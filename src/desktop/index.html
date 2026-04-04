@@ -768,7 +768,10 @@
           </div>
 
           <div class="section-label">频段锁定</div>
-          <div id="bandGrid" class="band-grid"></div>
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">LTE</div>
+          <div id="bandGridLte" class="band-grid"></div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">NR</div>
+          <div id="bandGridNr" class="band-grid"></div>
           <div style="margin-top:10px;display:flex;gap:8px;">
             <button class="btn btn-secondary btn-sm" onclick="applyBandLock()">应用频段</button>
             <button class="btn btn-secondary btn-sm" onclick="clearBandLock()">全部取消</button>
@@ -1285,13 +1288,14 @@
     }
 
     function applyBandLock() {
-      const checked = [...document.querySelectorAll('.band-chip.checked')].map(c => c.dataset.band);
+      const checked = [...document.querySelectorAll('#bandGridLte .band-chip.checked, #bandGridNr .band-chip.checked')]
+        .map(c => c.dataset.band);
       if (checked.length === 0) { alert('请选择至少一个频段'); return; }
       addTerminalLine(`[频段锁定] ${checked.join(', ')}`, 'ok');
     }
 
     function clearBandLock() {
-      document.querySelectorAll('.band-chip').forEach(c => c.classList.remove('checked'));
+      document.querySelectorAll('#bandGridLte .band-chip, #bandGridNr .band-chip').forEach(c => c.classList.remove('checked'));
       addTerminalLine('[频段锁定] 已清除', 'info');
     }
 
@@ -1423,21 +1427,21 @@
 
     // ── 频段初始化 ──
     (function initBandGrid() {
-      const bands = [
-        'B1','B3','B5','B7','B8','B20','B34','B38','B39','B40','B41',
-        'n1','n3','n5','n8','n28','n38','n40','n41','n77','n78','n79'
-      ];
-      const grid = document.getElementById('bandGrid');
-      bands.forEach(band => {
-        const chip = document.createElement('label');
-        chip.className = 'band-chip';
-        chip.dataset.band = band;
-        chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
-        chip.addEventListener('click', function () {
-          this.classList.toggle('checked');
+      const lteBands = ['B1','B3','B5','B7','B8','B20','B34','B38','B39','B40','B41'];
+      const nrBands  = ['n1','n3','n5','n8','n28','n38','n40','n41','n77','n78','n79'];
+      function makeChips(bands, gridId) {
+        const grid = document.getElementById(gridId);
+        bands.forEach(band => {
+          const chip = document.createElement('label');
+          chip.className = 'band-chip';
+          chip.dataset.band = band;
+          chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
+          chip.addEventListener('click', function () { this.classList.toggle('checked'); });
+          grid.appendChild(chip);
         });
-        grid.appendChild(chip);
-      });
+      }
+      makeChips(lteBands, 'bandGridLte');
+      makeChips(nrBands, 'bandGridNr');
     })();
   </script>
 </body>

@@ -441,6 +441,91 @@
     }
     .section-label:first-child { margin-top: 0; }
 
+    /* ── APN list ── */
+    .apn-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .apn-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.12s;
+    }
+    .apn-item:hover { border-color: var(--text-muted); }
+    .apn-item.selected { border-color: var(--accent); }
+    .apn-item-info { flex: 1; min-width: 0; }
+    .apn-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .apn-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .apn-item-active {
+      font-size: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* ── Lock list ── */
+    .lock-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .lock-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .lock-item-badge {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+      background: rgba(249,115,22,0.12);
+      border: 1px solid rgba(249,115,22,0.3);
+      padding: 2px 7px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .lock-item-info { flex: 1; color: var(--text-secondary); }
+    .lock-item-del {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+      flex-shrink: 0;
+    }
+    .lock-item-del:hover { color: var(--error); }
+    .lock-quota { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+
+    /* ── Neighbor sub-tabs ── */
+    .sub-tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 12px;
+    }
+    .sub-tab-btn {
+      padding: 6px 14px;
+      font-size: 11px;
+      font-family: inherit;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      color: var(--text-secondary);
+      margin-bottom: -1px;
+      transition: color 0.12s;
+    }
+    .sub-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sub-tab-btn:hover:not(.active) { color: var(--text-primary); }
+
     /* ── Placeholder ── */
     .placeholder-page {
       flex: 1;
@@ -611,154 +696,179 @@
     <!-- ══ 蜂窝网络 ══ -->
     <div class="page" id="page-cellular">
 
-      <div class="panel">
-        <div class="panel-title">APN 配置</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>APN 名称</label>
-            <input type="text" id="apnName" placeholder="cmnet">
-          </div>
-          <div class="form-group">
-            <label>用户名</label>
-            <input type="text" id="apnUser" placeholder="（可选）">
-          </div>
-          <div class="form-group">
-            <label>密码</label>
-            <input type="password" id="apnPass" placeholder="（可选）">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>鉴权类型</label>
-            <select id="apnAuth">
-              <option value="none">None</option>
-              <option value="pap">PAP</option>
-              <option value="chap">CHAP</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>IP 类型</label>
-            <select id="apnIp">
-              <option value="ipv4">IPv4</option>
-              <option value="ipv6">IPv6</option>
-              <option value="ipv4v6">IPv4v6（双栈）</option>
-            </select>
-          </div>
-          <div class="form-group auto" style="display:flex;align-items:flex-end;">
-            <button class="btn btn-primary" onclick="saveApn()">保存 APN</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-title">网络锁定</div>
-
-        <div class="section-label">首选网络</div>
-        <div class="form-row">
-          <div class="form-group">
-            <select id="preferredNetwork">
-              <option value="auto">自动</option>
-              <option value="5gsa">仅 5G SA</option>
-              <option value="nrNsa">仅 NR NSA</option>
-              <option value="lte">仅 LTE</option>
-              <option value="wcdma">仅 WCDMA</option>
-            </select>
-          </div>
-          <div class="form-group auto" style="display:flex;align-items:flex-end;">
-            <button class="btn btn-secondary" onclick="applyPreferredNetwork()">应用</button>
-          </div>
-        </div>
-
-        <div class="section-label">频段锁定</div>
-        <div id="bandGrid" class="band-grid"></div>
-        <div style="margin-top:10px;display:flex;gap:8px;">
-          <button class="btn btn-secondary btn-sm" onclick="applyBandLock()">应用频段</button>
-          <button class="btn btn-secondary btn-sm" onclick="clearBandLock()">全部取消</button>
-        </div>
-
-        <div class="section-label">小区锁定</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Cell ID</label>
-            <input type="text" id="lockCellId" placeholder="如 0x12345678">
-          </div>
-          <div class="form-group">
-            <label>频点（EARFCN / NR-ARFCN）</label>
-            <input type="text" id="lockCellArfcn" placeholder="如 500300">
-          </div>
-          <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn btn-secondary btn-sm" onclick="applyCellLock()">锁定</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearCellLock()">解锁</button>
-          </div>
-        </div>
-
-        <div class="section-label">频点锁定</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>EARFCN / NR-ARFCN</label>
-            <input type="text" id="lockArfcn" placeholder="如 500300">
-          </div>
-          <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn btn-secondary btn-sm" onclick="applyArfcnLock()">锁定</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearArfcnLock()">解锁</button>
-          </div>
-        </div>
-
-        <div class="section-label">运营商锁定</div>
-        <div class="form-row">
-          <div class="form-group narrow">
-            <label>MCC</label>
-            <input type="text" id="lockMcc" placeholder="460" maxlength="3">
-          </div>
-          <div class="form-group narrow">
-            <label>MNC</label>
-            <input type="text" id="lockMnc" placeholder="00" maxlength="3">
-          </div>
-          <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">邻区信息</div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshNeighbors()">刷新</button>
-        </div>
-
+      <div class="panel" style="flex:1;">
+        <!-- 顶部 Tab 栏 -->
         <div class="tab-bar">
-          <button class="tab-btn active" onclick="switchNeighborTab('lte', this)">LTE 邻区</button>
-          <button class="tab-btn" onclick="switchNeighborTab('nr', this)">NR 邻区</button>
+          <button class="tab-btn active" onclick="switchCellularTab('apn', this)">APN 配置</button>
+          <button class="tab-btn" onclick="switchCellularTab('netlock', this)">网络锁定</button>
+          <button class="tab-btn" onclick="switchCellularTab('celllock', this)">小区 / 频点锁定</button>
+          <button class="tab-btn" onclick="switchCellularTab('neighbor', this)">邻区信息</button>
         </div>
 
-        <div class="tab-panel active" id="tab-lte">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Cell ID</th><th>PCI</th><th>RSRP</th><th>RSRQ</th><th>EARFCN</th><th>频偏</th>
-              </tr>
-            </thead>
-            <tbody id="lteNeighborBody">
-              <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
-            </tbody>
-          </table>
+        <!-- ─ Tab 1: APN 配置 ─ -->
+        <div class="tab-panel active" id="ctab-apn">
+          <div class="apn-list" id="apnList"></div>
+          <div style="border-top:1px solid var(--border-color);padding-top:14px;margin-top:4px;">
+            <div class="section-label" id="apnFormTitle">新增 APN</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>APN 名称</label>
+                <input type="text" id="apnName" placeholder="cmnet">
+              </div>
+              <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="apnUser" placeholder="（可选）">
+              </div>
+              <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="apnPass" placeholder="（可选）">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>鉴权类型</label>
+                <select id="apnAuth">
+                  <option value="none">None</option>
+                  <option value="pap">PAP</option>
+                  <option value="chap">CHAP</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>IP 类型</label>
+                <select id="apnIp">
+                  <option value="ipv4">IPv4</option>
+                  <option value="ipv6">IPv6</option>
+                  <option value="ipv4v6">IPv4v6（双栈）</option>
+                </select>
+              </div>
+              <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+                <button class="btn btn-primary btn-sm" onclick="saveApn()">保存</button>
+                <button class="btn btn-secondary btn-sm" id="apnCancelBtn" onclick="cancelApnEdit()" style="display:none;">取消</button>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="tab-panel" id="tab-nr">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Cell ID</th><th>PCI</th><th>RSRP</th><th>SINR</th><th>NR-ARFCN</th><th>频偏</th>
-              </tr>
-            </thead>
-            <tbody id="nrNeighborBody">
-              <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <!-- ─ Tab 2: 网络锁定 ─ -->
+        <div class="tab-panel" id="ctab-netlock">
+          <div class="section-label">首选网络</div>
+          <div class="form-row">
+            <div class="form-group">
+              <select id="preferredNetwork">
+                <option value="auto">自动</option>
+                <option value="5gsa">仅 5G SA</option>
+                <option value="nrNsa">仅 NR NSA</option>
+                <option value="lte">仅 LTE</option>
+                <option value="wcdma">仅 WCDMA</option>
+              </select>
+            </div>
+            <div class="form-group auto" style="display:flex;align-items:flex-end;">
+              <button class="btn btn-secondary btn-sm" onclick="applyPreferredNetwork()">应用</button>
+            </div>
+          </div>
 
+          <div class="section-label">频段锁定</div>
+          <div id="bandGrid" class="band-grid"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="applyBandLock()">应用频段</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearBandLock()">全部取消</button>
+          </div>
+
+          <div class="section-label" style="margin-top:20px;">运营商锁定</div>
+          <div class="form-row">
+            <div class="form-group narrow">
+              <label>MCC</label>
+              <input type="text" id="lockMcc" placeholder="460" maxlength="3">
+            </div>
+            <div class="form-group narrow">
+              <label>MNC</label>
+              <input type="text" id="lockMnc" placeholder="00" maxlength="3">
+            </div>
+            <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+              <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
+              <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─ Tab 3: 小区 / 频点锁定 ─ -->
+        <div class="tab-panel" id="ctab-celllock">
+          <div class="lock-quota" id="lockQuota">已锁定 0 / 6 条</div>
+          <div class="lock-list" id="lockList"></div>
+
+          <div style="border-top:1px solid var(--border-color);padding-top:14px;">
+            <div class="sub-tab-bar">
+              <button class="sub-tab-btn active" onclick="switchLockType('cell', this)">小区锁定</button>
+              <button class="sub-tab-btn" onclick="switchLockType('arfcn', this)">频点锁定</button>
+            </div>
+
+            <div id="lockform-cell">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Cell ID</label>
+                  <input type="text" id="lockCellId" placeholder="如 0x12345678">
+                </div>
+                <div class="form-group">
+                  <label>频点（EARFCN / NR-ARFCN）</label>
+                  <input type="text" id="lockCellArfcn" placeholder="如 500300">
+                </div>
+                <div class="form-group auto" style="display:flex;align-items:flex-end;">
+                  <button class="btn btn-secondary btn-sm" onclick="addCellLock()">添加</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="lockform-arfcn" style="display:none;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>EARFCN / NR-ARFCN</label>
+                  <input type="text" id="lockArfcn" placeholder="如 500300">
+                </div>
+                <div class="form-group auto" style="display:flex;align-items:flex-end;">
+                  <button class="btn btn-secondary btn-sm" onclick="addArfcnLock()">添加</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="applyAllLocks()">应用全部锁定</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearAllLocks()">清除全部</button>
+          </div>
+        </div>
+
+        <!-- ─ Tab 4: 邻区信息 ─ -->
+        <div class="tab-panel" id="ctab-neighbor">
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+            <button class="btn btn-secondary btn-sm" onclick="refreshNeighbors()">刷新</button>
+          </div>
+          <div class="sub-tab-bar">
+            <button class="sub-tab-btn active" onclick="switchNeighborTab('lte', this)">LTE 邻区</button>
+            <button class="sub-tab-btn" onclick="switchNeighborTab('nr', this)">NR 邻区</button>
+          </div>
+          <div class="tab-panel active" id="tab-lte">
+            <table class="data-table">
+              <thead>
+                <tr><th>Cell ID</th><th>PCI</th><th>RSRP</th><th>RSRQ</th><th>EARFCN</th><th>频偏</th></tr>
+              </thead>
+              <tbody id="lteNeighborBody">
+                <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="tab-panel" id="tab-nr">
+            <table class="data-table">
+              <thead>
+                <tr><th>Cell ID</th><th>PCI</th><th>RSRP</th><th>SINR</th><th>NR-ARFCN</th><th>频偏</th></tr>
+              </thead>
+              <tbody id="nrNeighborBody">
+                <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /panel -->
     </div><!-- /page-cellular -->
 
 
@@ -1078,11 +1188,94 @@
       terminal.scrollTop = terminal.scrollHeight;
     }
 
+    // ── 蜂窝网络 Tab 切换 ──
+    function switchCellularTab(tab, btn) {
+      document.querySelectorAll('#page-cellular .tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#page-cellular > .panel > .tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('ctab-' + tab).classList.add('active');
+    }
+
     // ── APN ──
+    const apnData = [
+      { name: 'cmnet', user: '', pass: '', auth: 'none', ip: 'ipv4', active: true },
+    ];
+    let editingApnIdx = -1;
+
+    function renderApnList() {
+      const list = document.getElementById('apnList');
+      if (apnData.length === 0) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 APN，请在下方添加</div>';
+        return;
+      }
+      list.innerHTML = apnData.map((a, i) => `
+        <div class="apn-item ${editingApnIdx === i ? 'selected' : ''}" onclick="editApn(${i})">
+          <div class="apn-item-info">
+            <div class="apn-item-name">${a.name}</div>
+            <div class="apn-item-meta">${a.ip.toUpperCase()} · 鉴权: ${a.auth.toUpperCase()}${a.user ? ' · 用户: ' + a.user : ''}</div>
+          </div>
+          ${a.active ? '<span class="apn-item-active">当前</span>' : `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();setActiveApn(${i})">激活</button>`}
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();deleteApn(${i})">删除</button>
+        </div>
+      `).join('');
+    }
+
+    function editApn(i) {
+      editingApnIdx = i;
+      const a = apnData[i];
+      document.getElementById('apnName').value = a.name;
+      document.getElementById('apnUser').value = a.user;
+      document.getElementById('apnPass').value = a.pass;
+      document.getElementById('apnAuth').value = a.auth;
+      document.getElementById('apnIp').value = a.ip;
+      document.getElementById('apnFormTitle').textContent = '编辑 APN';
+      document.getElementById('apnCancelBtn').style.display = '';
+      renderApnList();
+    }
+
+    function cancelApnEdit() {
+      editingApnIdx = -1;
+      ['apnName','apnUser','apnPass'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('apnAuth').value = 'none';
+      document.getElementById('apnIp').value = 'ipv4';
+      document.getElementById('apnFormTitle').textContent = '新增 APN';
+      document.getElementById('apnCancelBtn').style.display = 'none';
+      renderApnList();
+    }
+
     function saveApn() {
-      const apn = document.getElementById('apnName').value.trim();
-      if (!apn) { alert('请输入 APN 名称'); return; }
-      addTerminalLine(`[APN] 已保存: ${apn}`, 'ok');
+      const name = document.getElementById('apnName').value.trim();
+      if (!name) { alert('请输入 APN 名称'); return; }
+      const entry = {
+        name,
+        user: document.getElementById('apnUser').value.trim(),
+        pass: document.getElementById('apnPass').value,
+        auth: document.getElementById('apnAuth').value,
+        ip: document.getElementById('apnIp').value,
+        active: editingApnIdx >= 0 ? apnData[editingApnIdx].active : apnData.length === 0,
+      };
+      if (editingApnIdx >= 0) {
+        apnData[editingApnIdx] = entry;
+        addTerminalLine(`[APN] 已更新: ${name}`, 'ok');
+      } else {
+        apnData.push(entry);
+        addTerminalLine(`[APN] 已添加: ${name}`, 'ok');
+      }
+      cancelApnEdit();
+    }
+
+    function deleteApn(i) {
+      if (!confirm(`删除 APN "${apnData[i].name}"？`)) return;
+      apnData.splice(i, 1);
+      if (editingApnIdx === i) cancelApnEdit();
+      else renderApnList();
+      addTerminalLine('[APN] 已删除', 'info');
+    }
+
+    function setActiveApn(i) {
+      apnData.forEach((a, idx) => a.active = idx === i);
+      renderApnList();
+      addTerminalLine(`[APN] 已激活: ${apnData[i].name}`, 'ok');
     }
 
     // ── 网络锁定 ──
@@ -1102,30 +1295,6 @@
       addTerminalLine('[频段锁定] 已清除', 'info');
     }
 
-    function applyCellLock() {
-      const cid = document.getElementById('lockCellId').value.trim();
-      const arfcn = document.getElementById('lockCellArfcn').value.trim();
-      if (!cid || !arfcn) { alert('请输入 Cell ID 和频点'); return; }
-      addTerminalLine(`[小区锁定] CellID=${cid} ARFCN=${arfcn}`, 'ok');
-    }
-
-    function clearCellLock() {
-      document.getElementById('lockCellId').value = '';
-      document.getElementById('lockCellArfcn').value = '';
-      addTerminalLine('[小区锁定] 已解锁', 'info');
-    }
-
-    function applyArfcnLock() {
-      const arfcn = document.getElementById('lockArfcn').value.trim();
-      if (!arfcn) { alert('请输入频点'); return; }
-      addTerminalLine(`[频点锁定] ARFCN=${arfcn}`, 'ok');
-    }
-
-    function clearArfcnLock() {
-      document.getElementById('lockArfcn').value = '';
-      addTerminalLine('[频点锁定] 已解锁', 'info');
-    }
-
     function applyOperatorLock() {
       const mcc = document.getElementById('lockMcc').value.trim();
       const mnc = document.getElementById('lockMnc').value.trim();
@@ -1139,10 +1308,74 @@
       addTerminalLine('[运营商锁定] 已解锁', 'info');
     }
 
+    // ── 小区 / 频点锁定 ──
+    const lockEntries = []; // { type: 'cell'|'arfcn', label: string }
+
+    function switchLockType(type, btn) {
+      document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('lockform-cell').style.display = type === 'cell' ? '' : 'none';
+      document.getElementById('lockform-arfcn').style.display = type === 'arfcn' ? '' : 'none';
+    }
+
+    function renderLockList() {
+      const quota = document.getElementById('lockQuota');
+      const list = document.getElementById('lockList');
+      quota.textContent = `已锁定 ${lockEntries.length} / 6 条`;
+      if (lockEntries.length === 0) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px 0;">暂无锁定条目</div>';
+        return;
+      }
+      list.innerHTML = lockEntries.map((e, i) => `
+        <div class="lock-item">
+          <span class="lock-item-badge">${e.type === 'cell' ? '小区' : '频点'}</span>
+          <span class="lock-item-info">${e.label}</span>
+          <button class="lock-item-del" onclick="removeLock(${i})" title="删除">×</button>
+        </div>
+      `).join('');
+    }
+
+    function addCellLock() {
+      if (lockEntries.length >= 6) { alert('最多锁定 6 条'); return; }
+      const cid = document.getElementById('lockCellId').value.trim();
+      const arfcn = document.getElementById('lockCellArfcn').value.trim();
+      if (!cid || !arfcn) { alert('请输入 Cell ID 和频点'); return; }
+      lockEntries.push({ type: 'cell', label: `CellID: ${cid}  ARFCN: ${arfcn}` });
+      document.getElementById('lockCellId').value = '';
+      document.getElementById('lockCellArfcn').value = '';
+      renderLockList();
+    }
+
+    function addArfcnLock() {
+      if (lockEntries.length >= 6) { alert('最多锁定 6 条'); return; }
+      const arfcn = document.getElementById('lockArfcn').value.trim();
+      if (!arfcn) { alert('请输入频点'); return; }
+      lockEntries.push({ type: 'arfcn', label: `ARFCN: ${arfcn}` });
+      document.getElementById('lockArfcn').value = '';
+      renderLockList();
+    }
+
+    function removeLock(i) {
+      lockEntries.splice(i, 1);
+      renderLockList();
+    }
+
+    function applyAllLocks() {
+      if (lockEntries.length === 0) { alert('暂无锁定条目'); return; }
+      lockEntries.forEach(e => addTerminalLine(`[锁定] ${e.type === 'cell' ? '小区' : '频点'} ${e.label}`, 'ok'));
+    }
+
+    function clearAllLocks() {
+      lockEntries.length = 0;
+      renderLockList();
+      addTerminalLine('[锁定] 已清除全部', 'info');
+    }
+
     // ── 邻区信息 ──
     function switchNeighborTab(tab, btn) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      const neighborPanel = document.getElementById('ctab-neighbor');
+      neighborPanel.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+      neighborPanel.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
     }
@@ -1183,6 +1416,10 @@
         setTimeout(() => addTerminalLine('[操作] 执行完成', 'ok'), 600);
       }
     }
+
+    // ── 初始化 ──
+    renderApnList();
+    renderLockList();
 
     // ── 频段初始化 ──
     (function initBandGrid() {

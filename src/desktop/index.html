@@ -767,14 +767,14 @@
             </div>
           </div>
 
-          <div class="section-label">频段锁定</div>
+          <div class="section-label">频段选择</div>
           <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">LTE</div>
           <div id="bandGridLte" class="band-grid"></div>
           <div style="font-size:10px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">NR</div>
           <div id="bandGridNr" class="band-grid"></div>
           <div style="margin-top:10px;display:flex;gap:8px;">
-            <button class="btn btn-secondary btn-sm" onclick="applyBandLock()">应用频段</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearBandLock()">全部取消</button>
+            <button class="btn btn-primary btn-sm" onclick="applyBandLock()">保存</button>
+            <button class="btn btn-secondary btn-sm" onclick="resetBandLock()">重置</button>
           </div>
 
           <div class="section-label" style="margin-top:20px;">运营商锁定</div>
@@ -1291,12 +1291,12 @@
       const checked = [...document.querySelectorAll('#bandGridLte .band-chip.checked, #bandGridNr .band-chip.checked')]
         .map(c => c.dataset.band);
       if (checked.length === 0) { alert('请选择至少一个频段'); return; }
-      addTerminalLine(`[频段锁定] ${checked.join(', ')}`, 'ok');
+      addTerminalLine(`[频段选择] 已保存: ${checked.join(', ')}`, 'ok');
     }
 
-    function clearBandLock() {
-      document.querySelectorAll('#bandGridLte .band-chip, #bandGridNr .band-chip').forEach(c => c.classList.remove('checked'));
-      addTerminalLine('[频段锁定] 已清除', 'info');
+    function resetBandLock() {
+      document.querySelectorAll('#bandGridLte .band-chip, #bandGridNr .band-chip').forEach(c => c.classList.add('checked'));
+      addTerminalLine('[频段选择] 已重置（全选）', 'info');
     }
 
     function applyOperatorLock() {
@@ -1436,6 +1436,7 @@
           chip.className = 'band-chip';
           chip.dataset.band = band;
           chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
+          chip.classList.add('checked');
           chip.addEventListener('click', function () { this.classList.toggle('checked'); });
           grid.appendChild(chip);
         });

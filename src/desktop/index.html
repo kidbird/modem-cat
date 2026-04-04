@@ -609,8 +609,32 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">核心指标</div>
+        <div class="panel-title">网络状态</div>
         <div class="info-grid">
+          <div class="info-item">
+            <div class="info-label">SIM 状态</div>
+            <div class="info-value muted" id="simStatus">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">SIM 槽</div>
+            <div class="info-value muted" id="simSlot">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">注册状态</div>
+            <div class="info-value muted" id="regStatus">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">连接状态</div>
+            <div class="info-value muted" id="connStatus">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IMEI</div>
+            <div class="info-value muted" id="imei" style="font-size:12px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">ICCID</div>
+            <div class="info-value muted" id="iccid" style="font-size:11px;letter-spacing:0.5px;">--</div>
+          </div>
           <div class="info-item">
             <div class="info-label">运营商</div>
             <div class="info-value muted" id="operator">--</div>
@@ -618,14 +642,6 @@
           <div class="info-item">
             <div class="info-label">网络类型</div>
             <div class="info-value muted" id="networkType">--</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">RSRP</div>
-            <div class="info-value muted" id="rsrp">--</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">SINR</div>
-            <div class="info-value muted" id="sinr">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">PCI</div>
@@ -636,8 +652,24 @@
             <div class="info-value muted" id="cellid">--</div>
           </div>
           <div class="info-item">
+            <div class="info-label">ARFCN（频点）</div>
+            <div class="info-value muted" id="arfcn">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">频宽</div>
+            <div class="info-value muted" id="bandwidth">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">RSRP</div>
+            <div class="info-value muted" id="rsrp">--</div>
+          </div>
+          <div class="info-item">
             <div class="info-label">RSRQ</div>
             <div class="info-value muted" id="rsrq">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">SINR</div>
+            <div class="info-value muted" id="sinr">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">TX Power</div>
@@ -1078,13 +1110,21 @@
 
     // ── Mock data ──
     function populateMockData() {
+      setTextGood('simStatus', '已插入');
+      setText('simSlot', 'SIM 1');
+      setTextGood('regStatus', '已注册');
+      setTextGood('connStatus', '已连接');
+      setText('imei', '867530012345678');
+      setText('iccid', '89860021234567890123');
       setText('operator', 'China Mobile');
       setText('networkType', '5G SA');
-      setTextGood('rsrp', '-85 dBm');
-      setTextGood('sinr', '15 dB');
       setText('pci', '123');
       setText('cellid', '0x12345678');
+      setText('arfcn', '630000');
+      setText('bandwidth', '100 MHz');
+      setTextGood('rsrp', '-85 dBm');
       setText('rsrq', '-12 dB');
+      setTextGood('sinr', '15 dB');
       setText('txPower', '23 dBm');
       setText('ant0', '-85 dBm');
       setText('ant1', '-87 dBm');
@@ -1113,7 +1153,8 @@
     }
 
     function clearData() {
-      const ids = ['operator','networkType','rsrp','sinr','pci','cellid','rsrq','txPower',
+      const ids = ['simStatus','simSlot','regStatus','connStatus','imei','iccid',
+        'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
         'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp'];
       ids.forEach(id => {

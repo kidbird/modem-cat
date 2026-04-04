@@ -1,0 +1,23 @@
+{
+  "name": "modem-cat",
+  "version": "0.1.0",
+  "description": "5G Modem调试工具 - Cross-platform CLI and desktop tool for debugging 5G modems",
+  "type": "module",
+  "bin": {
+    "modem-cat": "./src/cli/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/cli/index.ts",
+    "build": "bun build src/cli/index.ts --outdir ./dist --target bun",
+    "build:desktop": "cd src-tauri && cargo build --release",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.0.0",
+    "typescript": "^5.3.0"
+  }
+}

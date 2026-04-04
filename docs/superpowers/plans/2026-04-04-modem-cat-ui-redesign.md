@@ -1,0 +1,1285 @@
+# Modem Cat UI Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Redesign `src/desktop/index.html` into a complete 5G modem debug tool with five sections: 模组状态、蜂窝网络、AT调试、硬件信息、工程模式（占位）.
+
+**Architecture:** Single self-contained HTML file. CSS variables drive theming. JavaScript sections are grouped by page, with a shared state object. No external dependencies.
+
+**Tech Stack:** Vanilla HTML5, CSS3 (custom properties), ES6 JavaScript
+
+---
+
+### Task 1: CSS 基础系统 & 新增组件样式
+
+**Files:**
+- Modify: `src/desktop/index.html` — 替换全部 `<style>` 块
+
+- [ ] **Step 1: 替换 `<style>` 内容**
+
+用以下完整 CSS 替换现有 `<style>` 标签内所有内容：
+
+```css
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #242424;
+  --bg-tertiary: #2d2d2d;
+  --border-color: #3d3d3d;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a0a0a0;
+  --text-muted: #6b6b6b;
+  --accent: #f97316;
+  --accent-hover: #fb923c;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --danger: #dc2626;
+  --danger-hover: #ef4444;
+}
+
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-tertiary: #ebebeb;
+  --border-color: #d4d4d4;
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-muted: #a3a3a3;
+  --accent: #ea580c;
+  --accent-hover: #f97316;
+  --danger: #b91c1c;
+  --danger-hover: #dc2626;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 200px;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.logo {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.logo-text { display: flex; align-items: center; gap: 8px; }
+.logo-icon { color: var(--accent); font-size: 16px; }
+
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: inherit;
+}
+.theme-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+
+.nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+
+.nav-item {
+  padding: 9px 16px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-left: 2px solid transparent;
+  transition: background 0.12s, color 0.12s;
+  user-select: none;
+}
+.nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.nav-item.active { background: var(--bg-tertiary); color: var(--accent); border-left-color: var(--accent); }
+.nav-item.disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.5; }
+.nav-item.disabled:hover { background: none; color: var(--text-muted); }
+
+.nav-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+
+.status-bar {
+  border-top: 1px solid var(--border-color);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-label { font-size: 11px; color: var(--text-muted); }
+
+/* ── Main content ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.page { display: none; flex-direction: column; gap: 14px; }
+.page.active { display: flex; }
+
+/* AT page fills height */
+#page-at { height: calc(100vh - 32px); }
+
+/* ── Panels ── */
+.panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 14px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.panel-header .panel-title { margin-bottom: 0; }
+
+/* ── Forms ── */
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.form-row:last-child { margin-bottom: 0; }
+
+.form-group { flex: 1; min-width: 120px; }
+.form-group.narrow { flex: 0 0 auto; min-width: 80px; }
+.form-group.auto { flex: 0 0 auto; }
+
+.form-group label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+.form-group input:focus,
+.form-group select:focus { outline: none; border-color: var(--accent); }
+
+/* ── Buttons ── */
+.btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
+.btn-secondary:hover { background: var(--bg-primary); color: var(--text-primary); }
+.btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ── Info grid ── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.info-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.info-item {
+  background: var(--bg-tertiary);
+  padding: 10px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+.info-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.info-value {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 4px;
+  color: var(--text-primary);
+}
+.info-value.good { color: var(--success); }
+.info-value.warn { color: var(--warning); }
+.info-value.muted { color: var(--text-muted); }
+
+/* ── Terminal ── */
+.terminal-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.terminal {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 10px;
+  overflow-y: auto;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  min-height: 200px;
+}
+.terminal-line { margin-bottom: 2px; line-height: 1.6; }
+.terminal-line.cmd { color: var(--accent); }
+.terminal-line.resp { color: var(--text-secondary); }
+.terminal-line.ok { color: var(--success); }
+.terminal-line.err { color: var(--error); }
+.terminal-line.info { color: var(--text-muted); }
+
+.shortcut-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.terminal-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.terminal-input input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  font-size: 12px;
+}
+.terminal-input input:focus { outline: none; border-color: var(--accent); }
+.terminal-prompt { color: var(--accent); font-size: 14px; flex-shrink: 0; }
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 14px;
+}
+.tab-btn {
+  padding: 7px 16px;
+  font-size: 12px;
+  font-family: inherit;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  margin-bottom: -1px;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover:not(.active) { color: var(--text-primary); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Table ── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.data-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--border-color);
+}
+.data-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg-tertiary); color: var(--text-primary); }
+
+/* ── Band grid ── */
+.band-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.band-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  user-select: none;
+}
+.band-chip input { display: none; }
+.band-chip.checked { border-color: var(--accent); color: var(--accent); background: var(--bg-primary); }
+
+/* ── Toggle switch ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.toggle-row:last-child { border-bottom: none; }
+.toggle-label { font-size: 13px; color: var(--text-primary); }
+.toggle-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 14px; height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-track { background: var(--accent); }
+.toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+
+/* ── Danger zone ── */
+.danger-zone {
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, transparent);
+  border-radius: 6px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--danger) 5%, transparent);
+}
+.danger-zone .panel-title { color: var(--danger); }
+.danger-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ── Placeholder page ── */
+.placeholder-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-muted);
+}
+.placeholder-icon { font-size: 40px; opacity: 0.3; }
+.placeholder-title { font-size: 15px; font-weight: 600; }
+.placeholder-sub { font-size: 12px; }
+
+/* ── Section divider ── */
+.section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 14px 0 8px;
+}
+.section-label:first-child { margin-top: 0; }
+```
+
+- [ ] **Step 2: 验证 CSS 无语法问题**
+
+在浏览器打开 `src/desktop/index.html`，确认页面不空白，console 无报错。
+
+---
+
+### Task 2: 侧边栏 & 导航骨架 HTML
+
+**Files:**
+- Modify: `src/desktop/index.html` — 替换 `<body>` 内 HTML 结构
+
+- [ ] **Step 1: 替换 `<body>` 内全部 HTML（`<script>` 标签之前的部分）**
+
+```html
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-text">
+      <span class="logo-icon">◈</span>
+      <span>Modem Cat</span>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()">浅色</button>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-item active" data-page="status">
+      <span class="nav-icon">●</span>模组状态
+    </div>
+    <div class="nav-item" data-page="cellular">
+      <span class="nav-icon">◎</span>蜂窝网络
+    </div>
+    <div class="nav-item" data-page="at">
+      <span class="nav-icon">›</span>AT调试
+    </div>
+    <div class="nav-item" data-page="hardware">
+      <span class="nav-icon">⬡</span>硬件信息
+    </div>
+    <div class="nav-item disabled" data-page="engineering">
+      <span class="nav-icon">⚙</span>工程模式
+    </div>
+  </nav>
+
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-label" id="statusLabel">未连接</span>
+  </div>
+</div>
+
+<div class="main" id="mainContent">
+
+  <!-- ── 模组状态 ── -->
+  <div class="page active" id="page-status">
+
+    <div class="panel">
+      <div class="panel-title">接口配置</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>连接类型</label>
+          <select id="connectionType">
+            <option value="usb">USB Serial</option>
+            <option value="ethernet">Ethernet TCP</option>
+            <option value="ttl">TTL UART</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>端口 / 地址</label>
+          <input type="text" id="connectionParams" placeholder="/dev/cu.usbserial-1420">
+        </div>
+        <div class="form-group narrow">
+          <label>波特率</label>
+          <input type="number" id="baudRate" value="115200">
+        </div>
+        <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+          <button class="btn btn-primary" onclick="connect()">连接</button>
+          <button class="btn btn-secondary" onclick="disconnect()">断开</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">核心指标</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">运营商</div>
+          <div class="info-value muted" id="operator">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">网络类型</div>
+          <div class="info-value muted" id="networkType">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">RSRP</div>
+          <div class="info-value muted" id="rsrp">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">SINR</div>
+          <div class="info-value muted" id="sinr">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">PCI</div>
+          <div class="info-value muted" id="pci">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Cell ID</div>
+          <div class="info-value muted" id="cellid">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">RSRQ</div>
+          <div class="info-value muted" id="rsrq">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">TX Power</div>
+          <div class="info-value muted" id="txPower">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">天线信号</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">ANT 0</div>
+          <div class="info-value muted" id="ant0">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">ANT 1</div>
+          <div class="info-value muted" id="ant1">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">ANT 2</div>
+          <div class="info-value muted" id="ant2">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">ANT 3</div>
+          <div class="info-value muted" id="ant3">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">流量统计</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">签约上行带宽</div>
+          <div class="info-value muted" id="ulBandwidth">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">签约下行带宽</div>
+          <div class="info-value muted" id="dlBandwidth">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">上行流量</div>
+          <div class="info-value muted" id="ulTraffic">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">下行流量</div>
+          <div class="info-value muted" id="dlTraffic">--</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-status -->
+
+
+  <!-- ── 蜂窝网络 ── -->
+  <div class="page" id="page-cellular">
+
+    <!-- APN 配置 -->
+    <div class="panel">
+      <div class="panel-title">APN 配置</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>APN 名称</label>
+          <input type="text" id="apnName" placeholder="cmnet">
+        </div>
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="apnUser" placeholder="（可选）">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="apnPass" placeholder="（可选）">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>鉴权类型</label>
+          <select id="apnAuth">
+            <option value="none">None</option>
+            <option value="pap">PAP</option>
+            <option value="chap">CHAP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>IP 类型</label>
+          <select id="apnIp">
+            <option value="ipv4">IPv4</option>
+            <option value="ipv6">IPv6</option>
+            <option value="ipv4v6">IPv4v6（双栈）</option>
+          </select>
+        </div>
+        <div class="form-group auto" style="display:flex;align-items:flex-end;">
+          <button class="btn btn-primary" onclick="saveApn()">保存 APN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 网络锁定 -->
+    <div class="panel">
+      <div class="panel-title">网络锁定</div>
+
+      <div class="section-label">首选网络</div>
+      <div class="form-row">
+        <div class="form-group">
+          <select id="preferredNetwork">
+            <option value="auto">自动</option>
+            <option value="5gsa">仅 5G SA</option>
+            <option value="nrNsa">仅 NR NSA</option>
+            <option value="lte">仅 LTE</option>
+            <option value="wcdma">仅 WCDMA</option>
+          </select>
+        </div>
+        <div class="form-group auto" style="display:flex;align-items:flex-end;">
+          <button class="btn btn-secondary" onclick="applyPreferredNetwork()">应用</button>
+        </div>
+      </div>
+
+      <div class="section-label">频段锁定</div>
+      <div id="bandGrid" class="band-grid"></div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="applyBandLock()">应用频段</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearBandLock()">全部取消</button>
+      </div>
+
+      <div class="section-label">小区锁定</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cell ID</label>
+          <input type="text" id="lockCellId" placeholder="如 0x12345678">
+        </div>
+        <div class="form-group">
+          <label>频点 (EARFCN / NR-ARFCN)</label>
+          <input type="text" id="lockCellArfcn" placeholder="如 500300">
+        </div>
+        <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="applyCellLock()">锁定</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearCellLock()">解锁</button>
+        </div>
+      </div>
+
+      <div class="section-label">频点锁定</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>EARFCN / NR-ARFCN</label>
+          <input type="text" id="lockArfcn" placeholder="如 500300">
+        </div>
+        <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="applyArfcnLock()">锁定</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearArfcnLock()">解锁</button>
+        </div>
+      </div>
+
+      <div class="section-label">运营商锁定</div>
+      <div class="form-row">
+        <div class="form-group narrow">
+          <label>MCC</label>
+          <input type="text" id="lockMcc" placeholder="460" maxlength="3">
+        </div>
+        <div class="form-group narrow">
+          <label>MNC</label>
+          <input type="text" id="lockMnc" placeholder="00" maxlength="3">
+        </div>
+        <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
+          <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 邻区信息 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">邻区信息</div>
+        <button class="btn btn-secondary btn-sm" onclick="refreshNeighbors()">刷新</button>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchNeighborTab('lte', this)">LTE 邻区</button>
+        <button class="tab-btn" onclick="switchNeighborTab('nr', this)">NR 邻区</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-lte">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cell ID</th><th>PCI</th><th>RSRP</th><th>RSRQ</th><th>EARFCN</th><th>频偏</th>
+            </tr>
+          </thead>
+          <tbody id="lteNeighborBody">
+            <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-panel" id="tab-nr">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cell ID</th><th>PCI</th><th>RSRP</th><th>SINR</th><th>NR-ARFCN</th><th>频偏</th>
+            </tr>
+          </thead>
+          <tbody id="nrNeighborBody">
+            <tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /page-cellular -->
+
+
+  <!-- ── AT 调试 ── -->
+  <div class="page" id="page-at">
+    <div class="panel" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+      <div class="panel-title">AT 命令终端</div>
+      <div class="terminal-wrap">
+        <div class="terminal" id="terminal">
+          <div class="terminal-line info">› Modem Cat AT Terminal — 等待连接</div>
+        </div>
+        <div class="shortcut-bar">
+          <button class="btn btn-secondary btn-sm" onclick="quickAt('AT')">AT</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CSQ')">AT+CSQ</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CIMI')">AT+CIMI</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGDCONT?')">AT+CGDCONT?</button>
+          <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CEREG?')">AT+CEREG?</button>
+        </div>
+        <div class="terminal-input">
+          <span class="terminal-prompt">›</span>
+          <input type="text" id="atCommand" placeholder="输入 AT 命令..." onkeydown="handleAtKey(event)">
+          <button class="btn btn-primary" onclick="sendAtCommand()">发送</button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /page-at -->
+
+
+  <!-- ── 硬件信息 ── -->
+  <div class="page" id="page-hardware">
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">模组信息</div>
+        <button class="btn btn-secondary btn-sm" onclick="refreshHardwareInfo()">刷新</button>
+      </div>
+      <div class="info-grid-2">
+        <div class="info-item">
+          <div class="info-label">模组型号</div>
+          <div class="info-value muted" id="hwModel">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">生产厂家</div>
+          <div class="info-value muted" id="hwManufacturer">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">固件版本</div>
+          <div class="info-value muted" id="hwFirmware">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">AP 基线版本</div>
+          <div class="info-value muted" id="hwApBaseline">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">CP 基线版本</div>
+          <div class="info-value muted" id="hwCpBaseline">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">SOC 温度</div>
+          <div class="info-value muted" id="hwSocTemp">--</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">PA 温度</div>
+          <div class="info-value muted" id="hwPaTemp">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">功能开关</div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">开启 ADB</div>
+          <div class="toggle-desc">Android Debug Bridge 调试接口</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleAdb" onchange="applyToggle('adb', this.checked)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">开启 LAN AT</div>
+          <div class="toggle-desc">通过以太网接口发送 AT 命令</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleLanAt" onchange="applyToggle('lanAt', this.checked)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">开启 UART AT</div>
+          <div class="toggle-desc">通过 UART 接口发送 AT 命令</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleUartAt" onchange="applyToggle('uartAt', this.checked)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">开启 AP Log</div>
+          <div class="toggle-desc">启用应用处理器日志输出</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleApLog" onchange="applyToggle('apLog', this.checked)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="danger-zone">
+      <div class="panel-title">危险操作</div>
+      <div class="danger-actions">
+        <button class="btn btn-danger" onclick="confirmAction('reboot')">重启模组</button>
+        <button class="btn btn-danger" onclick="confirmAction('factory')">恢复出厂设置</button>
+      </div>
+    </div>
+
+  </div><!-- /page-hardware -->
+
+
+  <!-- ── 工程模式（占位） ── -->
+  <div class="page" id="page-engineering">
+    <div class="placeholder-page">
+      <div class="placeholder-icon">⚙</div>
+      <div class="placeholder-title">工程模式</div>
+      <div class="placeholder-sub">功能开发中，敬请期待</div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+```
+
+- [ ] **Step 2: 确认页面结构在浏览器中渲染正常（侧边栏可见，主内容区可滚动）**
+
+---
+
+### Task 3: JavaScript 逻辑
+
+**Files:**
+- Modify: `src/desktop/index.html` — 替换全部 `<script>` 内容
+
+- [ ] **Step 1: 替换 `<script>` 标签内全部内容**
+
+```javascript
+// ── State ──
+const state = {
+  connected: false,
+  isDark: true,
+  atHistory: [],
+  atHistoryIdx: -1,
+};
+
+// ── Theme ──
+(function () {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') setTheme('light');
+})();
+
+function toggleTheme() { setTheme(state.isDark ? 'light' : 'dark'); }
+
+function setTheme(theme) {
+  state.isDark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  document.querySelector('.theme-toggle').textContent = state.isDark ? '浅色' : '深色';
+}
+
+// ── Navigation ──
+document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
+  item.addEventListener('click', function () {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    this.classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + this.dataset.page).classList.add('active');
+  });
+});
+
+// ── Connection ──
+function connect() {
+  const type = document.getElementById('connectionType').value;
+  const params = document.getElementById('connectionParams').value.trim();
+  if (!params) { alert('请输入端口或地址'); return; }
+
+  state.connected = true;
+  updateStatusBar(true);
+  addTerminalLine(`[连接] ${type}://${params}`, 'cmd');
+  setTimeout(() => {
+    addTerminalLine('[连接] 已建立连接', 'ok');
+    populateMockData();
+  }, 400);
+}
+
+function disconnect() {
+  if (!state.connected) return;
+  state.connected = false;
+  updateStatusBar(false);
+  clearData();
+  addTerminalLine('[连接] 已断开', 'cmd');
+}
+
+function updateStatusBar(connected) {
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusLabel');
+  if (connected) {
+    dot.classList.add('connected');
+    const params = document.getElementById('connectionParams').value.trim();
+    label.textContent = params || '已连接';
+  } else {
+    dot.classList.remove('connected');
+    label.textContent = '未连接';
+  }
+}
+
+// ── Mock data ──
+function populateMockData() {
+  // 模组状态
+  setText('operator', 'China Mobile');
+  setText('networkType', '5G SA');
+  setTextGood('rsrp', '-85 dBm');
+  setTextGood('sinr', '15 dB');
+  setText('pci', '123');
+  setText('cellid', '0x12345678');
+  setText('rsrq', '-12 dB');
+  setText('txPower', '23 dBm');
+  setText('ant0', '-85 dBm');
+  setText('ant1', '-87 dBm');
+  setText('ant2', '-86 dBm');
+  setText('ant3', '-88 dBm');
+  setText('ulBandwidth', '100 MHz');
+  setText('dlBandwidth', '100 MHz');
+  setText('ulTraffic', '0 KB');
+  setText('dlTraffic', '0 KB');
+
+  // 硬件信息
+  setText('hwModel', 'RM520N-GL');
+  setText('hwManufacturer', 'Quectel');
+  setText('hwFirmware', 'RM520NGLAAR03A03M4G');
+  setText('hwApBaseline', 'AP_01.002.01.002');
+  setText('hwCpBaseline', 'CP_01.002.01.002');
+  setTextWarn('hwSocTemp', '42 °C');
+  setTextWarn('hwPaTemp', '38 °C');
+
+  // 邻区信息 mock
+  populateLteNeighbors([
+    { cellId: '0x1234', pci: '101', rsrp: '-90 dBm', rsrq: '-13 dB', earfcn: '1825', offset: '0' },
+    { cellId: '0x1235', pci: '102', rsrp: '-95 dBm', rsrq: '-15 dB', earfcn: '1825', offset: '-6' },
+  ]);
+  populateNrNeighbors([
+    { cellId: '0xABCD', pci: '201', rsrp: '-88 dBm', sinr: '12 dB', arfcn: '630000', offset: '0' },
+  ]);
+}
+
+function clearData() {
+  const ids = ['operator','networkType','rsrp','sinr','pci','cellid','rsrq','txPower',
+    'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
+    'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = '--'; el.className = 'info-value muted'; }
+  });
+  document.getElementById('lteNeighborBody').innerHTML =
+    '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
+  document.getElementById('nrNeighborBody').innerHTML =
+    '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.className = 'info-value'; }
+}
+function setTextGood(id, val) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.className = 'info-value good'; }
+}
+function setTextWarn(id, val) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = val; el.className = 'info-value warn'; }
+}
+
+// ── AT Terminal ──
+function sendAtCommand() {
+  const input = document.getElementById('atCommand');
+  const cmd = input.value.trim().toUpperCase();
+  if (!cmd) return;
+
+  state.atHistory.unshift(cmd);
+  state.atHistoryIdx = -1;
+  input.value = '';
+
+  addTerminalLine('› ' + cmd, 'cmd');
+  setTimeout(() => {
+    addTerminalLine('< OK', 'ok');
+  }, 80);
+}
+
+function quickAt(cmd) {
+  document.getElementById('atCommand').value = cmd;
+  sendAtCommand();
+}
+
+function handleAtKey(e) {
+  const input = document.getElementById('atCommand');
+  if (e.key === 'Enter') { sendAtCommand(); return; }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (state.atHistoryIdx < state.atHistory.length - 1) {
+      state.atHistoryIdx++;
+      input.value = state.atHistory[state.atHistoryIdx];
+    }
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (state.atHistoryIdx > 0) {
+      state.atHistoryIdx--;
+      input.value = state.atHistory[state.atHistoryIdx];
+    } else {
+      state.atHistoryIdx = -1;
+      input.value = '';
+    }
+  }
+}
+
+function addTerminalLine(text, cls = '') {
+  const terminal = document.getElementById('terminal');
+  const line = document.createElement('div');
+  line.className = 'terminal-line' + (cls ? ' ' + cls : '');
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+// ── APN ──
+function saveApn() {
+  const apn = document.getElementById('apnName').value.trim();
+  if (!apn) { alert('请输入 APN 名称'); return; }
+  addTerminalLine(`[APN] 已保存: ${apn}`, 'ok');
+}
+
+// ── 网络锁定 ──
+function applyPreferredNetwork() {
+  const val = document.getElementById('preferredNetwork').value;
+  addTerminalLine(`[网络] 首选网络已设置: ${document.getElementById('preferredNetwork').selectedOptions[0].text}`, 'ok');
+}
+
+function applyBandLock() {
+  const checked = [...document.querySelectorAll('.band-chip.checked')].map(c => c.dataset.band);
+  if (checked.length === 0) { alert('请选择至少一个频段'); return; }
+  addTerminalLine(`[频段] 已锁定: ${checked.join(', ')}`, 'ok');
+}
+
+function clearBandLock() {
+  document.querySelectorAll('.band-chip').forEach(c => c.classList.remove('checked'));
+  addTerminalLine('[频段] 已清除所有频段锁定', 'info');
+}
+
+function applyCellLock() {
+  const cid = document.getElementById('lockCellId').value.trim();
+  const arfcn = document.getElementById('lockCellArfcn').value.trim();
+  if (!cid || !arfcn) { alert('请输入 Cell ID 和频点'); return; }
+  addTerminalLine(`[小区锁定] CellID=${cid} ARFCN=${arfcn}`, 'ok');
+}
+
+function clearCellLock() {
+  document.getElementById('lockCellId').value = '';
+  document.getElementById('lockCellArfcn').value = '';
+  addTerminalLine('[小区锁定] 已解锁', 'info');
+}
+
+function applyArfcnLock() {
+  const arfcn = document.getElementById('lockArfcn').value.trim();
+  if (!arfcn) { alert('请输入频点'); return; }
+  addTerminalLine(`[频点锁定] ARFCN=${arfcn}`, 'ok');
+}
+
+function clearArfcnLock() {
+  document.getElementById('lockArfcn').value = '';
+  addTerminalLine('[频点锁定] 已解锁', 'info');
+}
+
+function applyOperatorLock() {
+  const mcc = document.getElementById('lockMcc').value.trim();
+  const mnc = document.getElementById('lockMnc').value.trim();
+  if (!mcc || !mnc) { alert('请输入 MCC 和 MNC'); return; }
+  addTerminalLine(`[运营商锁定] MCC=${mcc} MNC=${mnc}`, 'ok');
+}
+
+function clearOperatorLock() {
+  document.getElementById('lockMcc').value = '';
+  document.getElementById('lockMnc').value = '';
+  addTerminalLine('[运营商锁定] 已解锁', 'info');
+}
+
+// ── 邻区信息 ──
+function switchNeighborTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+function refreshNeighbors() {
+  addTerminalLine('[邻区] 正在刷新...', 'info');
+  setTimeout(() => addTerminalLine('[邻区] 刷新完成', 'ok'), 300);
+}
+
+function populateLteNeighbors(rows) {
+  const tbody = document.getElementById('lteNeighborBody');
+  tbody.innerHTML = rows.map(r =>
+    `<tr><td>${r.cellId}</td><td>${r.pci}</td><td>${r.rsrp}</td><td>${r.rsrq}</td><td>${r.earfcn}</td><td>${r.offset}</td></tr>`
+  ).join('');
+}
+
+function populateNrNeighbors(rows) {
+  const tbody = document.getElementById('nrNeighborBody');
+  tbody.innerHTML = rows.map(r =>
+    `<tr><td>${r.cellId}</td><td>${r.pci}</td><td>${r.rsrp}</td><td>${r.sinr}</td><td>${r.arfcn}</td><td>${r.offset}</td></tr>`
+  ).join('');
+}
+
+// ── 硬件操作 ──
+function refreshHardwareInfo() {
+  if (!state.connected) { addTerminalLine('[硬件] 未连接', 'err'); return; }
+  addTerminalLine('[硬件] 正在读取信息...', 'info');
+  setTimeout(() => addTerminalLine('[硬件] 信息已更新', 'ok'), 300);
+}
+
+function applyToggle(feature, enabled) {
+  const labels = { adb: 'ADB', lanAt: 'LAN AT', uartAt: 'UART AT', apLog: 'AP Log' };
+  addTerminalLine(`[功能] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
+}
+
+function confirmAction(action) {
+  const labels = { reboot: '重启模组', factory: '恢复出厂设置（所有配置将丢失）' };
+  if (confirm(`确认要执行：${labels[action]}？`)) {
+    addTerminalLine(`[操作] 正在执行: ${labels[action]}...`, 'cmd');
+    setTimeout(() => addTerminalLine('[操作] 执行完成', 'ok'), 600);
+  }
+}
+
+// ── 频段初始化 ──
+(function initBandGrid() {
+  const bands = [
+    'B1','B3','B5','B7','B8','B20','B34','B38','B39','B40','B41',
+    'n1','n3','n5','n8','n28','n38','n40','n41','n77','n78','n79'
+  ];
+  const grid = document.getElementById('bandGrid');
+  bands.forEach(band => {
+    const chip = document.createElement('label');
+    chip.className = 'band-chip';
+    chip.dataset.band = band;
+    chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
+    chip.addEventListener('click', function () {
+      this.classList.toggle('checked');
+    });
+    grid.appendChild(chip);
+  });
+})();
+```
+
+- [ ] **Step 2: 在浏览器中验证**
+  - 点击所有导航项，页面正常切换
+  - 点击"连接"后侧边栏状态点变绿，数据格填充
+  - AT终端可以发送命令，↑↓ 翻历史
+  - 快捷命令按钮工作
+  - 蜂窝网络页所有功能按钮点击后在 AT terminal 有日志输出
+  - 频段 chip 可以点击 toggle
+  - 硬件页 toggle 开关可以切换
+  - 重启/恢复出厂有确认弹窗
+  - 邻区 tab 切换正常
+  - 主题切换正常
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/desktop/index.html
+git commit -m "feat: redesign desktop UI with 5 sections for 5G modem debugging"
+```
+
+---
+
+### Task 4: 创建 GitHub 仓库并推送
+
+**Files:** 无代码文件变更
+
+- [ ] **Step 1: 使用 gh CLI 创建公开仓库 `modem-cat`**
+
+```bash
+gh repo create modem-cat --public --description "5G modem debug tool desktop UI"
+```
+
+- [ ] **Step 2: 添加远端并推送所有分支**
+
+```bash
+git remote add origin https://github.com/$(gh api user -q .login)/modem-cat.git
+git push -u origin main
+git push origin 001-modem-debug-tool
+```

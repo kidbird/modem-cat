@@ -72,7 +72,7 @@
     }
 
     .logo-text { display: flex; align-items: center; gap: 8px; }
-    .logo-icon { color: var(--accent); font-size: 16px; }
+    .logo-icon { color: var(--accent); display: flex; align-items: center; }
 
     .theme-toggle {
       background: none;
@@ -112,9 +112,26 @@
       border-top: 1px solid var(--border-color);
       padding: 11px 16px;
       display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .status-bar-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+    .status-bar-bottom {
+      display: flex;
       align-items: center;
       gap: 8px;
-      flex-shrink: 0;
+      width: 100%;
+      border-top: 1px solid var(--border-color);
+      padding-top: 6px;
+      margin-top: 6px;
     }
     .status-dot {
       width: 7px; height: 7px;
@@ -125,6 +142,42 @@
     }
     .status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
     .status-label { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .data-status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+    .data-status-label { font-size: 12px; color: var(--text-muted); }
+    .data-status-label.connected { color: var(--success); }
+    .apn-label { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
+    .data-connect-btn {
+      padding: 4px 16px;
+      font-size: 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .data-connect-btn {
+      margin-left: auto;
+      padding: 2px 8px;
+      font-size: 10px;
+      border-radius: 3px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .data-connect-btn:hover { background: var(--bg-primary); }
+    .data-connect-btn.connecting { opacity: 0.6; cursor: not-allowed; }
+    .data-connect-btn.connected { background: var(--success); border-color: var(--success); color: #fff; }
 
     /* ── Main content ── */
     .main {
@@ -547,10 +600,39 @@
   <div class="sidebar">
     <div class="logo">
       <div class="logo-text">
-        <span class="logo-icon">◈</span>
+        <span class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Head -->
+            <circle cx="16" cy="15" r="11"/>
+            <!-- Left ear -->
+            <path d="M7 8 L4 2 L12 6"/>
+            <!-- Right ear -->
+            <path d="M25 8 L28 2 L20 6"/>
+            <!-- Inner ear left -->
+            <path d="M6.5 6.5 L5 3 L9 5.5"/>
+            <!-- Inner ear right -->
+            <path d="M25.5 6.5 L27 3 L23 5.5"/>
+            <!-- Eyes (big and round) -->
+            <circle cx="10.5" cy="13" r="3"/>
+            <circle cx="21.5" cy="13" r="3"/>
+            <!-- Eye shine -->
+            <circle cx="9.5" cy="12" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="20.5" cy="12" r="1" fill="currentColor" stroke="none"/>
+            <!-- M pattern on forehead -->
+            <path d="M12 8 L14 10 L16 8 L18 10 L20 8"/>
+            <!-- Nose -->
+            <path d="M15 17 L17 17 L16 18.5 Z" fill="currentColor" stroke="none"/>
+            <!-- Mouth -->
+            <path d="M16 18.5 Q13.5 20.5 11.5 19"/>
+            <path d="M16 18.5 Q18.5 20.5 20.5 19"/>
+            <!-- Blush -->
+            <ellipse cx="7" cy="17" rx="3" ry="2" opacity="0.3"/>
+            <ellipse cx="25" cy="17" rx="3" ry="2" opacity="0.3"/>
+          </svg>
+        </span>
         <span>Modem Cat</span>
       </div>
-      <button class="theme-toggle" onclick="toggleTheme()">浅色</button>
+      <button class="theme-toggle" onclick="toggleTheme()">☀</button>
     </div>
 
     <nav class="nav">
@@ -560,14 +642,14 @@
       <div class="nav-item" data-page="cellular">
         <span class="nav-icon">◎</span>蜂窝网络
       </div>
+      <div class="nav-item" data-page="ip">
+        <span class="nav-icon">⌥</span>IP 信息
+      </div>
       <div class="nav-item" data-page="at">
         <span class="nav-icon">›</span>AT调试
       </div>
       <div class="nav-item" data-page="hardware">
         <span class="nav-icon">⬡</span>硬件信息
-      </div>
-      <div class="nav-item" data-page="ip">
-        <span class="nav-icon">⌥</span>IP 信息
       </div>
       <div class="nav-item disabled" data-page="engineering">
         <span class="nav-icon">⚙</span>工程模式
@@ -575,8 +657,15 @@
     </nav>
 
     <div class="status-bar">
-      <div class="status-dot" id="statusDot"></div>
-      <span class="status-label" id="statusLabel">未连接</span>
+      <div class="status-bar-top">
+        <span class="data-status-label" id="dataStatusLabel">数据未连接</span>
+        <span class="apn-label" id="apnLabel">--</span>
+        <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()">连接</button>
+      </div>
+      <div class="status-bar-bottom">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-label" id="statusLabel">未连接</span>
+      </div>
     </div>
   </div>
 
@@ -1017,6 +1106,34 @@
             <span class="toggle-track"></span>
           </label>
         </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">PCIe ↔ 以太网</div>
+            <div class="toggle-desc">切换 PCIe 接口与以太网之间的数据通路</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="togglePcie" onchange="applyToggle('pcie', this.checked)">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">USB 网络模式</div>
+        <div class="form-row" style="align-items:flex-end;">
+          <div class="form-group">
+            <label>网络模式</label>
+            <select id="usbNetMode">
+              <option value="ncm">NCM 网卡</option>
+              <option value="rndis">RNDIS 网卡</option>
+              <option value="mbim">MBIM 移动宽带</option>
+            </select>
+          </div>
+          <div class="form-group auto">
+            <button class="btn btn-danger btn-sm" onclick="saveUsbNetMode()">保存并重启</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">保存后模组将自动重启，USB 连接会短暂中断。</div>
       </div>
 
       <div class="danger-zone">
@@ -1133,10 +1250,58 @@
     // ── State ──
     const state = {
       connected: false,
+      dataConnected: false,
+      dataApn: '',
       isDark: true,
       atHistory: [],
       atHistoryIdx: -1,
     };
+
+    // ── Data Connection ──
+    function toggleDataConnection() {
+      const btn = document.getElementById('dataConnectBtn');
+      if (state.dataConnected) {
+        // 断开数据连接
+        state.dataConnected = false;
+        updateDataConnectionUI();
+        addTerminalLine('[数据] 已断开数据连接', 'cmd');
+      } else {
+        // 开始连接
+        if (!state.connected) {
+          alert('请先连接模组');
+          return;
+        }
+        btn.textContent = '连接中...';
+        btn.classList.add('connecting');
+        setTimeout(() => {
+          state.dataConnected = true;
+          state.dataApn = 'cmnet';
+          updateDataConnectionUI();
+          addTerminalLine(`[数据] 已连接，使用 APN: ${state.dataApn}`, 'ok');
+        }, 800);
+      }
+    }
+
+    function updateDataConnectionUI() {
+      const statusLabel = document.getElementById('dataStatusLabel');
+      const apnLabel = document.getElementById('apnLabel');
+      const btn = document.getElementById('dataConnectBtn');
+
+      if (state.dataConnected) {
+        statusLabel.textContent = '已连接';
+        statusLabel.classList.add('connected');
+        apnLabel.textContent = state.dataApn ? `APN: ${state.dataApn}` : '';
+        btn.textContent = '断开';
+        btn.classList.remove('connecting');
+        btn.classList.add('connected');
+      } else {
+        statusLabel.textContent = '未连接';
+        statusLabel.classList.remove('connected');
+        apnLabel.textContent = '--';
+        btn.textContent = '连接';
+        btn.classList.remove('connecting', 'connected');
+      }
+    }
 
     // ── Theme ──
     (function () {
@@ -1150,7 +1315,7 @@
       state.isDark = theme === 'dark';
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
-      document.querySelector('.theme-toggle').textContent = state.isDark ? '浅色' : '深色';
+      document.querySelector('.theme-toggle').textContent = state.isDark ? '☾' : '☀';
     }
 
     // ── Navigation ──
@@ -1181,7 +1346,10 @@
     function disconnect() {
       if (!state.connected) return;
       state.connected = false;
+      state.dataConnected = false;
+      state.dataApn = '';
       updateStatusBar(false);
+      updateDataConnectionUI();
       clearData();
       addTerminalLine('[连接] 已断开', 'cmd');
     }
@@ -1578,8 +1746,16 @@
       setTimeout(() => addTerminalLine('[硬件] 信息已更新', 'ok'), 300);
     }
 
+    function saveUsbNetMode() {
+      const mode = document.getElementById('usbNetMode');
+      const label = mode.selectedOptions[0].text;
+      if (!confirm(`切换 USB 网络模式为「${label}」？\n模组将自动重启，连接会短暂中断。`)) return;
+      addTerminalLine(`[USB] 网络模式切换为: ${label}，正在重启...`, 'cmd');
+      setTimeout(() => addTerminalLine('[USB] 重启完成', 'ok'), 1200);
+    }
+
     function applyToggle(feature, enabled) {
-      const labels = { adb: 'ADB', lanAt: 'LAN AT', uartAt: 'UART AT', apLog: 'AP Log' };
+      const labels = { adb: 'ADB', lanAt: 'LAN AT', uartAt: 'UART AT', apLog: 'AP Log', pcie: 'PCIe ↔ 以太网' };
       addTerminalLine(`[功能] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
     }
 

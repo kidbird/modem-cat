@@ -566,6 +566,9 @@
       <div class="nav-item" data-page="hardware">
         <span class="nav-icon">⬡</span>硬件信息
       </div>
+      <div class="nav-item" data-page="ip">
+        <span class="nav-icon">⌥</span>IP 信息
+      </div>
       <div class="nav-item disabled" data-page="engineering">
         <span class="nav-icon">⚙</span>工程模式
       </div>
@@ -1027,6 +1030,94 @@
     </div><!-- /page-hardware -->
 
 
+    <!-- ══ IP 信息 ══ -->
+    <div class="page" id="page-ip">
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">IP 地址</div>
+          <button class="btn btn-secondary btn-sm" onclick="refreshIpInfo()">刷新</button>
+        </div>
+        <div class="info-grid-2">
+          <div class="info-item">
+            <div class="info-label">IPv4 地址</div>
+            <div class="info-value muted" id="ipv4Addr" style="font-size:13px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IPv4 子网掩码</div>
+            <div class="info-value muted" id="ipv4Mask" style="font-size:13px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IPv4 网关</div>
+            <div class="info-value muted" id="ipv4Gw" style="font-size:13px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IPv4 DNS</div>
+            <div class="info-value muted" id="ipv4Dns" style="font-size:13px;">--</div>
+          </div>
+          <div class="info-item" style="grid-column: span 2;">
+            <div class="info-label">IPv6 地址</div>
+            <div class="info-value muted" id="ipv6Addr" style="font-size:12px;letter-spacing:0.3px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IPv6 网关</div>
+            <div class="info-value muted" id="ipv6Gw" style="font-size:12px;">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">IPv6 DNS</div>
+            <div class="info-value muted" id="ipv6Dns" style="font-size:12px;">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">MTU 配置</div>
+        <div class="form-row">
+          <div class="form-group narrow" style="min-width:160px;">
+            <label>MTU 值（字节）</label>
+            <input type="number" id="mtuValue" value="1500" min="576" max="9000" placeholder="1500">
+          </div>
+          <div class="form-group auto" style="display:flex;align-items:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="applyMtu()">应用</button>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:1px;">
+            <span style="font-size:11px;color:var(--text-muted);">推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">功能配置</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Proxy ARP</div>
+            <div class="toggle-desc">开启后模组代替局域网设备响应 ARP 请求</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggleProxyArp" onchange="applyToggleIp('proxyArp', this.checked)">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">DMZ 主机</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>DMZ 主机 IP 地址</label>
+            <input type="text" id="dmzHost" placeholder="如 192.168.1.100">
+          </div>
+          <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
+            <button class="btn btn-primary btn-sm" onclick="applyDmz()">应用</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearDmz()">清除</button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">DMZ 主机将接收所有未映射的入站流量，请确保主机具备必要的安全防护。</div>
+      </div>
+
+    </div><!-- /page-ip -->
+
+
     <!-- ══ 工程模式（占位）══ -->
     <div class="page" id="page-engineering">
       <div class="placeholder-page">
@@ -1135,6 +1226,14 @@
       setText('ulTraffic', '0 KB');
       setText('dlTraffic', '0 KB');
 
+      setText('ipv4Addr', '10.141.12.33');
+      setText('ipv4Mask', '255.255.255.252');
+      setText('ipv4Gw', '10.141.12.34');
+      setText('ipv4Dns', '223.5.5.5');
+      setText('ipv6Addr', '2409:8c54:870:2b3::1');
+      setText('ipv6Gw', 'fe80::1');
+      setText('ipv6Dns', '2400:3200::1');
+
       setText('hwModel', 'RM520N-GL');
       setText('hwManufacturer', 'Quectel');
       setText('hwFirmware', 'RM520NGLAAR03A03M4G');
@@ -1156,7 +1255,8 @@
       const ids = ['simStatus','simSlot','regStatus','connStatus','imei','iccid',
         'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
-        'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp'];
+        'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp',
+        'ipv4Addr','ipv4Mask','ipv4Gw','ipv4Dns','ipv6Addr','ipv6Gw','ipv6Dns'];
       ids.forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.textContent = '--'; el.className = 'info-value muted'; }
@@ -1440,6 +1540,35 @@
       document.getElementById('nrNeighborBody').innerHTML = rows.map(r =>
         `<tr><td>${r.cellId}</td><td>${r.pci}</td><td>${r.rsrp}</td><td>${r.sinr}</td><td>${r.arfcn}</td><td>${r.offset}</td></tr>`
       ).join('');
+    }
+
+    // ── IP 信息 ──
+    function refreshIpInfo() {
+      if (!state.connected) { addTerminalLine('[IP] 未连接', 'err'); return; }
+      addTerminalLine('[IP] 正在刷新...', 'info');
+      setTimeout(() => addTerminalLine('[IP] 刷新完成', 'ok'), 300);
+    }
+
+    function applyMtu() {
+      const val = parseInt(document.getElementById('mtuValue').value);
+      if (isNaN(val) || val < 576 || val > 9000) { alert('MTU 范围：576 ~ 9000'); return; }
+      addTerminalLine(`[MTU] 已设置: ${val} 字节`, 'ok');
+    }
+
+    function applyToggleIp(feature, enabled) {
+      const labels = { proxyArp: 'Proxy ARP' };
+      addTerminalLine(`[IP] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
+    }
+
+    function applyDmz() {
+      const ip = document.getElementById('dmzHost').value.trim();
+      if (!ip) { alert('请输入 DMZ 主机 IP 地址'); return; }
+      addTerminalLine(`[DMZ] 已设置主机: ${ip}`, 'ok');
+    }
+
+    function clearDmz() {
+      document.getElementById('dmzHost').value = '';
+      addTerminalLine('[DMZ] 已清除', 'info');
     }
 
     // ── 硬件操作 ──

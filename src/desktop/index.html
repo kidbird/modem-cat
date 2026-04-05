@@ -110,59 +110,43 @@
 
     .status-bar {
       border-top: 1px solid var(--border-color);
-      padding: 11px 16px;
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
+      gap: 5px;
       flex-shrink: 0;
     }
-    .status-bar-top {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      width: 100%;
-      flex-wrap: wrap;
-    }
-    .status-bar-bottom {
+    .status-row {
       display: flex;
       align-items: center;
-      gap: 8px;
-      width: 100%;
-      border-top: 1px solid var(--border-color);
-      padding-top: 6px;
-      margin-top: 6px;
+      gap: 7px;
+      height: 22px;
     }
     .status-dot {
-      width: 7px; height: 7px;
+      width: 6px; height: 6px;
       border-radius: 50%;
       background: var(--text-muted);
       flex-shrink: 0;
       transition: background 0.3s, box-shadow 0.3s;
     }
-    .status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
-    .status-label { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .data-status-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      flex: 1;
-    }
-    .data-status-label { font-size: 12px; color: var(--text-muted); }
-    .data-status-label.connected { color: var(--success); }
-    .apn-label { font-size: 12px; color: var(--text-secondary); margin-left: 4px; }
-    .data-connect-btn {
-      padding: 4px 16px;
-      font-size: 12px;
-      border-radius: 4px;
-      border: 1px solid var(--border-color);
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
-      cursor: pointer;
-      font-family: inherit;
+    .status-dot.connected { background: var(--success); box-shadow: 0 0 5px var(--success); }
+    .status-dot.data-on { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+    .status-key {
+      font-size: 10px;
+      color: var(--text-muted);
       flex-shrink: 0;
+      width: 28px;
     }
+    .status-val {
+      font-size: 11px;
+      color: var(--text-secondary);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-val.ok { color: var(--success); }
+    .status-val.active { color: var(--accent); }
     .data-connect-btn {
       margin-left: auto;
       padding: 2px 8px;
@@ -174,8 +158,10 @@
       cursor: pointer;
       font-family: inherit;
       flex-shrink: 0;
+      transition: all 0.12s;
     }
-    .data-connect-btn:hover { background: var(--bg-primary); }
+    .data-connect-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .data-connect-btn.active { border-color: var(--accent); color: var(--accent); }
     .data-connect-btn.connecting { opacity: 0.6; cursor: not-allowed; }
     .data-connect-btn.connected { background: var(--success); border-color: var(--success); color: #fff; }
 
@@ -601,33 +587,20 @@
     <div class="logo">
       <div class="logo-text">
         <span class="logo-icon">
-          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Ears -->
+            <path d="M5 10 L5 4 L9.5 8" fill="currentColor" opacity="0.9"/>
+            <path d="M19 10 L19 4 L14.5 8" fill="currentColor" opacity="0.9"/>
             <!-- Head -->
-            <circle cx="16" cy="15" r="11"/>
-            <!-- Left ear -->
-            <path d="M7 8 L4 2 L12 6"/>
-            <!-- Right ear -->
-            <path d="M25 8 L28 2 L20 6"/>
-            <!-- Inner ear left -->
-            <path d="M6.5 6.5 L5 3 L9 5.5"/>
-            <!-- Inner ear right -->
-            <path d="M25.5 6.5 L27 3 L23 5.5"/>
-            <!-- Eyes (big and round) -->
-            <circle cx="10.5" cy="13" r="3"/>
-            <circle cx="21.5" cy="13" r="3"/>
-            <!-- Eye shine -->
-            <circle cx="9.5" cy="12" r="1" fill="currentColor" stroke="none"/>
-            <circle cx="20.5" cy="12" r="1" fill="currentColor" stroke="none"/>
-            <!-- M pattern on forehead -->
-            <path d="M12 8 L14 10 L16 8 L18 10 L20 8"/>
+            <rect x="4" y="8" width="16" height="13" rx="5" fill="currentColor"/>
+            <!-- Eyes -->
+            <ellipse cx="9" cy="13.5" rx="1.6" ry="1.8" fill="var(--bg-primary)"/>
+            <ellipse cx="15" cy="13.5" rx="1.6" ry="1.8" fill="var(--bg-primary)"/>
+            <!-- Pupils -->
+            <ellipse cx="9" cy="13.5" rx="0.7" ry="1.2" fill="var(--bg-secondary)"/>
+            <ellipse cx="15" cy="13.5" rx="0.7" ry="1.2" fill="var(--bg-secondary)"/>
             <!-- Nose -->
-            <path d="M15 17 L17 17 L16 18.5 Z" fill="currentColor" stroke="none"/>
-            <!-- Mouth -->
-            <path d="M16 18.5 Q13.5 20.5 11.5 19"/>
-            <path d="M16 18.5 Q18.5 20.5 20.5 19"/>
-            <!-- Blush -->
-            <ellipse cx="7" cy="17" rx="3" ry="2" opacity="0.3"/>
-            <ellipse cx="25" cy="17" rx="3" ry="2" opacity="0.3"/>
+            <ellipse cx="12" cy="17" rx="1" ry="0.7" fill="var(--bg-primary)" opacity="0.6"/>
           </svg>
         </span>
         <span>Modem Cat</span>
@@ -657,14 +630,16 @@
     </nav>
 
     <div class="status-bar">
-      <div class="status-bar-top">
-        <span class="data-status-label" id="dataStatusLabel">数据未连接</span>
-        <span class="apn-label" id="apnLabel">--</span>
-        <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()">连接</button>
-      </div>
-      <div class="status-bar-bottom">
+      <div class="status-row">
         <div class="status-dot" id="statusDot"></div>
-        <span class="status-label" id="statusLabel">未连接</span>
+        <span class="status-key">AT</span>
+        <span class="status-val" id="statusLabel">未连接</span>
+      </div>
+      <div class="status-row">
+        <div class="status-dot" id="dataDot"></div>
+        <span class="status-key">数据</span>
+        <span class="status-val" id="dataStatusLabel">未连接</span>
+        <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()">连接</button>
       </div>
     </div>
   </div>
@@ -1284,22 +1259,22 @@
 
     function updateDataConnectionUI() {
       const statusLabel = document.getElementById('dataStatusLabel');
-      const apnLabel = document.getElementById('apnLabel');
+      const dot = document.getElementById('dataDot');
       const btn = document.getElementById('dataConnectBtn');
 
       if (state.dataConnected) {
-        statusLabel.textContent = '已连接';
-        statusLabel.classList.add('connected');
-        apnLabel.textContent = state.dataApn ? `APN: ${state.dataApn}` : '';
+        statusLabel.textContent = state.dataApn || '已连接';
+        statusLabel.classList.add('active');
+        dot.classList.add('data-on');
         btn.textContent = '断开';
+        btn.classList.add('active');
         btn.classList.remove('connecting');
-        btn.classList.add('connected');
       } else {
         statusLabel.textContent = '未连接';
-        statusLabel.classList.remove('connected');
-        apnLabel.textContent = '--';
+        statusLabel.classList.remove('active');
+        dot.classList.remove('data-on');
         btn.textContent = '连接';
-        btn.classList.remove('connecting', 'connected');
+        btn.classList.remove('active', 'connecting');
       }
     }
 

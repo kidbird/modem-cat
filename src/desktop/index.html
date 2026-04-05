@@ -122,20 +122,21 @@
       gap: 7px;
       height: 22px;
     }
-    .status-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--text-muted);
+    .status-icon {
+      width: 14px; height: 14px;
       flex-shrink: 0;
-      transition: background 0.3s, box-shadow 0.3s;
+      color: var(--text-muted);
+      transition: color 0.3s, filter 0.3s;
+      display: flex; align-items: center; justify-content: center;
     }
-    .status-dot.connected { background: var(--success); box-shadow: 0 0 5px var(--success); }
-    .status-dot.data-on { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+    .status-icon svg { width: 14px; height: 14px; }
+    .status-icon.connected { color: var(--success); filter: drop-shadow(0 0 3px var(--success)); }
+    .status-icon.data-on   { color: var(--accent);  filter: drop-shadow(0 0 3px var(--accent)); }
     .status-key {
       font-size: 10px;
       color: var(--text-muted);
       flex-shrink: 0;
-      width: 28px;
+      width: 26px;
     }
     .status-val {
       font-size: 11px;
@@ -631,12 +632,27 @@
 
     <div class="status-bar">
       <div class="status-row">
-        <div class="status-dot" id="statusDot"></div>
-        <span class="status-key">AT</span>
+        <!-- 模组连接：USB插头图标 -->
+        <span class="status-icon" id="statusDot">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 2v4M10 2v4"/>
+            <rect x="2" y="6" width="10" height="4" rx="1.5"/>
+            <path d="M7 10v2"/>
+            <path d="M5 12h4"/>
+          </svg>
+        </span>
+        <span class="status-key">模组</span>
         <span class="status-val" id="statusLabel">未连接</span>
       </div>
       <div class="status-row">
-        <div class="status-dot" id="dataDot"></div>
+        <!-- 数据连接：信号波图标 -->
+        <span class="status-icon" id="dataDot">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+            <path d="M1 10.5 Q3.5 5 7 10.5 Q10.5 5 13 10.5" opacity="0.5"/>
+            <path d="M3 11.5 Q5 8 7 11.5 Q9 8 11 11.5" opacity="0.75"/>
+            <circle cx="7" cy="12" r="0.8" fill="currentColor" stroke="none"/>
+          </svg>
+        </span>
         <span class="status-key">数据</span>
         <span class="status-val" id="dataStatusLabel">未连接</span>
         <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()">连接</button>
@@ -1259,20 +1275,20 @@
 
     function updateDataConnectionUI() {
       const statusLabel = document.getElementById('dataStatusLabel');
-      const dot = document.getElementById('dataDot');
+      const icon = document.getElementById('dataDot');
       const btn = document.getElementById('dataConnectBtn');
 
       if (state.dataConnected) {
         statusLabel.textContent = state.dataApn || '已连接';
         statusLabel.classList.add('active');
-        dot.classList.add('data-on');
+        icon.classList.add('data-on');
         btn.textContent = '断开';
         btn.classList.add('active');
         btn.classList.remove('connecting');
       } else {
         statusLabel.textContent = '未连接';
         statusLabel.classList.remove('active');
-        dot.classList.remove('data-on');
+        icon.classList.remove('data-on');
         btn.textContent = '连接';
         btn.classList.remove('active', 'connecting');
       }
@@ -1330,14 +1346,14 @@
     }
 
     function updateStatusBar(connected) {
-      const dot = document.getElementById('statusDot');
+      const icon = document.getElementById('statusDot');
       const label = document.getElementById('statusLabel');
       if (connected) {
-        dot.classList.add('connected');
+        icon.classList.add('connected');
         const params = document.getElementById('connectionParams').value.trim();
         label.textContent = params || '已连接';
       } else {
-        dot.classList.remove('connected');
+        icon.classList.remove('connected');
         label.textContent = '未连接';
       }
     }

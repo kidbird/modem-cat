@@ -257,8 +257,8 @@
     .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
     .btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
     .btn-secondary:hover { background: var(--bg-primary); color: var(--text-primary); }
-    .btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
-    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-danger { background: transparent; border-color: var(--accent); color: var(--accent); }
+    .btn-danger:hover { background: var(--accent); border-color: var(--accent-hover); color: #fff; }
     .btn-sm { padding: 4px 10px; font-size: 11px; }
 
     /* ── Info grid ── */
@@ -462,12 +462,12 @@
 
     /* ── Danger zone ── */
     .danger-zone {
-      border: 1px solid rgba(220, 38, 38, 0.35);
+      border: 1px solid var(--border-color);
       border-radius: 6px;
       padding: 14px 16px;
-      background: rgba(220, 38, 38, 0.04);
+      background: var(--bg-secondary);
     }
-    .danger-zone .panel-title { color: var(--danger); margin-bottom: 10px; }
+    .danger-zone .panel-title { color: var(--text-muted); margin-bottom: 10px; }
     .danger-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
     /* ── Section label ── */
@@ -1110,7 +1110,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">USB 网络模式</div>
+        <div class="panel-title">USB 网卡模式</div>
         <div class="form-row" style="align-items:flex-end;">
           <div class="form-group">
             <label>网络模式</label>
@@ -1128,7 +1128,7 @@
       </div>
 
       <div class="danger-zone">
-        <div class="panel-title">危险操作</div>
+        <div class="panel-title">系统操作</div>
         <div class="danger-actions">
           <button class="btn btn-danger" onclick="confirmAction('reboot')">重启模组</button>
           <button class="btn btn-danger" onclick="confirmAction('factory')">恢复出厂设置</button>
@@ -1740,8 +1740,8 @@
     function saveUsbNetMode() {
       const mode = document.getElementById('usbNetMode');
       const label = mode.selectedOptions[0].text;
-      if (!confirm(`切换 USB 网络模式为「${label}」？\n模组将自动重启，连接会短暂中断。`)) return;
-      addTerminalLine(`[USB] 网络模式切换为: ${label}，正在重启...`, 'cmd');
+      if (!confirm(`切换 USB 网卡模式为「${label}」？\n模组将自动重启，连接会短暂中断。`)) return;
+      addTerminalLine(`[USB] 网卡模式切换为: ${label}，正在重启...`, 'cmd');
       setTimeout(() => addTerminalLine('[USB] 重启完成', 'ok'), 1200);
     }
 

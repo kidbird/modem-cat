@@ -758,6 +758,14 @@
             <div class="info-label">TX Power</div>
             <div class="info-value muted" id="txPower">--</div>
           </div>
+          <div class="info-item">
+            <div class="info-label">CQI</div>
+            <div class="info-value muted" id="cqi">--</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">QoS</div>
+            <div class="info-value muted" id="qos">--</div>
+          </div>
         </div>
       </div>
 
@@ -1397,6 +1405,8 @@
       setText('rsrq', '-12 dB');
       setTextGood('sinr', '15 dB');
       setText('txPower', '23 dBm');
+      setTextGood('cqi', '12');
+      setText('qos', 'QCI 9');
       setText('ant0', '-85 dBm');
       setText('ant1', '-87 dBm');
       setText('ant2', '-86 dBm');
@@ -1433,7 +1443,7 @@
 
     function clearData() {
       const ids = ['simStatus','simSlot','regStatus','connStatus','imei','iccid',
-        'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower',
+        'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower','cqi','qos',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
         'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp',
         'ipv4Addr','ipv4Mask','ipv4Gw','ipv4Dns','ipv6Addr','ipv6Gw','ipv6Dns'];

@@ -32,12 +32,13 @@ export const connectCommand = {
     },
   },
   run: async (args: Record<string, unknown>, globalOpts: { json: boolean; human: boolean }) => {
+    const format: OutputFormat = globalOpts.json ? 'json' : 'human';
+
     const type = args.type as string;
     if (!type) {
       throw new Error('--type is required (usb, ethernet, or ttl)');
     }
 
-    const format: OutputFormat = globalOpts.json ? 'json' : 'human';
     let connection;
 
     if (type === 'usb' || type === 'ttl') {
@@ -67,17 +68,26 @@ export const connectCommand = {
       throw new Error('Invalid connection type. Use: usb, ethernet, or ttl');
     }
 
-    await connectionManager.connect();
+    try {
+      await connectionManager.connect();
 
-    const output = {
-      success: true,
-      connection: {
-        id: connection.id,
-        type: connection.type,
-        status: connection.status,
-      },
-    };
+      const output = {
+        success: true,
+        connection: {
+          id: connection.id,
+          type: connection.type,
+          params: connection.params,
+          status: connectionManager.getStatus(),
+        },
+      };
 
-    console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    } catch (error) {
+      const output = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    }
   },
 };

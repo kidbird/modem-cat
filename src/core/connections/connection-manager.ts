@@ -2,11 +2,13 @@
  * Connection Manager - State machine for managing connections
  */
 
+import { SerialPort } from 'serialport';
 import type { Connection, ConnectionStatus, ConnectionType, ConnectionParams } from '../types/index.js';
 import { logger } from '../../lib/logger.js';
 
 export class ConnectionManager {
   private connection: Connection | null = null;
+  private serialPort: SerialPort | null = null;
 
   /**
    * Create a new connection
@@ -43,6 +45,13 @@ export class ConnectionManager {
   }
 
   /**
+   * Get serial port instance
+   */
+  getSerialPort(): SerialPort | null {
+    return this.serialPort;
+  }
+
+  /**
    * Update connection status
    */
   setStatus(status: ConnectionStatus): void {
@@ -54,38 +63,102 @@ export class ConnectionManager {
   }
 
   /**
-   * Connect to modem
+   * Connect to modem via USB Serial
    */
   async connect(): Promise<Connection> {
     if (!this.connection) {
       throw new Error('No connection created');
     }
 
+    if (this.connection.type !== 'USB_SERIAL' && this.connection.type !== 'TTL') {
+      throw new Error('Unsupported connection type for serial connection');
+    }
+
+    const { port, baudRate = 115200 } = this.connection.params;
+    if (!port) {
+      throw new Error('Port is required');
+    }
+
     this.setStatus('CONNECTING');
 
-    // In real implementation, this would establish the actual connection
-    // For now, we just mark as connected
-    this.setStatus('CONNECTED');
+    return new Promise((resolve, reject) => {
+      // Close existing port if any
+      if (this.serialPort?.isOpen) {
+        this.serialPort.close();
+        this.serialPort = null;
+      }
 
-    return this.connection;
+      this.serialPort = new SerialPort({
+        path: port,
+        baudRate,
+        dataBits: 8,
+        parity: 'none',
+        stopBits: 1,
+        autoOpen: false,
+      });
+
+      this.serialPort.on('error', (err) => {
+        logger.error('Serial port error', { error: err.message });
+        this.setStatus('ERROR');
+        reject(err);
+      });
+
+      this.serialPort.on('close', () => {
+        logger.info('Serial port closed');
+        this.setStatus('DISCONNECTED');
+      });
+
+      this.serialPort.open((err) => {
+        if (err) {
+          logger.error('Failed to open serial port', { error: err.message });
+          this.setStatus('ERROR');
+          reject(err);
+          return;
+        }
+
+        logger.info('Serial port opened', { port, baudRate });
+
+        // Wait for modem to initialize (typically 3 seconds)
+        setTimeout(() => {
+          // Flush input buffer to clear any stale data
+          if (this.serialPort?.isOpen) {
+            this.serialPort.flush(() => {
+              logger.info('Serial buffer flushed');
+              this.setStatus('CONNECTED');
+              resolve(this.connection!);
+            });
+          } else {
+            this.setStatus('CONNECTED');
+            resolve(this.connection!);
+          }
+        }, 3000);
+      });
+    });
   }
 
   /**
    * Disconnect from modem
    */
   async disconnect(): Promise<void> {
-    if (!this.connection) {
-      throw new Error('No active connection');
+    if (this.serialPort?.isOpen) {
+      this.serialPort.close((err) => {
+        if (err) {
+          logger.error('Error closing serial port', { error: err.message });
+        }
+      });
     }
-
     this.setStatus('DISCONNECTED');
-    logger.info('Disconnected', { id: this.connection.id });
+    logger.info('Disconnected', { id: this.connection?.id });
   }
 
   /**
    * Close and cleanup connection
    */
   close(): void {
+    if (this.serialPort?.isOpen) {
+      this.serialPort.close();
+    }
+    this.serialPort = null;
     if (this.connection) {
       logger.info('Closing connection', { id: this.connection.id });
       this.connection = null;

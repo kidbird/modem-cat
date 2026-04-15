@@ -3,6 +3,7 @@
  * List available serial ports
  */
 
+import { SerialPort } from 'serialport';
 import { formatJson, formatHuman } from '../../lib/formatter.js';
 import type { OutputFormat } from '../../core/types/index.js';
 
@@ -13,17 +14,25 @@ export const listPortsCommand = {
   run: async (args: Record<string, unknown>, globalOpts: { json: boolean; human: boolean }) => {
     const format: OutputFormat = globalOpts.json ? 'json' : 'human';
 
-    // Mock ports for now - in real implementation, this would call Tauri backend
-    const ports = [
-      { path: '/dev/cu.usbserial-1420', description: 'USB Serial Device', manufacturer: 'Silicon Labs' },
-      { path: '/dev/cu.Bluetooth-Incoming-Port', description: 'Bluetooth', manufacturer: null },
-    ];
+    try {
+      const ports = await SerialPort.list();
 
-    const output = {
-      success: true,
-      ports,
-    };
+      const output = {
+        success: true,
+        ports: ports.map(p => ({
+          path: p.path,
+          description: p.serialNumber || p.manufacturer || null,
+          manufacturer: p.manufacturer || null,
+        })),
+      };
 
-    console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    } catch (error) {
+      const output = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    }
   },
 };

@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "serialport": "^13.0.0"
   },
   "devDependencies": {
     "@types/bun": "^1.0.0",

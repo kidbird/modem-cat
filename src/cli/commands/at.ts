@@ -4,6 +4,7 @@
  */
 
 import { connectionManager } from '../../core/connections/connection-manager.js';
+import { atExecutor } from '../../core/modem/at-executor.js';
 import { formatJson, formatHuman } from '../../lib/formatter.js';
 import type { OutputFormat } from '../../core/types/index.js';
 
@@ -14,6 +15,9 @@ export const atCommand = {
     command: {
       type: 'string',
       short: 'c',
+    },
+    timeout: {
+      type: 'string',
     },
   },
   run: async (args: Record<string, unknown>, globalOpts: { json: boolean; human: boolean }) => {
@@ -31,20 +35,29 @@ export const atCommand = {
       throw new Error('--command is required');
     }
 
-    // Mock response - in real implementation, would send to modem
-    const response = `${command}\r\nOK\r\n`;
+    const timeout = parseInt(args.timeout as string || '5000', 10);
 
-    const output = {
-      success: true,
-      command: {
-        id: `cmd_${Date.now()}`,
-        command,
-        response,
-        status: 'OK',
-        duration: 45,
-      },
-    };
+    try {
+      const result = await atExecutor.execute(command, timeout);
 
-    console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+      const output = {
+        success: result.status === 'OK',
+        command: {
+          id: result.id,
+          command: result.command,
+          response: result.response,
+          status: result.status,
+          duration: result.duration,
+        },
+      };
+
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    } catch (error) {
+      const output = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      console.log(format === 'json' ? formatJson(output) : formatHuman(output));
+    }
   },
 };

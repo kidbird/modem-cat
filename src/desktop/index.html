@@ -1800,12 +1800,16 @@
       }
     }
 
-    function deleteApn(i) {
+    async function deleteApn(i) {
       if (!confirm(`删除 APN "${apnData[i].name}"？`)) return;
-      apnData.splice(i, 1);
-      if (editingApnIdx === i) cancelApnEdit();
-      else renderApnList();
-      addTerminalLine('[APN] 已删除', 'info');
+      if (!state.connected) { alert('请先连接模组'); return; }
+      try {
+        await invoke('delete_apn_config', { cid: apnData[i].cid });
+        addTerminalLine(`[APN] 已删除: ${apnData[i].name}`, 'ok');
+        await refreshApnList();
+      } catch (e) {
+        addTerminalLine('[APN] 删除失败: ' + e, 'err');
+      }
     }
 
     function setActiveApn(i) {

@@ -281,6 +281,17 @@ pub fn set_apn(
     }
 }
 
+/// Delete APN via AT+CGDCONT=<cid>
+pub fn delete_apn(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
+    let cmd = format!("AT+CGDCONT={}", cid);
+    let resp = t.send_at(&cmd)?;
+    if is_ok(&resp) {
+        Ok(())
+    } else {
+        Err(format!("Failed to delete APN: {}", resp))
+    }
+}
+
 /// Activate data connection via AT+QNETDEVCTL=<cid>,3,<flag>
 /// op=3 means connect, flag=1 disables auto-connect on next boot
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {

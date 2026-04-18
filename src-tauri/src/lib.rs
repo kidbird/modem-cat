@@ -456,6 +456,19 @@ async fn set_apn_config(
 }
 
 #[tauri::command]
+async fn delete_apn_config(
+    cid: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let transport = state.transport.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut guard = transport.lock().unwrap();
+        let t = guard.as_deref_mut().ok_or("Not connected")?;
+        at_adapter::delete_apn(t, cid)
+    }).await.map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     let data_cid = state.data_cid.clone();
@@ -674,6 +687,7 @@ pub fn run() {
             get_traffic,
             // Write operations
             set_apn_config,
+            delete_apn_config,
             connect_data,
             disconnect_data,
             set_network_mode_cmd,

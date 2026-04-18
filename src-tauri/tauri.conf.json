@@ -5,7 +5,6 @@
   "version": "0.1.0",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "",
     "frontendDist": "../src/desktop"
   },
@@ -14,10 +13,13 @@
     "windows": [
       {
         "title": "Modem Cat",
-        "width": 1024,
-        "height": 768,
+        "width": 1100,
+        "height": 860,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {

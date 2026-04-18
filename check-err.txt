@@ -1,0 +1,29 @@
+   Compiling modem-cat v0.1.0 (D:\code\modem-cat\src-tauri)
+error[E0308]: arguments to this function are incorrect
+   --> src\lib.rs:263:12
+    |
+263 |         if is_at_port(&port.port_name, &description, &manufacturer) {
+    |            ^^^^^^^^^^
+    |
+note: expected `&Option<&String>`, found `&Option<String>`
+   --> src\lib.rs:263:40
+    |
+263 |         if is_at_port(&port.port_name, &description, &manufacturer) {
+    |                                        ^^^^^^^^^^^^
+    = note: expected reference `&std::option::Option<&std::string::String>`
+               found reference `&std::option::Option<std::string::String>`
+note: expected `&Option<&String>`, found `&Option<String>`
+   --> src\lib.rs:263:54
+    |
+263 |         if is_at_port(&port.port_name, &description, &manufacturer) {
+    |                                                      ^^^^^^^^^^^^^
+    = note: expected reference `&std::option::Option<&std::string::String>`
+               found reference `&std::option::Option<std::string::String>`
+note: function defined here
+   --> src\lib.rs:201:4
+    |
+201 | fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Option<&String>) -> bool {
+    |    ^^^^^^^^^^                   -----------------------------  ------------------------------
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `modem-cat` (lib) due to 1 previous error

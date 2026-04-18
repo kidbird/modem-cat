@@ -94,7 +94,7 @@ impl SerialTransport {
                     {
                         // Got a complete response, do one more short read to catch any trailing data
                         let old_timeout = self.port.timeout();
-                        let _ = self.port.set_timeout(Duration::from_millis(200));
+                        let _ = self.port.set_timeout(Duration::from_millis(30));
                         while let Ok(n2) = self.port.read(&mut buf) {
                             if n2 == 0 { break; }
                             response.push_str(&String::from_utf8_lossy(&buf[..n2]));
@@ -200,7 +200,7 @@ impl AtTransport for SerialTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
         // Quick drain of any stale data
         let mut drain = [0u8; 4096];
-        let _ = self.port.set_timeout(Duration::from_millis(50));
+        let _ = self.port.set_timeout(Duration::from_millis(10));
         loop {
             match self.port.read(&mut drain) {
                 Ok(0) | Err(_) => break,

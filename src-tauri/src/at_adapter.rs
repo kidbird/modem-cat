@@ -4,7 +4,7 @@ use crate::types::*;
 
 /// Small delay between AT commands to let the modem process
 fn cmd_delay() {
-    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::thread::sleep(std::time::Duration::from_millis(5));
 }
 
 /// Query full modem status: SIM, registration, signal, cell info

@@ -175,7 +175,7 @@
     .main {
       flex: 1;
       overflow-y: auto;
-      padding: 16px;
+      padding: 6px 16px;
       display: flex;
       flex-direction: column;
       gap: 14px;
@@ -753,7 +753,15 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">网络状态</div>
+        <div class="panel-header">
+          <div class="panel-title">网络状态</div>
+          <button class="btn btn-secondary" onclick="refreshModemStatus()" title="刷新" style="border-color: var(--accent); color: var(--accent); padding: 6px 10px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
+        </div>
         <div class="info-grid">
           <div class="info-item">
             <div class="info-label">SIM 状态</div>
@@ -1101,6 +1109,7 @@
             <span class="terminal-prompt">›</span>
             <input type="text" id="atCommand" placeholder="输入 AT 命令..." onkeydown="handleAtKey(event)">
             <button class="btn btn-primary" onclick="sendAtCommand()">发送</button>
+            <button class="btn btn-secondary" onclick="clearTerminal()">清除</button>
           </div>
         </div>
       </div>
@@ -1203,13 +1212,17 @@
 
       <div class="panel">
         <div class="panel-title">USB 网卡模式</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <select id="usbNetMode" style="flex:1;">
-            <option value="2">MBIM 移动宽带</option>
-            <option value="3">RNDIS 网卡</option>
-            <option value="5">NCM 网卡</option>
-          </select>
-          <button class="btn btn-danger btn-sm" onclick="saveUsbNetMode()">保存并重启</button>
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 auto;min-width:200px;">
+            <select id="usbNetMode">
+              <option value="2">MBIM 移动宽带</option>
+              <option value="3">RNDIS 网卡</option>
+              <option value="5">NCM 网卡</option>
+            </select>
+          </div>
+          <div class="form-group auto" style="display:flex;align-items:flex-end;">
+            <button class="btn btn-danger btn-sm" onclick="saveUsbNetMode()">保存并重启</button>
+          </div>
         </div>
       </div>
 
@@ -1273,7 +1286,6 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">功能配置</div>
         <div class="toggle-row">
           <div>
             <div class="toggle-label">Proxy ARP</div>
@@ -1287,7 +1299,6 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">DMZ 主机</div>
         <div class="form-row">
           <div class="form-group">
             <label>DMZ 主机 IP 地址</label>
@@ -1430,15 +1441,22 @@
       }, 500);
     }
 
-    // ── Navigation ──
     document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
       item.addEventListener('click', function () {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         this.classList.add('active');
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + this.dataset.page).classList.add('active');
+        if (this.dataset.page === 'hardware' && state.connected) {
+          loadHardwarePage();
+        }
       });
     });
+
+    async function loadHardwarePage() {
+      await refreshHardwareInfo();
+      await refreshFeatureToggles();
+    }
 
     // ── Connection ──
     async function toggleConnection() {
@@ -1529,18 +1547,6 @@
       } catch (e) {
         addTerminalLine('[刷新] 模组状态获取失败: ' + e, 'err');
       }
-      setLoadingText('正在获取模组数据...', '查询硬件信息');
-      try {
-        await refreshHardwareInfo();
-      } catch (e) {
-        addTerminalLine('[刷新] 硬件信息获取失败: ' + e, 'err');
-      }
-      setLoadingText('正在获取模组数据...', '查询功能开关');
-      try {
-        await refreshFeatureToggles();
-      } catch (e) {
-        console.warn('refreshFeatureToggles failed:', e);
-      }
       setLoadingText('正在获取模组数据...', '查询 IP 与 APN');
       try {
         await refreshIpInfo();
@@ -1551,18 +1557,6 @@
         await refreshApnList();
       } catch (e) {
         console.warn('refreshApnList failed:', e);
-      }
-      setLoadingText('正在获取模组数据...', '查询频段配置');
-      try {
-        await refreshBands();
-      } catch (e) {
-        console.warn('refreshBands failed:', e);
-      }
-      setLoadingText('正在获取模组数据...', '查询邻区信息');
-      try {
-        await refreshNeighbors();
-      } catch (e) {
-        console.warn('refreshNeighbors failed:', e);
       }
       setLoadingText('正在获取模组数据...', '查询 QoS 与流量');
       try {
@@ -1580,7 +1574,8 @@
     }
 
     async function refreshModemStatus() {
-      if (!state.connected) return;
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
+      showLoading('正在获取网络状态...', '查询 AT+QENG 等指令');
       addTerminalLine('[状态] 正在查询模组状态...', 'info');
       try {
         const s = await invoke('get_modem_status');
@@ -1622,10 +1617,14 @@
           state.dataApn = '';
           updateDataConnectionUI();
         }
+        showToast('刷新成功', 'ok');
 
       } catch (e) {
         console.error('Failed to refresh modem status:', e);
-        addTerminalLine('[状态] 刷新失败: ' + e, 'err');
+        addTerminalLine('[状态] 刷新失败：' + e, 'err');
+        showToast('刷新失败：' + e, 'err');
+      } finally {
+        hideLoading();
       }
     }
 
@@ -1669,17 +1668,20 @@
       input.value = '';
 
       addTerminalLine('› ' + cmd, 'cmd');
+      const startTime = performance.now();
       try {
         const resp = await invoke('send_raw_at', { command: cmd });
+        const elapsed = Math.round(performance.now() - startTime);
         resp.split('\n').forEach(line => {
           const trimmed = line.trim();
           if (!trimmed) return;
-          if (trimmed === 'OK') addTerminalLine('< ' + trimmed, 'ok');
-          else if (trimmed.startsWith('ERROR')) addTerminalLine('< ' + trimmed, 'err');
+          if (trimmed === 'OK') addTerminalLine('< ' + trimmed + '  [' + elapsed + 'ms]', 'ok');
+          else if (trimmed.startsWith('ERROR')) addTerminalLine('< ' + trimmed + '  [' + elapsed + 'ms]', 'err');
           else addTerminalLine('< ' + trimmed, 'resp');
         });
       } catch (e) {
-        addTerminalLine('< ERROR: ' + e, 'err');
+        const elapsed = Math.round(performance.now() - startTime);
+        addTerminalLine('< ERROR: ' + e + '  [' + elapsed + 'ms]', 'err');
       }
     }
 
@@ -1719,12 +1721,28 @@
       terminal.scrollTop = terminal.scrollHeight;
     }
 
+    function clearTerminal() {
+      document.getElementById('terminal').innerHTML = '';
+    }
+
     // ── 蜂窝网络 Tab 切换 ──
+    let neighborLoaded = false;
+    let netlockLoaded = false;
     function switchCellularTab(tab, btn) {
       document.querySelectorAll('#page-cellular .tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('#page-cellular > .panel > .tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('ctab-' + tab).classList.add('active');
+      // Lazy-load neighbor data on first tab switch
+      if (tab === 'neighbor' && state.connected && !neighborLoaded) {
+        neighborLoaded = true;
+        loadNeighborCells();
+      }
+      // Lazy-load bands + network mode on first netlock tab switch
+      if (tab === 'netlock' && state.connected && !netlockLoaded) {
+        netlockLoaded = true;
+        loadNetlockData();
+      }
     }
 
     // ── APN ──
@@ -1835,6 +1853,28 @@
     }
 
     // ── 网络锁定 ──
+    async function loadNetlockData() {
+      if (!state.connected) return;
+      showLoading('正在获取模组数据...', '查询网络配置');
+      addTerminalLine('[网络] 正在获取网络配置...', 'info');
+      try {
+        // Load preferred network mode
+        try {
+          const mode = await invoke('get_network_mode');
+          const modeMap = { 'AUTO': 'auto', 'NR5G': '5gsa', 'NR5G NSA': 'nrNsa', 'LTE': 'lte', 'WCDMA': 'wcdma' };
+          const sel = document.getElementById('preferredNetwork');
+          sel.value = modeMap[mode] || 'auto';
+        } catch (e) {
+          console.warn('get_network_mode failed:', e);
+        }
+        // Load bands
+        await refreshBands();
+      } catch (e) {
+        addTerminalLine('[网络] 获取网络配置失败: ' + e, 'err');
+      }
+      hideLoading();
+    }
+
     async function applyPreferredNetwork() {
       const sel = document.getElementById('preferredNetwork');
       const modeMap = { auto: 'AUTO', '5gsa': 'NR5G', nrNsa: 'NR5G NSA', lte: 'LTE', wcdma: 'WCDMA' };
@@ -2007,8 +2047,24 @@
       document.getElementById('tab-' + tab).classList.add('active');
     }
 
+    async function loadNeighborCells() {
+      if (!state.connected) return;
+      showLoading('正在获取模组数据...', '查询邻区信息');
+      addTerminalLine('[邻区] 正在获取...', 'info');
+      try {
+        const result = await invoke('get_neighbor_cells');
+        populateLteNeighbors(result.lte || []);
+        populateNrNeighbors(result.nr || []);
+        addTerminalLine(`[邻区] LTE ${(result.lte || []).length} 个, NR ${(result.nr || []).length} 个`, 'ok');
+      } catch (e) {
+        addTerminalLine('[邻区] 获取失败: ' + e, 'err');
+      }
+      hideLoading();
+    }
+
     async function refreshNeighbors() {
       if (!state.connected) return;
+      showLoading('正在获取模组数据...', '刷新邻区信息');
       addTerminalLine('[邻区] 正在刷新...', 'info');
       try {
         const result = await invoke('get_neighbor_cells');
@@ -2018,6 +2074,7 @@
       } catch (e) {
         addTerminalLine('[邻区] 刷新失败: ' + e, 'err');
       }
+      hideLoading();
     }
 
     function populateLteNeighbors(rows) {
@@ -2231,6 +2288,8 @@
     renderLockList();
 
     async function doInit() {
+      const t0 = performance.now();
+      await invoke('mark_init_start');
       const label = document.getElementById('statusLabel');
       label.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');
@@ -2247,20 +2306,45 @@
         label.textContent = '连接失败';
         addTerminalLine('[初始化] 连接失败: ' + e, 'err');
       }
+      await invoke('mark_init_end');
+      const totalMs = Math.round(performance.now() - t0);
+      addTerminalLine(`[时延] 总初始化耗时: ${totalMs}ms`, 'info');
+      // Fetch and display timing breakdown
+      try {
+        const stats = await invoke('get_timing_stats');
+        displayTimingStats(stats, totalMs);
+      } catch (e) {
+        console.warn('Failed to get timing stats:', e);
+      }
     }
 
     // Tauri v2: 等待 appinitialized 事件确保 IPC 就绪
     window.Tauri?.onAppInitialized(() => {
-      doInit();
+      console.log('[Init] App initialized event received');
+      if (!state.connected) doInit();
     });
 
-    // 兜底：2秒后强制执行
+    // 兜底：3 秒后强制执行
     setTimeout(() => {
-      const label = document.getElementById('statusLabel');
-      if (label.textContent === '正在初始化...' || label.textContent === '初始化中...') {
+      console.log('[Init] Timeout fallback checking...');
+      if (!state.connected) {
+        console.log('[Init] Not connected, triggering init');
         doInit();
+      } else {
+        console.log('[Init] Already connected, skipping');
       }
-    }, 2000);
+    }, 3000);
+
+    // 额外兜底：页面加载完成后也尝试初始化
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      console.log('[Init] Page ready, waiting for initialization');
+      setTimeout(() => {
+        if (!state.connected) {
+          console.log('[Init] Page fully loaded, triggering init');
+          doInit();
+        }
+      }, 500);
+    }
 
     // ── 刷新串口列表 ──
     async function refreshPortList() {
@@ -2288,6 +2372,69 @@
         console.error('Failed to list ports:', e);
         select.innerHTML = '<option value="">刷新失败: ' + String(e).slice(0, 60) + '</option>';
       }
+    }
+
+    // ── Timing display ──
+    function displayTimingStats(stats, totalMs) {
+      const entries = stats.entries || [];
+      if (entries.length === 0) return;
+
+      addTerminalLine('═══════════════════════════════════════', 'info');
+      addTerminalLine('[时延分析] 详细耗时 breakdown:', 'info');
+      addTerminalLine('───────────────────────────────────────', 'info');
+
+      // Group by phase
+      const phases = {};
+      for (const e of entries) {
+        if (!phases[e.phase]) phases[e.phase] = { items: [], total: 0 };
+        phases[e.phase].items.push(e);
+        phases[e.phase].total += e.durationMs;
+      }
+
+      // Transport level: individual AT commands
+      const atEntries = entries.filter(e => e.phase === 'transport');
+      if (atEntries.length > 0) {
+        addTerminalLine(`[AT指令] 共 ${atEntries.length} 条:`, 'info');
+        for (const e of atEntries) {
+          const bar = '█'.repeat(Math.max(1, Math.round(e.durationMs / 20)));
+          const status = e.success ? '✓' : '✗';
+          addTerminalLine(`  ${status} ${e.command.padEnd(35)} ${String(e.durationMs).padStart(5)}ms ${bar}`, e.success ? 'info' : 'err');
+        }
+        const atTotal = atEntries.reduce((s, e) => s + e.durationMs, 0);
+        addTerminalLine(`  AT指令总耗时: ${atTotal}ms`, 'info');
+      }
+
+      // Query level phases
+      const queryPhases = ['query_modem_status', 'query_hardware_info', 'query_feature_toggles',
+        'query_ip_info', 'query_apn_list', 'query_bands', 'query_neighbor_cells',
+        'query_qos', 'query_traffic'];
+      for (const qp of queryPhases) {
+        const entry = entries.find(e => e.command === qp);
+        if (entry) {
+          const bar = '█'.repeat(Math.max(1, Math.round(entry.durationMs / 50)));
+          addTerminalLine(`  [模组查询] ${qp.padEnd(30)} ${String(entry.durationMs).padStart(5)}ms ${bar}`, 'info');
+        }
+      }
+
+      // Tauri command level
+      const tauriEntries = entries.filter(e => e.phase === 'tauri_cmd');
+      if (tauriEntries.length > 0) {
+        addTerminalLine(`[Tauri命令] 共 ${tauriEntries.length} 条:`, 'info');
+        for (const e of tauriEntries) {
+          const bar = '█'.repeat(Math.max(1, Math.round(e.durationMs / 50)));
+          addTerminalLine(`  ${e.command.padEnd(35)} ${String(e.durationMs).padStart(5)}ms ${bar}`, 'info');
+        }
+      }
+
+      // Auto-connect
+      const autoConn = entries.find(e => e.command === 'auto_connect_at');
+      if (autoConn) {
+        addTerminalLine(`[自动连接] ${String(autoConn.durationMs).padStart(5)}ms`, 'info');
+      }
+
+      addTerminalLine('───────────────────────────────────────', 'info');
+      addTerminalLine(`[时延汇总] AT指令总: ${stats.totalMs || 0}ms | 前端总耗时: ${totalMs}ms`, 'info');
+      addTerminalLine('═══════════════════════════════════════', 'info');
     }
 
     // ── 频段初始化（空，等待连接后从模组加载） ──

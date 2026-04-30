@@ -2,11 +2,11 @@
 
 **Date:** 2026-04-30  
 **Status:** Approved  
-**Approach:** B — Quectel shared layer + independent TdTech
+**Approach:** B — Quectel shared layer + independent TdTech, unified via napi-rs
 
 ## Overview
 
-Add a unified Hardware Abstraction Layer (HAL) in the Rust backend (`src-tauri/`) that supports three 5G modem platforms through a single `ModemVendor` trait interface. After auto-detecting the modem model via AT commands, the factory creates the appropriate adapter; all callers (CLI, Tauri frontend) work against the same trait.
+Build a unified Hardware Abstraction Layer (HAL) as a standalone Rust library (`modem-hal`) that handles serial port I/O, raw AT command parsing, and all three vendor adapters in one place. All callers — Tauri desktop app, Bun/TS desktop CLI, and embedded Linux CLI — consume the same Rust implementation through different binding layers. No AT parsing logic lives in TypeScript.
 
 **Platforms in scope:**
 | Platform | Models | Chipset | Detection string |
@@ -15,57 +15,101 @@ Add a unified Hardware Abstraction Layer (HAL) in the Rust backend (`src-tauri/`
 | Quectel UniSoc | RG200U, RG500U, RM500U, RG501U, RM501U | 展锐 | contains above |
 | TDTech | MT5700M-CN | Huawei-derived | contains "MT5700" |
 
+**Runtime targets:**
+| Caller | Binding | Platforms |
+|--------|---------|-----------|
+| Tauri desktop app | Rust crate (`rlib`) | macOS, Linux desktop, Windows |
+| Bun/TS desktop CLI | napi-rs native addon (`.node`) | macOS, Linux desktop, Windows |
+| Embedded CLI | Static binary | aarch64/armv7 Linux (musl/glibc) |
+
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│             Callers (CLI / Tauri commands)           │
-└────────────────────────┬────────────────────────────┘
-                         │  Box<dyn ModemVendor>
-┌────────────────────────▼────────────────────────────┐
-│                ModemVendor trait                     │
-│  query_signal_strength, query_serving_cell,          │
-│  connect_data, set_lte_bands, query_traffic, ...     │
-└───────────┬──────────────────────────┬──────────────┘
-            │                          │
-┌───────────▼──────────┐  ┌────────────▼─────────────┐
-│    QuectelModem       │  │      TdTechModem          │
-│  chip: QuectelChip   │  │  Full independent impl    │
-│  ┌──────┬──────────┐ │  │  AT^ prefix commands      │
-│  │Qualcomm│ UniSoc  │ │  └───────────────────────────┘
-│  │overrides overrides│
-│  └──────┴──────────┘ │
-└──────────────────────┘
-            │
-┌───────────▼──────────┐
-│   AtTransport trait  │
-│   Serial / TCP       │
-└──────────────────────┘
+┌──────────────────┐  ┌──────────────────┐  ┌─────────────────────┐
+│  Tauri desktop   │  │  Bun/TS CLI      │  │  Embedded CLI       │
+│  (Rust frontend) │  │  import modem-hal│  │  (static binary)    │
+└────────┬─────────┘  └────────┬─────────┘  └──────────┬──────────┘
+         │ rlib                │ napi-rs .node           │ bin
+         └────────────┬────────┘                        │
+                      │                                  │
+┌─────────────────────▼──────────────────────────────────▼─────────┐
+│                        modem-hal (Rust crate)                     │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                    ModemVendor trait                        │  │
+│  │  query_signal_strength, query_serving_cell, connect_data,  │  │
+│  │  set_lte_bands, query_traffic, reboot, ...                  │  │
+│  └───────────┬──────────────────────────┬───────────────────── ┘  │
+│              │                          │                         │
+│  ┌───────────▼──────────┐  ┌────────────▼─────────────┐          │
+│  │    QuectelModem      │  │      TdTechModem          │          │
+│  │  chip: QuectelChip   │  │  Full independent impl    │          │
+│  │  Qualcomm | UniSoc   │  │  AT^ prefix commands      │          │
+│  └───────────┬──────────┘  └────────────┬─────────────┘          │
+│              └──────────────┬────────────┘                        │
+│                             │                                     │
+│  ┌──────────────────────────▼──────────────────────────────────┐  │
+│  │                   AtTransport trait                         │  │
+│  │              Serial (serialport)  /  TCP                    │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## File Structure
+## Repository Structure
+
+The HAL is extracted from `src-tauri/` into a standalone crate. The Tauri app becomes a consumer like any other caller.
 
 ```
-src-tauri/src/
-├── modem_vendor.rs          # ModemVendor trait (unchanged)
-├── modem_factory.rs         # Factory: add TdTech detection + MT5700 model
-├── vendor_detector.rs       # AT+CGMM auto-detection (add TdTech branch)
-├── types.rs                 # Add ChipsetVendor::TdTech variant
-└── vendors/
-    ├── mod.rs
-    ├── quectel/             # NEW: replaces vendors/qualcomm.rs + vendors/unisoc.rs
-    │   ├── mod.rs           # QuectelModem struct, ModemVendor impl, shared AT commands
-    │   ├── parser.rs        # AT+QENG parser with QuectelChip-aware bandwidth lookup
-    │   ├── qualcomm.rs      # QualcommModem type alias + overrides (QMAP dial, bandwidth table)
-    │   └── unisoc.rs        # UniSocModem type alias + overrides (QNETDEVCTL dial, bandwidth table)
-    └── tdtech/              # NEW: fully independent TdTech implementation
-        ├── mod.rs           # TdTechModem struct + ModemVendor impl
-        ├── parser.rs        # AT^HCSQ/AT^MONSC/AT^DHCP/AT^SYSCFGEX parsers
-        └── dial.rs          # AT^NDISDUP dial logic + AT^DHCP IP extraction
+modem-cat/
+├── modem-hal/                   # Standalone Rust library (NEW)
+│   ├── Cargo.toml               # crate-type = ["rlib", "cdylib", "staticlib"]
+│   ├── src/
+│   │   ├── lib.rs               # Public API + napi-rs exports
+│   │   ├── modem_vendor.rs      # ModemVendor trait
+│   │   ├── modem_factory.rs     # Factory + VendorDetector
+│   │   ├── types.rs             # Shared types (add ChipsetVendor::TdTech)
+│   │   ├── transport/
+│   │   │   ├── mod.rs           # AtTransport trait
+│   │   │   ├── serial.rs        # serialport impl (feature = "serial")
+│   │   │   └── tcp.rs           # TCP impl
+│   │   └── vendors/
+│   │       ├── mod.rs
+│   │       ├── quectel/         # Replaces vendors/qualcomm.rs + unisoc.rs
+│   │       │   ├── mod.rs       # QuectelModem + ModemVendor impl
+│   │       │   ├── parser.rs    # AT+QENG parser, chip-aware bandwidth decode
+│   │       │   ├── qualcomm.rs  # Qualcomm overrides (QMAP dial, bandwidth table)
+│   │       │   └── unisoc.rs    # UniSoc overrides (QNETDEVCTL dial)
+│   │       └── tdtech/
+│   │           ├── mod.rs       # TdTechModem + ModemVendor impl
+│   │           ├── parser.rs    # AT^HCSQ/AT^MONSC/AT^DHCP/AT^SYSCFGEX parsers
+│   │           └── dial.rs      # AT^NDISDUP + hex IP conversion
+│   └── npm/                     # napi-rs generated bindings
+│       ├── index.js
+│       └── index.d.ts           # TypeScript types, auto-generated from Rust
+│
+├── modem-cli-embedded/          # Rust CLI for embedded (NEW)
+│   ├── Cargo.toml               # bin, depends on modem-hal
+│   └── src/main.rs              # clap commands, JSON output
+│
+├── src-tauri/                   # Tauri app (existing, simplified)
+│   └── src/
+│       └── lib.rs               # Tauri commands, depends on modem-hal
+│
+└── src/
+    ├── cli/                     # Bun/TS desktop CLI (existing)
+    │   └── ...                  # imports modem-hal via napi-rs .node
+    └── desktop/                 # Tauri frontend (existing)
+```
+
+**Cargo feature flags for `modem-hal`:**
+```toml
+[features]
+default = ["serial"]
+serial = ["dep:serialport"]   # disable on musl targets if needed
 ```
 
 ---
@@ -246,9 +290,66 @@ query_modem_status()
 
 ---
 
-## Build & Library Compatibility
+## Build & Distribution
 
-The Rust crate already configures `crate-type = ["staticlib", "cdylib", "rlib"]` in `Cargo.toml`. The new code adds no FFI-unsafe constructs. `Box<dyn ModemVendor>` is not `#[repr(C)]` — external C callers must use a thin C wrapper layer (out of scope for this spec).
+### Tauri desktop app
+`modem-hal` is a path dependency in `src-tauri/Cargo.toml`. No extra steps — `cargo tauri build` compiles everything together for macOS / Linux / Windows.
+
+### Bun/TS desktop CLI — napi-rs
+napi-rs compiles the Rust crate into a platform-specific `.node` native addon and auto-generates TypeScript type definitions from the `#[napi]` annotated functions.
+
+```rust
+// modem-hal/src/lib.rs — exposed to TS
+#[napi]
+pub fn connect(port: String, baud: u32) -> napi::Result<ModemHandle> { ... }
+
+#[napi]
+pub fn query_signal(handle: &ModemHandle) -> napi::Result<SignalInfo> { ... }
+```
+
+Build flow:
+```bash
+cd modem-hal && npx @napi-rs/cli build --release
+# produces: modem-hal.darwin-arm64.node, modem-hal.win32-x64.node, etc.
+```
+
+GitHub Actions pre-compiles one `.node` file per platform and publishes them as an npm package. Bun CLI imports:
+```ts
+import { connect, querySignal } from 'modem-hal'
+```
+
+### Embedded Linux CLI — static binary
+```bash
+# aarch64 glibc (Raspberry Pi, most SBCs)
+cargo build --release --target aarch64-unknown-linux-gnu
+
+# aarch64 musl (Alpine, OpenWrt, minimal rootfs)
+RUSTFLAGS="-C target-feature=+crt-static" \
+  cargo build --release --target aarch64-unknown-linux-musl
+```
+
+For musl targets, disable the `serial` feature's libudev dependency:
+```toml
+# modem-hal/Cargo.toml
+[target.'cfg(target_env = "musl")'.dependencies]
+serialport = { version = "4", default-features = false }
+```
+
+Cross-compilation uses the `cross` tool (Docker-based), so no host toolchain setup needed:
+```bash
+cross build --release --target aarch64-unknown-linux-musl
+```
+
+### CI matrix (GitHub Actions)
+| Job | Target | Output |
+|-----|--------|--------|
+| napi-macos-arm64 | aarch64-apple-darwin | .node |
+| napi-macos-x64 | x86_64-apple-darwin | .node |
+| napi-linux-x64 | x86_64-unknown-linux-gnu | .node |
+| napi-windows-x64 | x86_64-pc-windows-msvc | .node |
+| embedded-aarch64 | aarch64-unknown-linux-musl | binary |
+| embedded-armv7 | armv7-unknown-linux-musleabihf | binary |
+| tauri | all desktop | app bundle |
 
 ---
 

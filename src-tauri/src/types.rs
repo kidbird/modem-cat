@@ -121,3 +121,63 @@ pub struct PortInfo {
     pub is_at_port: bool,
     pub display_name: String,
 }
+
+/// Vendor/Chipset identification
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ChipsetVendor {
+    UniSoc,      // 展锐 - RG200U, RM500U系列
+    Qualcomm,    // 高通 - RG520N, RM520N系列
+    Unknown,
+}
+
+impl ChipsetVendor {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChipsetVendor::UniSoc => "unisoc",
+            ChipsetVendor::Qualcomm => "qualcomm",
+            ChipsetVendor::Unknown => "unknown",
+        }
+    }
+}
+
+/// Serving cell information (unified format)
+#[derive(Debug, Clone, Default)]
+pub struct ServingCellInfo {
+    pub connected: bool,
+    pub tech: String,
+    pub operator_mcc: String,
+    pub operator_mnc: String,
+    pub cell_id: String,
+    pub pci: String,
+    pub arfcn: String,
+    pub band: String,
+    pub bandwidth: String,
+    pub rsrp: String,
+    pub rsrq: String,
+    pub sinr: String,
+    pub tx_power: String,
+    pub scs: String,
+}
+
+/// Signal strength information (unified format)
+#[derive(Debug, Clone, Default)]
+pub struct SignalInfo {
+    pub rsrp: String,
+    pub rsrq: String,
+    pub sinr: String,
+    pub ant_values: [String; 4],
+}
+
+/// Temperature information (unified format)
+#[derive(Debug, Clone, Default)]
+pub struct TemperatureInfo {
+    pub soc_temp: String,
+    pub pa_temp: String,
+}
+
+/// Baseline information (unified format)
+#[derive(Debug, Clone, Default)]
+pub struct BaselineInfo {
+    pub ap_baseline: String,
+    pub cp_baseline: String,
+}

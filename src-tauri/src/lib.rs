@@ -4,11 +4,9 @@ pub mod at_adapter;
 pub mod at_parser;
 pub mod network;
 pub mod serial;
-pub mod transport;
-pub mod types;
 
-use transport::AtTransport;
-use types::*;
+use modem_hal::transport::AtTransport;
+use modem_hal::types::*;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
@@ -293,7 +291,7 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
         let pn = port_name.clone();
         let result = tokio::task::spawn_blocking(move || {
             // Open, send AT, verify OK, and return the transport
-            let mut transport = transport::SerialTransport::new(&pn, 115200)?;
+            let mut transport = modem_hal::transport::SerialTransport::new(&pn, 115200)?;
             let response = transport.send_at("AT");
             match response {
                 Ok(r) if r.trim().ends_with("OK") => Ok(transport),
@@ -328,7 +326,7 @@ fn connect_serial(
     baud_rate: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = transport::SerialTransport::new(&port_name, baud_rate)?;
+    let transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
     let id = format!("serial_{}", port_name);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
     log::info!("Connected to serial port {} at {} baud", port_name, baud_rate);
@@ -341,7 +339,7 @@ fn connect_tcp(
     port: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = transport::TcpTransport::new(&host, port)?;
+    let transport = modem_hal::transport::TcpTransport::new(&host, port)?;
     let id = format!("tcp_{}:{}", host, port);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
     log::info!("Connected to TCP {}:{}", host, port);

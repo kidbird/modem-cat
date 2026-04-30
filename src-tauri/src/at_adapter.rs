@@ -1,6 +1,6 @@
 use crate::at_parser::*;
-use crate::transport::AtTransport;
-use crate::types::*;
+use modem_hal::transport::AtTransport;
+use modem_hal::types::*;
 
 /// Small delay between AT commands to let the modem process
 fn cmd_delay() {

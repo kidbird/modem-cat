@@ -1,4 +1,4 @@
-use crate::types::{ApnEntry, NeighborCell};
+use modem_hal::types::{ApnEntry, NeighborCell};
 
 /// Check if AT response indicates success (ends with OK)
 pub fn is_ok(response: &str) -> bool {
@@ -381,7 +381,7 @@ pub fn parse_qicsgp(response: &str, active_cids: &[i32]) -> Vec<ApnEntry> {
 /// WCDMA mode:
 ///   +QENG: "neighbourcell","WCDMA",<UARFCN>,<srxqual>,<PSC>,<RSCP>,<ecno>,<set>,<rank>,<srxlev>,<thresh_Xhigh>,<thresh_Xlow>,<RAT>
 pub fn parse_qeng_neighbourcell(response: &str) -> (Vec<NeighborCell>, Vec<NeighborCell>) {
-    use crate::types::NeighborCell;
+    use modem_hal::types::NeighborCell;
     let mut lte_cells = Vec::new();
     let mut nr_cells = Vec::new();
 
@@ -582,7 +582,7 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
 
 // ── Formatting helpers ──
 
-fn format_rsrp(val: &str) -> String {
+pub fn format_rsrp(val: &str) -> String {
     if val.is_empty() || val == "0" { return String::new(); }
     if let Ok(v) = val.parse::<i32>() {
         if v < 0 { format!("{} dBm", v) }
@@ -592,7 +592,7 @@ fn format_rsrp(val: &str) -> String {
     }
 }
 
-fn format_rsrq(val: &str) -> String {
+pub fn format_rsrq(val: &str) -> String {
     if val.is_empty() || val == "0" { return String::new(); }
     if let Ok(v) = val.parse::<i32>() {
         if v < 0 { format!("{} dB", v) }

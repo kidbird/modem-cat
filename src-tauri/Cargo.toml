@@ -21,6 +21,7 @@ tokio = { version = "1", features = ["full"] }
 serialport = "4"
 log = "0.4"
 env_logger = "0.11"
+modem-hal = { path = "../modem-hal" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.56"

@@ -78,14 +78,14 @@ pub struct NeighborCell {
     pub offset: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NeighborCells {
     pub lte: Vec<NeighborCell>,
     pub nr: Vec<NeighborCell>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BandConfig {
     pub lte_supported: Vec<String>,

@@ -12,7 +12,7 @@ export const versionCommand = {
   name: 'version',
   description: 'Display version information',
   options: {},
-  run: async (args: Record<string, unknown>, globalOpts: { json: boolean; human: boolean }) => {
+  run: async (args: Record<string, unknown>, globalOpts: { json: boolean; human: boolean; verbose: boolean; help: boolean; version: boolean }) => {
     const format: OutputFormat = globalOpts.json ? 'json' : 'human';
 
     const output = {

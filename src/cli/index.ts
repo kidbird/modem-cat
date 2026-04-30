@@ -34,6 +34,7 @@ interface GlobalOptions {
 interface Command {
   name: string;
   description: string;
+  options?: Record<string, { type: 'string' | 'boolean'; short?: string }>;
   run: (args: Record<string, unknown>, globalOpts: GlobalOptions) => Promise<void>;
 }
 

@@ -2,8 +2,6 @@ use std::sync::{Arc, Mutex};
 
 pub mod at_adapter;
 pub mod at_parser;
-pub mod network;
-pub mod serial;
 
 use modem_hal::transport::AtTransport;
 use modem_hal::types::*;

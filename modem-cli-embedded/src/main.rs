@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use modem_hal::transport::SerialTransport;
-use modem_hal::{ModemFactory, ModemVendor};
+use modem_hal::ModemFactory;
 
 #[derive(Parser)]
 #[command(name = "modem", about = "5G modem CLI for embedded Linux")]

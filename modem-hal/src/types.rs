@@ -162,7 +162,7 @@ pub struct ServingCellInfo {
 }
 
 /// Signal strength information (unified format)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignalInfo {
     pub rsrp: String,
     pub rsrq: String,

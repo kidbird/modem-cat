@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "modem-hal",
+    "modem-cli-embedded",
     "src-tauri",
 ]
 resolver = "2"

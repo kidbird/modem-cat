@@ -102,7 +102,7 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
     cmd_delay();
 
     // ANT from AT+QANTRSSI?
-    let mut ant_values = [String::new(), String::new(), String::new(), String::new()];
+    let mut ant_values = vec![String::new(), String::new(), String::new(), String::new()];
     match t.send_at("AT+QANTRSSI?") {
         Ok(antrssi_resp) => {
             log::info!("AT+QANTRSSI? => {}", antrssi_resp);

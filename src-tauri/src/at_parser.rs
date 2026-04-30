@@ -240,8 +240,8 @@ pub fn parse_qsnr(response: &str) -> String {
 
 /// Parse AT+QANTRSSI? → antenna values
 /// Real: "+QANTRSSI: 1,-87,-69,-75,-72" (first value is count, then 4 antenna values)
-pub fn parse_qantrssi(response: &str) -> [String; 4] {
-    let mut ant = [String::new(), String::new(), String::new(), String::new()];
+pub fn parse_qantrssi(response: &str) -> Vec<String> {
+    let mut ant = vec![String::new(), String::new(), String::new(), String::new()];
 
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QANTRSSI:") {

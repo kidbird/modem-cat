@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "napi-feature", napi_derive::napi(object))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModemStatus {
@@ -18,7 +19,7 @@ pub struct ModemStatus {
     pub rsrq: String,
     pub sinr: String,
     pub tx_power: String,
-    pub ant_values: [String; 4],
+    pub ant_values: Vec<String>,
     pub scs: String,
 }
 
@@ -162,12 +163,13 @@ pub struct ServingCellInfo {
 }
 
 /// Signal strength information (unified format)
+#[cfg_attr(feature = "napi-feature", napi_derive::napi(object))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignalInfo {
     pub rsrp: String,
     pub rsrq: String,
     pub sinr: String,
-    pub ant_values: [String; 4],
+    pub ant_values: Vec<String>,
 }
 
 /// Temperature information (unified format)

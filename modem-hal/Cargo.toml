@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["rlib", "cdylib", "staticlib"]
+crate-type = ["rlib"]
 
 [features]
 default = ["serial"]
@@ -14,6 +14,8 @@ serial = ["dep:serialport"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+
+[target.'cfg(not(target_env = "musl"))'.dependencies]
 serialport = { version = "4", optional = true }
 
 [target.'cfg(target_env = "musl")'.dependencies]

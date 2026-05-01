@@ -1,7 +1,7 @@
+use crate::transport::AtTransport;
 use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
-use crate::transport::AtTransport;
 
 /// Serial port transport
 pub struct SerialTransport {
@@ -89,7 +89,9 @@ impl SerialTransport {
                         let old_timeout = self.port.timeout();
                         let _ = self.port.set_timeout(Duration::from_millis(30));
                         while let Ok(n2) = self.port.read(&mut buf) {
-                            if n2 == 0 { break; }
+                            if n2 == 0 {
+                                break;
+                            }
                             response.push_str(&String::from_utf8_lossy(&buf[..n2]));
                         }
                         let _ = self.port.set_timeout(old_timeout);
@@ -114,7 +116,11 @@ impl SerialTransport {
             }
         }
 
-        log::debug!("read_response: got {} bytes in {:?}", response.len(), start.elapsed());
+        log::debug!(
+            "read_response: got {} bytes in {:?}",
+            response.len(),
+            start.elapsed()
+        );
         Ok(response.trim().to_string())
     }
 }

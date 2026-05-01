@@ -36,7 +36,9 @@ pub fn parse_cpin(response: &str) -> String {
 
 pub fn parse_cgsn(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
+        if line.starts_with('+') {
+            continue;
+        }
         if line.chars().all(|c| c.is_ascii_digit()) && line.len() >= 14 {
             return line;
         }
@@ -58,7 +60,9 @@ pub fn parse_ccid(response: &str) -> String {
 
 pub fn parse_cgmm(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
+        if line.starts_with('+') {
+            continue;
+        }
         return line.trim().to_string();
     }
     String::new()
@@ -66,7 +70,9 @@ pub fn parse_cgmm(response: &str) -> String {
 
 pub fn parse_cgmi(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
+        if line.starts_with('+') {
+            continue;
+        }
         return line.trim().to_string();
     }
     String::new()
@@ -74,7 +80,9 @@ pub fn parse_cgmi(response: &str) -> String {
 
 pub fn parse_cgmr(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
+        if line.starts_with('+') {
+            continue;
+        }
         return line.trim().to_string();
     }
     String::new()
@@ -128,10 +136,14 @@ pub struct ServingCellInfo {
 
 pub fn parse_qeng_servingcell(response: &str) -> Option<ServingCellInfo> {
     for line in extract_data_lines(response) {
-        if !line.starts_with("+QENG:") { continue; }
+        if !line.starts_with("+QENG:") {
+            continue;
+        }
         let data = line.strip_prefix("+QENG:").unwrap().trim();
         let parts: Vec<&str> = data.splitn(25, ',').collect();
-        if parts.len() < 3 { continue; }
+        if parts.len() < 3 {
+            continue;
+        }
 
         let state = parts[1].trim().trim_matches('"');
         let tech = parts[2].trim().trim_matches('"');
@@ -277,10 +289,18 @@ pub fn parse_qnetdevstatus(response: &str) -> (String, String, String, String, S
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QNETDEVSTATUS:") {
             let parts: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
-            if !parts.is_empty() { ipv4 = parts[0].to_string(); }
-            if parts.len() > 1 { mask = parts[1].to_string(); }
-            if parts.len() > 2 { gw = parts[2].to_string(); }
-            if parts.len() > 4 { dns = parts[4].to_string(); }
+            if !parts.is_empty() {
+                ipv4 = parts[0].to_string();
+            }
+            if parts.len() > 1 {
+                mask = parts[1].to_string();
+            }
+            if parts.len() > 2 {
+                gw = parts[2].to_string();
+            }
+            if parts.len() > 4 {
+                dns = parts[4].to_string();
+            }
             // IPv6 might be in later positions
             if parts.len() > 5 {
                 let dns2 = parts[5].to_string();
@@ -301,7 +321,10 @@ pub fn parse_cgact(response: &str) -> Vec<(i32, i32)> {
         if let Some(rest) = line.strip_prefix("+CGACT:") {
             let parts: Vec<&str> = rest.trim().split(',').collect();
             if parts.len() >= 2 {
-                if let (Ok(cid), Ok(status)) = (parts[0].trim().parse::<i32>(), parts[1].trim().parse::<i32>()) {
+                if let (Ok(cid), Ok(status)) = (
+                    parts[0].trim().parse::<i32>(),
+                    parts[1].trim().parse::<i32>(),
+                ) {
                     result.push((cid, status));
                 }
             }
@@ -347,9 +370,20 @@ pub fn parse_qicsgp(response: &str, active_cids: &[i32]) -> Vec<ApnEntry> {
                     "3" => "IPv4v6",
                     _ => "IPv4",
                 };
-                let apn_name = parts.get(2).map(|v| v.trim().trim_matches('"')).unwrap_or("").to_string();
-                let username = parts.get(3).map(|v| v.trim().trim_matches('"')).unwrap_or("").to_string();
-                let auth_type = parts.get(5).and_then(|v| v.trim().parse::<i32>().ok()).unwrap_or(0);
+                let apn_name = parts
+                    .get(2)
+                    .map(|v| v.trim().trim_matches('"'))
+                    .unwrap_or("")
+                    .to_string();
+                let username = parts
+                    .get(3)
+                    .map(|v| v.trim().trim_matches('"'))
+                    .unwrap_or("")
+                    .to_string();
+                let auth_type = parts
+                    .get(5)
+                    .and_then(|v| v.trim().parse::<i32>().ok())
+                    .unwrap_or(0);
                 let active = active_cids.contains(&cid);
 
                 entries.push(ApnEntry {
@@ -437,7 +471,9 @@ pub fn parse_qeng_neighbourcell(response: &str) -> (Vec<NeighborCell>, Vec<Neigh
         if pos >= bytes.len() {
             continue;
         }
-        let rat = std::str::from_utf8(&bytes[rat_start..pos]).unwrap_or("").trim();
+        let rat = std::str::from_utf8(&bytes[rat_start..pos])
+            .unwrap_or("")
+            .trim();
         pos += 1; // skip closing quote
 
         // Remaining fields after the RAT quote (skip leading comma if present)
@@ -475,10 +511,16 @@ pub fn parse_qeng_neighbourcell(response: &str) -> (Vec<NeighborCell>, Vec<Neigh
                     // NR/EN-DC LTE has ~7 parts, LTE mode has ~10 parts
                     let (sinr, srxlev) = if parts.len() >= 10 {
                         // LTE mode: srxlev at index 4, sinr at index 5
-                        (parts.get(5).unwrap_or(&"").to_string(), parts.get(4).unwrap_or(&"").to_string())
+                        (
+                            parts.get(5).unwrap_or(&"").to_string(),
+                            parts.get(4).unwrap_or(&"").to_string(),
+                        )
                     } else {
                         // NR/EN-DC mode: sinr at index 4, srxlev at index 5
-                        (parts.get(4).unwrap_or(&"").to_string(), parts.get(5).unwrap_or(&"").to_string())
+                        (
+                            parts.get(4).unwrap_or(&"").to_string(),
+                            parts.get(5).unwrap_or(&"").to_string(),
+                        )
                     };
                     lte_cells.push(NeighborCell {
                         cell_id: String::new(),
@@ -583,20 +625,30 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
 // ── Formatting helpers ──
 
 pub fn format_rsrp(val: &str) -> String {
-    if val.is_empty() || val == "0" { return String::new(); }
+    if val.is_empty() || val == "0" {
+        return String::new();
+    }
     if let Ok(v) = val.parse::<i32>() {
-        if v < 0 { format!("{} dBm", v) }
-        else { format!("-{} dBm", v) }
+        if v < 0 {
+            format!("{} dBm", v)
+        } else {
+            format!("-{} dBm", v)
+        }
     } else {
         val.to_string()
     }
 }
 
 pub fn format_rsrq(val: &str) -> String {
-    if val.is_empty() || val == "0" { return String::new(); }
+    if val.is_empty() || val == "0" {
+        return String::new();
+    }
     if let Ok(v) = val.parse::<i32>() {
-        if v < 0 { format!("{} dB", v) }
-        else { format!("-{} dB", v) }
+        if v < 0 {
+            format!("{} dB", v)
+        } else {
+            format!("-{} dB", v)
+        }
     } else {
         val.to_string()
     }
@@ -604,7 +656,9 @@ pub fn format_rsrq(val: &str) -> String {
 
 /// Bandwidth value from QENG: raw number → "100 MHz"
 fn format_bw(val: &str) -> String {
-    if val.is_empty() || val == "0" { return String::new(); }
+    if val.is_empty() || val == "0" {
+        return String::new();
+    }
     if let Ok(v) = val.parse::<u32>() {
         format!("{} MHz", v)
     } else {
@@ -656,7 +710,11 @@ pub fn parse_qtemp(response: &str) -> (String, String) {
     let mut pa = String::new();
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QTEMP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             if parts.len() >= 2 {
                 let label = parts[0].to_lowercase();
                 let value = format!("{}°C", parts[1]);
@@ -723,26 +781,42 @@ pub fn parse_qnwprefcfg_supported(response: &str) -> (Vec<String>, Vec<String>) 
                 let value = if let Some(start) = after.find('(') {
                     if let Some(end) = after.find(')') {
                         Some(&after[start + 1..end])
-                    } else { None }
+                    } else {
+                        None
+                    }
                 } else if let Some(start) = after.find(',') {
                     Some(after[start + 1..].trim())
-                } else { None };
+                } else {
+                    None
+                };
                 if let Some(v) = value {
-                    lte = v.split(':').map(|s| s.trim()).filter(|s| !s.is_empty())
-                        .map(|s| format!("B{}", s)).collect();
+                    lte = v
+                        .split(':')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| format!("B{}", s))
+                        .collect();
                 }
             } else if let Some(pos) = rest.find("\"nr5g_band\"") {
                 let after = &rest[pos + "\"nr5g_band\"".len()..];
                 let value = if let Some(start) = after.find('(') {
                     if let Some(end) = after.find(')') {
                         Some(&after[start + 1..end])
-                    } else { None }
+                    } else {
+                        None
+                    }
                 } else if let Some(start) = after.find(',') {
                     Some(after[start + 1..].trim())
-                } else { None };
+                } else {
+                    None
+                };
                 if let Some(v) = value {
-                    nr = v.split(':').map(|s| s.trim()).filter(|s| !s.is_empty())
-                        .map(|s| format!("n{}", s)).collect();
+                    nr = v
+                        .split(':')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| format!("n{}", s))
+                        .collect();
                 }
             }
         }

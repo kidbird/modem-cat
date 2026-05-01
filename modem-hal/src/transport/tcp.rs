@@ -1,7 +1,7 @@
+use crate::transport::AtTransport;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::time::Duration;
-use crate::transport::AtTransport;
 
 /// TCP transport
 pub struct TcpTransport {
@@ -13,7 +13,9 @@ impl TcpTransport {
     pub fn new(host: &str, port: u16) -> Result<Self, String> {
         let addr = format!("{}:{}", host, port);
         let stream = TcpStream::connect_timeout(
-            &addr.parse().map_err(|e| format!("Invalid address: {}", e))?,
+            &addr
+                .parse()
+                .map_err(|e| format!("Invalid address: {}", e))?,
             Duration::from_secs(5),
         )
         .map_err(|e| format!("Failed to connect to {}: {}", addr, e))?;
@@ -21,9 +23,7 @@ impl TcpTransport {
         stream
             .set_read_timeout(Some(Duration::from_millis(500)))
             .ok();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(3)))
-            .ok();
+        stream.set_write_timeout(Some(Duration::from_secs(3))).ok();
 
         let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
         Ok(Self {

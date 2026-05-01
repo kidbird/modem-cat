@@ -3,7 +3,9 @@ use crate::types::{IpInfo, TrafficInfo};
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     let resp = t.send_at(&format!("AT+QNETDEVCTL=1,{},1", cid))?;
-    if resp.contains("ERROR") { return Err(format!("QNETDEVCTL connect failed: {}", resp)); }
+    if resp.contains("ERROR") {
+        return Err(format!("QNETDEVCTL connect failed: {}", resp));
+    }
     Ok(())
 }
 
@@ -15,19 +17,27 @@ pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> 
 pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
     let resp = t.send_at(&format!("AT+QNETDEVSTATUS={}", cid))?;
     let mut info = IpInfo {
-        ipv4_addr: String::new(), ipv4_mask: String::new(),
-        ipv4_gw: String::new(), ipv4_dns: String::new(),
-        ipv6_addr: String::new(), ipv6_gw: String::new(), ipv6_dns: String::new(),
+        ipv4_addr: String::new(),
+        ipv4_mask: String::new(),
+        ipv4_gw: String::new(),
+        ipv4_dns: String::new(),
+        ipv6_addr: String::new(),
+        ipv6_gw: String::new(),
+        ipv6_dns: String::new(),
     };
     for line in resp.lines() {
         let t2 = line.trim();
         if let Some(rest) = t2.strip_prefix("+QNETDEVSTATUS:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             if parts.len() >= 5 {
                 info.ipv4_addr = parts.get(1).unwrap_or(&"").to_string();
                 info.ipv4_mask = parts.get(2).unwrap_or(&"").to_string();
-                info.ipv4_gw   = parts.get(3).unwrap_or(&"").to_string();
-                info.ipv4_dns  = parts.get(4).unwrap_or(&"").to_string();
+                info.ipv4_gw = parts.get(3).unwrap_or(&"").to_string();
+                info.ipv4_dns = parts.get(4).unwrap_or(&"").to_string();
             }
         }
     }
@@ -47,5 +57,8 @@ pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
             }
         }
     }
-    Ok(TrafficInfo { ul_bytes: 0, dl_bytes: 0 })
+    Ok(TrafficInfo {
+        ul_bytes: 0,
+        dl_bytes: 0,
+    })
 }

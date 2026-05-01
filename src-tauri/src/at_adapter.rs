@@ -20,8 +20,14 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
 
     // IMEI
     let cgsn_resp = match t.send_at("AT+CGSN") {
-        Ok(r) => { log::info!("AT+CGSN => {}", r); r }
-        Err(e) => { log::warn!("AT+CGSN failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+CGSN => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+CGSN failed: {}", e);
+            String::new()
+        }
     };
     let imei = parse_cgsn(&cgsn_resp);
 
@@ -29,16 +35,28 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
 
     // ICCID (try CCID first, fallback to QCCID)
     let ccid_resp = match t.send_at("AT+CCID") {
-        Ok(r) => { log::info!("AT+CCID => {}", r); r }
-        Err(e) => { log::warn!("AT+CCID failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+CCID => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+CCID failed: {}", e);
+            String::new()
+        }
     };
     let iccid = if !parse_ccid(&ccid_resp).is_empty() {
         parse_ccid(&ccid_resp)
     } else {
         // Fallback to QCCID
         match t.send_at("AT+QCCID") {
-            Ok(r) => { log::info!("AT+QCCID => {}", r); parse_ccid(&r) }
-            Err(e) => { log::warn!("AT+QCCID failed: {}", e); String::new() }
+            Ok(r) => {
+                log::info!("AT+QCCID => {}", r);
+                parse_ccid(&r)
+            }
+            Err(e) => {
+                log::warn!("AT+QCCID failed: {}", e);
+                String::new()
+            }
         }
     };
 
@@ -149,8 +167,14 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
         ant_values,
         scs,
     };
-    log::info!("query_modem_status: done - SIM={}, REG={}, CONN={}, NET={}, OP={}",
-        result.sim_status, result.reg_status, result.conn_status, result.network_type, result.operator);
+    log::info!(
+        "query_modem_status: done - SIM={}, REG={}, CONN={}, NET={}, OP={}",
+        result.sim_status,
+        result.reg_status,
+        result.conn_status,
+        result.network_type,
+        result.operator
+    );
     Ok(result)
 }
 
@@ -169,8 +193,14 @@ pub fn query_hardware_info(t: &mut dyn AtTransport) -> Result<HardwareInfo, Stri
     cmd_delay();
 
     let gmr_resp = match t.send_at("AT+GMR") {
-        Ok(r) => { log::info!("AT+GMR => {}", r); r }
-        Err(e) => { log::warn!("AT+GMR failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+GMR => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+GMR failed: {}", e);
+            String::new()
+        }
     };
     let firmware = parse_gmr(&gmr_resp);
 
@@ -178,16 +208,28 @@ pub fn query_hardware_info(t: &mut dyn AtTransport) -> Result<HardwareInfo, Stri
 
     // AP/CP baseline
     let (ap_baseline, cp_baseline) = match t.send_at("AT+QBASELINE") {
-        Ok(resp) => { log::info!("AT+QBASELINE => {}", resp); parse_qbaseline(&resp) }
-        Err(e) => { log::warn!("AT+QBASELINE failed: {}", e); (String::new(), String::new()) }
+        Ok(resp) => {
+            log::info!("AT+QBASELINE => {}", resp);
+            parse_qbaseline(&resp)
+        }
+        Err(e) => {
+            log::warn!("AT+QBASELINE failed: {}", e);
+            (String::new(), String::new())
+        }
     };
 
     cmd_delay();
 
     // Temperature
     let (soc_temp, pa_temp) = match t.send_at("AT+QTEMP") {
-        Ok(resp) => { log::info!("AT+QTEMP => {}", resp); parse_qtemp(&resp) }
-        Err(e) => { log::warn!("AT+QTEMP failed: {}", e); (String::new(), String::new()) }
+        Ok(resp) => {
+            log::info!("AT+QTEMP => {}", resp);
+            parse_qtemp(&resp)
+        }
+        Err(e) => {
+            log::warn!("AT+QTEMP failed: {}", e);
+            (String::new(), String::new())
+        }
     };
 
     Ok(HardwareInfo {
@@ -236,7 +278,9 @@ pub fn query_apn_list(t: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String> 
 
 /// Query neighbor cells via AT+QENG="neighbourcell"
 /// Returns (lte_cells, nr_cells).
-pub fn query_neighbor_cells(t: &mut dyn AtTransport) -> Result<(Vec<NeighborCell>, Vec<NeighborCell>), String> {
+pub fn query_neighbor_cells(
+    t: &mut dyn AtTransport,
+) -> Result<(Vec<NeighborCell>, Vec<NeighborCell>), String> {
     log::info!("AT+QENG=\"neighbourcell\" => ...");
     let resp = t.send_at(r#"AT+QENG="neighbourcell""#)?;
     log::info!("AT+QENG=\"neighbourcell\" <= {}", resp);
@@ -348,8 +392,14 @@ pub fn set_nr5g_band(t: &mut dyn AtTransport, band: &str) -> Result<(), String> 
 pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
     // Query supported bands
     let supported_resp = match t.send_at("AT+QNWPREFCFG=?") {
-        Ok(r) => { log::info!("AT+QNWPREFCFG=? => {}", r); r }
-        Err(e) => { log::warn!("AT+QNWPREFCFG=? failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+QNWPREFCFG=? => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+QNWPREFCFG=? failed: {}", e);
+            String::new()
+        }
     };
     let (lte_supported, nr_supported) = parse_qnwprefcfg_supported(&supported_resp);
 
@@ -357,8 +407,14 @@ pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
 
     // Query current locked LTE bands
     let lte_locked_resp = match t.send_at(r#"AT+QNWPREFCFG="lte_band""#) {
-        Ok(r) => { log::info!("AT+QNWPREFCFG=\"lte_band\" => {}", r); r }
-        Err(e) => { log::warn!("AT+QNWPREFCFG=\"lte_band\" failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+QNWPREFCFG=\"lte_band\" => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+QNWPREFCFG=\"lte_band\" failed: {}", e);
+            String::new()
+        }
     };
     let lte_locked = parse_qnwprefcfg_bands(&lte_locked_resp, "lte_band");
 
@@ -366,8 +422,14 @@ pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
 
     // Query current locked NR5G bands
     let nr_locked_resp = match t.send_at(r#"AT+QNWPREFCFG="nr5g_band""#) {
-        Ok(r) => { log::info!("AT+QNWPREFCFG=\"nr5g_band\" => {}", r); r }
-        Err(e) => { log::warn!("AT+QNWPREFCFG=\"nr5g_band\" failed: {}", e); String::new() }
+        Ok(r) => {
+            log::info!("AT+QNWPREFCFG=\"nr5g_band\" => {}", r);
+            r
+        }
+        Err(e) => {
+            log::warn!("AT+QNWPREFCFG=\"nr5g_band\" failed: {}", e);
+            String::new()
+        }
     };
     let nr_locked = parse_qnwprefcfg_bands(&nr_locked_resp, "nr5g_band");
 
@@ -441,37 +503,55 @@ pub fn send_raw_at(t: &mut dyn AtTransport, command: &str) -> Result<String, Str
 pub fn query_feature_toggles(t: &mut dyn AtTransport) -> Result<FeatureToggles, String> {
     let pcie_mode = match t.send_at(r#"AT+QCFG="pcie/mode""#) {
         Ok(r) => parse_qcfg_int(&r, "pcie/mode").unwrap_or(0) == 1,
-        Err(e) => { log::warn!("AT+QCFG pcie/mode failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG pcie/mode failed: {}", e);
+            false
+        }
     };
     cmd_delay();
 
     let ethernet = match t.send_at(r#"AT+QCFG="ethernet""#) {
         Ok(r) => parse_qcfg_int(&r, "ethernet").unwrap_or(0) == 1,
-        Err(e) => { log::warn!("AT+QCFG ethernet failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG ethernet failed: {}", e);
+            false
+        }
     };
     cmd_delay();
 
     let proxyarp = match t.send_at(r#"AT+QCFG="proxyarp""#) {
         Ok(r) => parse_qcfg_int(&r, "proxyarp").unwrap_or(0) == 1,
-        Err(e) => { log::warn!("AT+QCFG proxyarp failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG proxyarp failed: {}", e);
+            false
+        }
     };
     cmd_delay();
 
     let uartat = match t.send_at(r#"AT+QCFG="uartat""#) {
         Ok(r) => parse_qcfg_int(&r, "uartat").unwrap_or(0) == 1,
-        Err(e) => { log::warn!("AT+QCFG uartat failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG uartat failed: {}", e);
+            false
+        }
     };
     cmd_delay();
 
     let eth_at = match t.send_at(r#"AT+QCFG="eth_at""#) {
         Ok(r) => parse_qcfg_int(&r, "eth_at").unwrap_or(0) == 1,
-        Err(e) => { log::warn!("AT+QCFG eth_at failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG eth_at failed: {}", e);
+            false
+        }
     };
     cmd_delay();
 
     let adb = match t.send_at(r#"AT+QCFG="usbcfg""#) {
         Ok(r) => parse_qcfg_usbcfg_adb(&r),
-        Err(e) => { log::warn!("AT+QCFG usbcfg failed: {}", e); false }
+        Err(e) => {
+            log::warn!("AT+QCFG usbcfg failed: {}", e);
+            false
+        }
     };
 
     Ok(FeatureToggles {
@@ -543,5 +623,8 @@ pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
     let resp = t.send_at("AT+QGDCNT?")?;
     log::info!("AT+QGDCNT? <= {}", resp);
     let (ul, dl) = parse_qgdcnt(&resp);
-    Ok(TrafficInfo { ul_bytes: ul, dl_bytes: dl })
+    Ok(TrafficInfo {
+        ul_bytes: ul,
+        dl_bytes: dl,
+    })
 }

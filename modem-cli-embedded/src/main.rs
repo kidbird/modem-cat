@@ -41,36 +41,41 @@ fn main() {
 
     let mut transport = match SerialTransport::new(&cli.port, cli.baud) {
         Ok(t) => t,
-        Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
     };
 
     let mut modem = match ModemFactory::create(&mut transport) {
         Ok(m) => m,
-        Err(e) => { eprintln!("Error detecting modem: {}", e); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("Error detecting modem: {}", e);
+            std::process::exit(1);
+        }
     };
 
     let result = match cli.command {
-        Commands::Status => {
-            modem.query_modem_status(&mut transport)
-                .map(|s| serde_json::to_string_pretty(&s).unwrap())
-        }
-        Commands::Signal => {
-            modem.query_signal_strength(&mut transport)
-                .map(|s| serde_json::to_string_pretty(&s).unwrap())
-        }
-        Commands::Connect { cid } => {
-            modem.connect_data(&mut transport, cid)
-                .map(|_| r#"{"status":"connected"}"#.to_string())
-        }
-        Commands::Disconnect { cid } => {
-            modem.disconnect_data(&mut transport, cid)
-                .map(|_| r#"{"status":"disconnected"}"#.to_string())
-        }
+        Commands::Status => modem
+            .query_modem_status(&mut transport)
+            .map(|s| serde_json::to_string_pretty(&s).unwrap()),
+        Commands::Signal => modem
+            .query_signal_strength(&mut transport)
+            .map(|s| serde_json::to_string_pretty(&s).unwrap()),
+        Commands::Connect { cid } => modem
+            .connect_data(&mut transport, cid)
+            .map(|_| r#"{"status":"connected"}"#.to_string()),
+        Commands::Disconnect { cid } => modem
+            .disconnect_data(&mut transport, cid)
+            .map(|_| r#"{"status":"disconnected"}"#.to_string()),
     };
 
     match result {
         Ok(output) => println!("{}", output),
-        Err(e) => { eprintln!("{}", e); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
     }
 }
 

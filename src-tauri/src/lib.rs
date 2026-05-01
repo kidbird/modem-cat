@@ -20,7 +20,8 @@ pub struct AppState {
 /// that have a "FriendlyName" value and a child "Device Parameters" key with
 /// a "PortName" value matching "COMx".
 #[cfg(target_os = "windows")]
-fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)>
+{
     use std::collections::HashMap;
     use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
@@ -78,14 +79,15 @@ fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<Stri
 }
 
 #[cfg(not(target_os = "windows"))]
-fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)>
+{
     std::collections::HashMap::new()
 }
 
 #[tauri::command]
 fn list_ports() -> Result<Vec<PortInfo>, String> {
-    let ports = serialport::available_ports()
-        .map_err(|e| format!("Failed to list ports: {}", e))?;
+    let ports =
+        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     // Get Windows WMI info for all ports at once (single PowerShell call)
     let win_info = get_windows_all_port_info();
@@ -112,9 +114,14 @@ fn list_ports() -> Result<Vec<PortInfo>, String> {
                 }
             }
 
-            let is_at_port = is_at_port(&port.port_name, &description.as_ref(), &manufacturer.as_ref());
+            let is_at_port = is_at_port(
+                &port.port_name,
+                &description.as_ref(),
+                &manufacturer.as_ref(),
+            );
 
-            let display_name = build_display_name(&port.port_name, &description, &manufacturer, is_at_port);
+            let display_name =
+                build_display_name(&port.port_name, &description, &manufacturer, is_at_port);
 
             PortInfo {
                 port_name: port.port_name,
@@ -194,13 +201,18 @@ fn regex_remove_com_suffix(s: &str) -> String {
 /// We check for common patterns in modem port descriptions:
 ///   - "AT Command Port", "AT Port", "AT Interface"
 ///   - Quectel RM/RG series with specific port naming
-fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Option<&String>) -> bool {
+fn is_at_port(
+    _port_name: &str,
+    description: &Option<&String>,
+    manufacturer: &Option<&String>,
+) -> bool {
     let desc_upper = description.map_or_else(String::new, |s| s.to_uppercase());
     let mfg_upper = manufacturer.map_or_else(String::new, |s| s.to_uppercase());
 
     // Strong match: description explicitly contains "AT" as a standalone keyword
     // e.g., "AT Command Port", "AT Port", "AT Interface", "AT Modem"
-    if desc_upper.split(|c: char| !c.is_alphabetic())
+    if desc_upper
+        .split(|c: char| !c.is_alphabetic())
         .any(|word| word == "AT")
     {
         return true;
@@ -222,7 +234,10 @@ fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Op
     if is_modem_manufacturer {
         // For modem manufacturers, check if description suggests this is the AT port
         // (not NMEA, not DM, not Diag)
-        if desc_upper.contains("NMEA") || desc_upper.contains("DIAG") || desc_upper.contains("DEBUG") {
+        if desc_upper.contains("NMEA")
+            || desc_upper.contains("DIAG")
+            || desc_upper.contains("DEBUG")
+        {
             return false;
         }
         // Modem manufacturer + description contains "MODEM" or "COMMAND" → likely AT
@@ -244,8 +259,8 @@ fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Op
 /// reliable identification, matching the logic in `list_ports`.
 #[tauri::command]
 async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let ports = serialport::available_ports()
-        .map_err(|e| format!("Failed to list ports: {}", e))?;
+    let ports =
+        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     let win_info = get_windows_all_port_info();
 
@@ -271,7 +286,11 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
             }
         }
 
-        if is_at_port(&port.port_name, &description.as_ref(), &manufacturer.as_ref()) {
+        if is_at_port(
+            &port.port_name,
+            &description.as_ref(),
+            &manufacturer.as_ref(),
+        ) {
             at_candidates.push(port.port_name.clone());
         }
     }
@@ -327,7 +346,11 @@ fn connect_serial(
     let transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
     let id = format!("serial_{}", port_name);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
-    log::info!("Connected to serial port {} at {} baud", port_name, baud_rate);
+    log::info!(
+        "Connected to serial port {} at {} baud",
+        port_name,
+        baud_rate
+    );
     Ok(id)
 }
 
@@ -363,7 +386,9 @@ async fn get_modem_status(state: tauri::State<'_, AppState>) -> Result<ModemStat
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_modem_status(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -373,7 +398,9 @@ async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<Hardware
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_hardware_info(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -385,7 +412,9 @@ async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_ip_info(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -395,7 +424,9 @@ async fn get_apn_list(state: tauri::State<'_, AppState>) -> Result<Vec<ApnEntry>
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_apn_list(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -406,7 +437,9 @@ async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<Neighbo
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let (lte, nr) = at_adapter::query_neighbor_cells(t)?;
         Ok(NeighborCells { lte, nr })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -418,7 +451,9 @@ async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, Stri
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_qos(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -428,7 +463,9 @@ async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, S
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_network_mode(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 // ── Write operations (async to avoid blocking UI) ──
@@ -448,20 +485,21 @@ async fn set_apn_config(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_apn(t, cid, context_type, &apn, &username, &password, auth_type)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn delete_apn_config(
-    cid: i32,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::delete_apn(t, cid)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -476,7 +514,9 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
         at_adapter::connect_data(t, cid)?;
         *data_cid.lock().unwrap() = cid;
         Ok(())
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -489,7 +529,9 @@ async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String
         let cid = *data_cid.lock().unwrap();
         let cid = if cid > 0 { cid } else { 1 };
         at_adapter::disconnect_data(t, cid)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -502,20 +544,21 @@ async fn set_network_mode_cmd(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_network_mode(t, &mode)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn set_nr5g_band_cmd(
-    band: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn set_nr5g_band_cmd(band: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_nr5g_band(t, &band)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -525,7 +568,9 @@ async fn reboot_modem(state: tauri::State<'_, AppState>) -> Result<(), String> {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::reboot_modem(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -535,20 +580,21 @@ async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> 
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::factory_reset(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn send_raw_at(
-    command: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::send_raw_at(t, &command)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -558,7 +604,9 @@ async fn get_bands(state: tauri::State<'_, AppState>) -> Result<BandConfig, Stri
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_bands(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -572,7 +620,9 @@ async fn set_bands(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_bands(t, &lte, &nr)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -582,7 +632,9 @@ async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::reset_all_bands(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -592,7 +644,9 @@ async fn get_feature_toggles(state: tauri::State<'_, AppState>) -> Result<Featur
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_feature_toggles(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -615,7 +669,9 @@ async fn set_feature_toggle(
             "adb" => at_adapter::set_adb(t, enabled),
             _ => Err(format!("Unknown feature: {}", feature)),
         }
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -625,7 +681,9 @@ async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, S
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_traffic(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -635,20 +693,21 @@ async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, Strin
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_usbnet(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn set_usbnet_mode(
-    mode: i32,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn set_usbnet_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_usbnet(t, mode)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

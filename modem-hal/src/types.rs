@@ -126,9 +126,9 @@ pub struct PortInfo {
 /// Vendor/Chipset identification
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum ChipsetVendor {
-    UniSoc,      // 展锐 - RG200U, RM500U系列
-    Qualcomm,    // 高通 - RG520N, RM520N系列
-    TdTech,      // 鼎桥 MT5700 series
+    UniSoc,   // 展锐 - RG200U, RM500U系列
+    Qualcomm, // 高通 - RG520N, RM520N系列
+    TdTech,   // 鼎桥 MT5700 series
     Unknown,
 }
 

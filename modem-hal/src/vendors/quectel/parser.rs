@@ -1,4 +1,4 @@
-use crate::types::{ServingCellInfo, NeighborCells, TemperatureInfo, ApnEntry};
+use crate::types::{ApnEntry, NeighborCells, ServingCellInfo, TemperatureInfo};
 
 /// Parse AT+QENG="servingcell" response.
 /// `qualcomm_bandwidth`: true = index lookup, false = direct MHz value (UniSoc)
@@ -6,8 +6,13 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
     for line in response.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("+QENG: \"servingcell\",") {
-            let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() < 4 { continue; }
+            let parts: Vec<&str> = rest
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
+            if parts.len() < 4 {
+                continue;
+            }
             let connected = parts[0] != "NOCONN";
             let tech = parts[1].to_string();
 
@@ -77,22 +82,29 @@ fn decode_qualcomm_bandwidth(idx: u32) -> String {
 
 pub fn parse_cpin(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+CPIN: ") { return rest.trim().to_string(); }
+        if let Some(rest) = line.strip_prefix("+CPIN: ") {
+            return rest.trim().to_string();
+        }
     }
     "UNKNOWN".to_string()
 }
 
 pub fn parse_cgsn(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
-        if line.chars().all(|c| c.is_ascii_digit()) && line.len() >= 14 { return line; }
+        if line.starts_with('+') {
+            continue;
+        }
+        if line.chars().all(|c| c.is_ascii_digit()) && line.len() >= 14 {
+            return line;
+        }
     }
     String::new()
 }
 
 pub fn parse_iccid(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+CCID: ")
+        if let Some(rest) = line
+            .strip_prefix("+CCID: ")
             .or_else(|| line.strip_prefix("+ICCID: "))
             .or_else(|| line.strip_prefix("+QCCID: "))
         {
@@ -104,7 +116,9 @@ pub fn parse_iccid(response: &str) -> String {
 
 pub fn parse_cgmm(response: &str) -> String {
     for line in extract_data_lines(response) {
-        if line.starts_with('+') { continue; }
+        if line.starts_with('+') {
+            continue;
+        }
         return line.trim().to_string();
     }
     String::new()
@@ -126,7 +140,10 @@ pub fn parse_qtemp(response: &str) -> TemperatureInfo {
     let mut info = TemperatureInfo::default();
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QTEMP: ") {
-            let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             match parts.get(0).unwrap_or(&"") {
                 &"soc-thermal" | &"mdm-core" => {
                     info.soc_temp = parts.get(1).unwrap_or(&"").to_string();
@@ -156,11 +173,17 @@ pub fn parse_cgact_cids(response: &str) -> std::collections::HashSet<i32> {
     active
 }
 
-pub fn parse_cgdcont_apn(response: &str, active_cids: &std::collections::HashSet<i32>) -> Vec<ApnEntry> {
+pub fn parse_cgdcont_apn(
+    response: &str,
+    active_cids: &std::collections::HashSet<i32>,
+) -> Vec<ApnEntry> {
     let mut entries = vec![];
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+CGDCONT:") {
-            let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             if parts.len() >= 3 {
                 let cid: i32 = parts[0].parse().unwrap_or(0);
                 entries.push(ApnEntry {
@@ -182,7 +205,9 @@ pub fn parse_band_list(response: &str) -> Vec<String> {
         if let Some(rest) = line.strip_prefix("+QNWPREFCFG:") {
             let parts: Vec<&str> = rest.split(',').collect();
             if parts.len() >= 2 {
-                return parts[1].trim().trim_matches('"')
+                return parts[1]
+                    .trim()
+                    .trim_matches('"')
                     .split(':')
                     .map(|b| b.trim_start_matches('B').to_string())
                     .collect();
@@ -193,16 +218,23 @@ pub fn parse_band_list(response: &str) -> Vec<String> {
 }
 
 pub fn parse_qeng_neighbour_cells(_response: &str) -> NeighborCells {
-    NeighborCells { lte: vec![], nr: vec![] }
+    NeighborCells {
+        lte: vec![],
+        nr: vec![],
+    }
 }
 
 pub fn extract_data_lines(response: &str) -> Vec<String> {
-    response.lines()
+    response
+        .lines()
         .filter(|l| {
             let t = l.trim();
-            !t.is_empty() && t != "OK" && !t.starts_with("ERROR")
+            !t.is_empty()
+                && t != "OK"
+                && !t.starts_with("ERROR")
                 && !t.starts_with("+CME ERROR")
-                && !t.starts_with("AT+") && !t.starts_with("AT^")
+                && !t.starts_with("AT+")
+                && !t.starts_with("AT^")
                 && t != "AT"
         })
         .map(|l| l.trim().to_string())

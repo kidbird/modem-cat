@@ -1,10 +1,10 @@
-pub mod tcp;
 #[cfg(feature = "serial")]
 pub mod serial;
+pub mod tcp;
 
-pub use tcp::TcpTransport;
 #[cfg(feature = "serial")]
 pub use serial::SerialTransport;
+pub use tcp::TcpTransport;
 
 pub trait AtTransport: Send {
     fn send_at(&mut self, command: &str) -> Result<String, String>;
@@ -25,7 +25,9 @@ impl MockTransport {
 
 impl AtTransport for MockTransport {
     fn send_at(&mut self, _command: &str) -> Result<String, String> {
-        self.responses.pop_front().ok_or("no more responses".to_string())
+        self.responses
+            .pop_front()
+            .ok_or("no more responses".to_string())
     }
     fn close(&mut self) {}
 }

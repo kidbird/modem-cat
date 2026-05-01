@@ -1,11 +1,14 @@
-use crate::types::{SignalInfo, ServingCellInfo};
+use crate::types::{ServingCellInfo, SignalInfo};
 
 /// Parse AT^HCSQ? response — converts indexed values to dBm strings
 pub fn parse_hcsq(response: &str) -> SignalInfo {
     for line in response.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("^HCSQ: ") {
-            let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             let mode = parts.get(0).unwrap_or(&"");
             if *mode == "LTE" && parts.len() >= 5 {
                 // ^HCSQ: "LTE",rssi,rsrp,sinr,rsrq
@@ -37,18 +40,24 @@ pub fn parse_hcsq(response: &str) -> SignalInfo {
 }
 
 fn decode_rsrp(idx: u32) -> String {
-    if idx == 255 { return "N/A".to_string(); }
+    if idx == 255 {
+        return "N/A".to_string();
+    }
     format!("{}", idx as i32 - 140)
 }
 
 fn decode_sinr(idx: u32) -> String {
-    if idx == 255 { return "N/A".to_string(); }
+    if idx == 255 {
+        return "N/A".to_string();
+    }
     let val = (idx as f32) * 0.2 - 20.0;
     format!("{:.1}", val)
 }
 
 fn decode_rsrq(idx: u32) -> String {
-    if idx == 255 { return "N/A".to_string(); }
+    if idx == 255 {
+        return "N/A".to_string();
+    }
     let val = (idx as f32) * 0.5 - 19.5;
     format!("{:.1}", val)
 }
@@ -110,7 +119,9 @@ pub fn parse_dconnstat(response: &str) -> bool {
         if let Some(rest) = t.strip_prefix("^DCONNSTAT:") {
             // ^DCONNSTAT: <cid>,"<APN>",<ipv4_stat>,<ipv6_stat>,<type>
             let parts: Vec<&str> = rest.trim().split(',').collect();
-            if parts.get(2).map(|s| s.trim()) == Some("1") { return true; }
+            if parts.get(2).map(|s| s.trim()) == Some("1") {
+                return true;
+            }
         }
     }
     false
@@ -121,7 +132,11 @@ pub fn parse_syscfgex(response: &str) -> (String, String) {
     for line in response.lines() {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("^SYSCFGEX:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             let acqorder = parts.get(0).unwrap_or(&"").to_string();
             let lteband = parts.get(4).unwrap_or(&"").to_string();
             return (acqorder, lteband);
@@ -132,10 +147,8 @@ pub fn parse_syscfgex(response: &str) -> (String, String) {
 
 /// Convert TdTech hex IP (big-endian u32) to dotted decimal
 pub fn hex_ip_to_string(hex: &str) -> String {
-    let n = u32::from_str_radix(
-        hex.trim_start_matches("0x").trim_start_matches("0X"),
-        16,
-    ).unwrap_or(0);
+    let n =
+        u32::from_str_radix(hex.trim_start_matches("0x").trim_start_matches("0X"), 16).unwrap_or(0);
     let b = n.to_be_bytes();
     format!("{}.{}.{}.{}", b[0], b[1], b[2], b[3])
 }

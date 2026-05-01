@@ -1,6 +1,6 @@
+use super::parser::{hex_ip_to_string, parse_dconnstat};
 use crate::transport::AtTransport;
 use crate::types::IpInfo;
-use super::parser::{hex_ip_to_string, parse_dconnstat};
 
 pub fn connect(
     t: &mut dyn AtTransport,
@@ -13,7 +13,10 @@ pub fn connect(
     let cmd = if apn.is_empty() {
         format!("AT^NDISDUP={},1", cid)
     } else {
-        format!("AT^NDISDUP={},1,\"{}\",\"{}\",\"{}\",{}", cid, apn, user, pass, auth)
+        format!(
+            "AT^NDISDUP={},1,\"{}\",\"{}\",\"{}\",{}",
+            cid, apn, user, pass, auth
+        )
     };
     let resp = t.send_at(&cmd)?;
     if resp.contains("ERROR") {
@@ -41,13 +44,25 @@ pub fn query_ip(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
             // ^DHCP: clip,netmask,gate,dhcp,pDNS,sDNS,max_rx,max_tx
             let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
             return Ok(IpInfo {
-                ipv4_addr: parts.get(0).map(|s| hex_ip_to_string(s)).unwrap_or_default(),
-                ipv4_mask: parts.get(1).map(|s| hex_ip_to_string(s)).unwrap_or_default(),
-                ipv4_gw:   parts.get(2).map(|s| hex_ip_to_string(s)).unwrap_or_default(),
-                ipv4_dns:  parts.get(4).map(|s| hex_ip_to_string(s)).unwrap_or_default(),
+                ipv4_addr: parts
+                    .get(0)
+                    .map(|s| hex_ip_to_string(s))
+                    .unwrap_or_default(),
+                ipv4_mask: parts
+                    .get(1)
+                    .map(|s| hex_ip_to_string(s))
+                    .unwrap_or_default(),
+                ipv4_gw: parts
+                    .get(2)
+                    .map(|s| hex_ip_to_string(s))
+                    .unwrap_or_default(),
+                ipv4_dns: parts
+                    .get(4)
+                    .map(|s| hex_ip_to_string(s))
+                    .unwrap_or_default(),
                 ipv6_addr: String::new(),
-                ipv6_gw:   String::new(),
-                ipv6_dns:  String::new(),
+                ipv6_gw: String::new(),
+                ipv6_dns: String::new(),
             });
         }
     }

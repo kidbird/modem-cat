@@ -1,5 +1,5 @@
-pub mod parser;
 pub mod dial;
+pub mod parser;
 
 use crate::modem_vendor::ModemVendor;
 use crate::transport::AtTransport;
@@ -11,7 +11,9 @@ pub struct TdTechModem {
 }
 
 impl TdTechModem {
-    pub fn new(model: String) -> Self { Self { model } }
+    pub fn new(model: String) -> Self {
+        Self { model }
+    }
 }
 
 fn cmd_delay() {
@@ -19,8 +21,12 @@ fn cmd_delay() {
 }
 
 impl ModemVendor for TdTechModem {
-    fn vendor(&self) -> ChipsetVendor { ChipsetVendor::TdTech }
-    fn model(&self) -> &str { &self.model }
+    fn vendor(&self) -> ChipsetVendor {
+        ChipsetVendor::TdTech
+    }
+    fn model(&self) -> &str {
+        &self.model
+    }
 
     fn query_sim_status(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
         let resp = t.send_at("AT^CARDMODE")?;
@@ -67,7 +73,9 @@ impl ModemVendor for TdTechModem {
         let extract = |r: &str| -> String {
             for line in r.lines() {
                 let ln = line.trim();
-                if ln.is_empty() || ln == "OK" || ln.starts_with("AT") || ln.starts_with('+') { continue; }
+                if ln.is_empty() || ln == "OK" || ln.starts_with("AT") || ln.starts_with('+') {
+                    continue;
+                }
                 return ln.to_string();
             }
             String::new()
@@ -99,7 +107,10 @@ impl ModemVendor for TdTechModem {
 
     fn query_neighbor_cells(&mut self, t: &mut dyn AtTransport) -> Result<NeighborCells, String> {
         let _resp = t.send_at("AT^MONNC")?;
-        Ok(NeighborCells { lte: vec![], nr: vec![] })
+        Ok(NeighborCells {
+            lte: vec![],
+            nr: vec![],
+        })
     }
 
     fn query_operator(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
@@ -129,7 +140,11 @@ impl ModemVendor for TdTechModem {
 
     fn query_connection_status(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
         let resp = t.send_at("AT^DCONNSTAT?")?;
-        Ok(if parse_dconnstat(&resp) { "1".to_string() } else { "0".to_string() })
+        Ok(if parse_dconnstat(&resp) {
+            "1".to_string()
+        } else {
+            "0".to_string()
+        })
     }
 
     fn query_apn_list(&mut self, t: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String> {
@@ -137,7 +152,10 @@ impl ModemVendor for TdTechModem {
         let mut entries = vec![];
         for line in resp.lines() {
             if let Some(rest) = line.trim().strip_prefix("+CGDCONT:") {
-                let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+                let parts: Vec<&str> = rest
+                    .split(',')
+                    .map(|s| s.trim().trim_matches('"'))
+                    .collect();
                 if parts.len() >= 3 {
                     entries.push(ApnEntry {
                         cid: parts[0].parse().unwrap_or(0),
@@ -153,8 +171,21 @@ impl ModemVendor for TdTechModem {
         Ok(entries)
     }
 
-    fn set_apn(&mut self, t: &mut dyn AtTransport, cid: i32, ctx: i32, apn: &str, _user: &str, _pass: &str, _auth: i32) -> Result<(), String> {
-        let pdp = match ctx { 2 => "IPV6", 3 => "IPV4V6", _ => "IP" };
+    fn set_apn(
+        &mut self,
+        t: &mut dyn AtTransport,
+        cid: i32,
+        ctx: i32,
+        apn: &str,
+        _user: &str,
+        _pass: &str,
+        _auth: i32,
+    ) -> Result<(), String> {
+        let pdp = match ctx {
+            2 => "IPV6",
+            3 => "IPV4V6",
+            _ => "IP",
+        };
         t.send_at(&format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp, apn))?;
         Ok(())
     }
@@ -191,7 +222,10 @@ impl ModemVendor for TdTechModem {
     fn set_lte_bands(&mut self, t: &mut dyn AtTransport, bands: &str) -> Result<(), String> {
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (acqorder, _) = parse_syscfgex(&resp);
-        t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, bands))?;
+        t.send_at(&format!(
+            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
+            acqorder, bands
+        ))?;
         Ok(())
     }
 
@@ -208,7 +242,10 @@ impl ModemVendor for TdTechModem {
         };
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (_, lteband) = parse_syscfgex(&resp);
-        t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, lteband))?;
+        t.send_at(&format!(
+            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
+            acqorder, lteband
+        ))?;
         Ok(())
     }
 
@@ -219,15 +256,25 @@ impl ModemVendor for TdTechModem {
                 // ^DSFLOWQRY: last_time,last_tx,last_rx,total_time,total_tx,total_rx
                 let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
                 let tx = u64::from_str_radix(
-                    parts.get(4).unwrap_or(&"0x0").trim_start_matches("0x"), 16
-                ).unwrap_or(0);
+                    parts.get(4).unwrap_or(&"0x0").trim_start_matches("0x"),
+                    16,
+                )
+                .unwrap_or(0);
                 let rx = u64::from_str_radix(
-                    parts.get(5).unwrap_or(&"0x0").trim_start_matches("0x"), 16
-                ).unwrap_or(0);
-                return Ok(TrafficInfo { ul_bytes: tx, dl_bytes: rx });
+                    parts.get(5).unwrap_or(&"0x0").trim_start_matches("0x"),
+                    16,
+                )
+                .unwrap_or(0);
+                return Ok(TrafficInfo {
+                    ul_bytes: tx,
+                    dl_bytes: rx,
+                });
             }
         }
-        Ok(TrafficInfo { ul_bytes: 0, dl_bytes: 0 })
+        Ok(TrafficInfo {
+            ul_bytes: 0,
+            dl_bytes: 0,
+        })
     }
 
     fn reset_traffic(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
@@ -245,16 +292,28 @@ impl ModemVendor for TdTechModem {
         Ok(())
     }
 
-    fn query_feature_toggles(&mut self, _t: &mut dyn AtTransport) -> Result<FeatureToggles, String> {
+    fn query_feature_toggles(
+        &mut self,
+        _t: &mut dyn AtTransport,
+    ) -> Result<FeatureToggles, String> {
         Ok(FeatureToggles::default())
     }
 
-    fn set_feature_toggle(&mut self, _t: &mut dyn AtTransport, _feat: &str, _on: bool) -> Result<(), String> {
+    fn set_feature_toggle(
+        &mut self,
+        _t: &mut dyn AtTransport,
+        _feat: &str,
+        _on: bool,
+    ) -> Result<(), String> {
         Ok(())
     }
 
     fn query_qos(&mut self, _t: &mut dyn AtTransport, _cid: i32) -> Result<QosInfo, String> {
-        Ok(QosInfo { cqi: String::new(), ul_bandwidth: String::new(), dl_bandwidth: String::new() })
+        Ok(QosInfo {
+            cqi: String::new(),
+            ul_bandwidth: String::new(),
+            dl_bandwidth: String::new(),
+        })
     }
 }
 

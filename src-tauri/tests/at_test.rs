@@ -20,8 +20,12 @@ fn send_at(port: &mut Box<dyn serialport::SerialPort>, cmd: &str) -> String {
         match port.read(&mut buf) {
             Ok(n) => response.extend_from_slice(&buf[..n]),
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                if !response.is_empty() && start.elapsed() > Duration::from_millis(500) { break; }
-                if start.elapsed() > Duration::from_secs(3) { break; }
+                if !response.is_empty() && start.elapsed() > Duration::from_millis(500) {
+                    break;
+                }
+                if start.elapsed() > Duration::from_secs(3) {
+                    break;
+                }
             }
             Err(_) => break,
         }
@@ -42,13 +46,21 @@ fn test_at_with_parser() {
     for p in &ports {
         print!("Probing {} ... ", p.port_name);
         let mut port = match serialport::new(&p.port_name, 115200)
-            .timeout(Duration::from_millis(500)).open() {
+            .timeout(Duration::from_millis(500))
+            .open()
+        {
             Ok(port) => port,
-            Err(e) => { println!("OPEN FAILED"); continue; }
+            Err(e) => {
+                println!("OPEN FAILED");
+                continue;
+            }
         };
         std::thread::sleep(Duration::from_millis(500));
         let resp = send_at(&mut port, "AT");
-        if !is_at_response(&resp) { println!("No AT"); continue; }
+        if !is_at_response(&resp) {
+            println!("No AT");
+            continue;
+        }
         println!("OK");
 
         // ── Parse SIM ──
@@ -85,10 +97,14 @@ fn test_at_with_parser() {
         let qeng = send_at(&mut port, "AT+QENG=\"servingcell\"");
         println!("\n[QENG] raw: {}", qeng.trim().replace('\n', " | "));
         if let Some(sc) = modem_cat_lib::at_parser::parse_qeng_servingcell(&qeng) {
-            println!("[Cell] tech={} connected={} mcc={} mnc={} cell={} pci={}",
-                sc.tech, sc.connected, sc.operator_mcc, sc.operator_mnc, sc.cell_id, sc.pci);
-            println!("[Cell] arfcn={} band={} bw={} rsrp={} rsrq={} sinr={}",
-                sc.arfcn, sc.band, sc.bandwidth, sc.rsrp, sc.rsrq, sc.sinr);
+            println!(
+                "[Cell] tech={} connected={} mcc={} mnc={} cell={} pci={}",
+                sc.tech, sc.connected, sc.operator_mcc, sc.operator_mnc, sc.cell_id, sc.pci
+            );
+            println!(
+                "[Cell] arfcn={} band={} bw={} rsrp={} rsrq={} sinr={}",
+                sc.arfcn, sc.band, sc.bandwidth, sc.rsrp, sc.rsrq, sc.sinr
+            );
         } else {
             println!("[Cell] PARSE FAILED");
         }
@@ -96,13 +112,20 @@ fn test_at_with_parser() {
         // ── Parse antennas ──
         let antrssi = send_at(&mut port, "AT+QANTRSSI?");
         let ants = modem_cat_lib::at_parser::parse_qantrssi(&antrssi);
-        println!("[ANT] {:?} (raw: {})", ants, antrssi.trim().replace('\n', " | "));
+        println!(
+            "[ANT] {:?} (raw: {})",
+            ants,
+            antrssi.trim().replace('\n', " | ")
+        );
 
         // ── Parse APN ──
         let qicsgp = send_at(&mut port, "AT+QICSGP?");
         let apns = modem_cat_lib::at_parser::parse_qicsgp(&qicsgp);
         for a in &apns {
-            println!("[APN] cid={} name={} type={} auth={}", a.cid, a.apn_name, a.ip_type, a.auth_type);
+            println!(
+                "[APN] cid={} name={} type={} auth={}",
+                a.cid, a.apn_name, a.ip_type, a.auth_type
+            );
         }
 
         // ── Parse CGACT ──
@@ -116,7 +139,9 @@ fn test_at_with_parser() {
         let ipresp = send_at(&mut port, "AT+QNETDEVSTATUS=1");
         let (ip4, mask, gw, dns, ip6) = modem_cat_lib::at_parser::parse_qnetdevstatus(&ipresp);
         println!("[IP] addr={} mask={} gw={} dns={}", ip4, mask, gw, dns);
-        if !ip6.is_empty() { println!("[IP] ipv6={}", ip6); }
+        if !ip6.is_empty() {
+            println!("[IP] ipv6={}", ip6);
+        }
 
         // ── Parse QoS ──
         let qosresp = send_at(&mut port, "AT+C5GQOSRDP=1");

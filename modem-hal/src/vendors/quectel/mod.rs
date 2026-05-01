@@ -11,7 +11,10 @@ fn cmd_delay() {
     std::thread::sleep(std::time::Duration::from_millis(5));
 }
 
-pub enum QuectelChip { Qualcomm, UniSoc }
+pub enum QuectelChip {
+    Qualcomm,
+    UniSoc,
+}
 
 pub struct QuectelModem {
     pub chip: QuectelChip,
@@ -19,8 +22,18 @@ pub struct QuectelModem {
 }
 
 impl QuectelModem {
-    pub fn qualcomm(model: String) -> Self { Self { chip: QuectelChip::Qualcomm, model } }
-    pub fn unisoc(model: String) -> Self { Self { chip: QuectelChip::UniSoc, model } }
+    pub fn qualcomm(model: String) -> Self {
+        Self {
+            chip: QuectelChip::Qualcomm,
+            model,
+        }
+    }
+    pub fn unisoc(model: String) -> Self {
+        Self {
+            chip: QuectelChip::UniSoc,
+            model,
+        }
+    }
 }
 
 impl ModemVendor for QuectelModem {
@@ -31,7 +44,9 @@ impl ModemVendor for QuectelModem {
         }
     }
 
-    fn model(&self) -> &str { &self.model }
+    fn model(&self) -> &str {
+        &self.model
+    }
 
     fn query_sim_status(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
         let resp = t.send_at("AT+CPIN?")?;
@@ -50,7 +65,9 @@ impl ModemVendor for QuectelModem {
         };
         let resp = t.send_at(cmd)?;
         let iccid = parse_iccid(&resp);
-        if !iccid.is_empty() { return Ok(iccid); }
+        if !iccid.is_empty() {
+            return Ok(iccid);
+        }
         cmd_delay();
         let resp2 = t.send_at("AT+QCCID")?;
         Ok(parse_iccid(&resp2))
@@ -137,11 +154,19 @@ impl ModemVendor for QuectelModem {
     fn query_hardware_info(&mut self, t: &mut dyn AtTransport) -> Result<HardwareInfo, String> {
         let model = parse_cgmm(&t.send_at("AT+CGMM")?);
         cmd_delay();
-        let manufacturer = { let r = t.send_at("AT+CGMI")?; parse_cgmm(&r) };
+        let manufacturer = {
+            let r = t.send_at("AT+CGMI")?;
+            parse_cgmm(&r)
+        };
         cmd_delay();
-        let firmware = { let r = t.send_at("AT+GMR")?; parse_cgmm(&r) };
+        let firmware = {
+            let r = t.send_at("AT+GMR")?;
+            parse_cgmm(&r)
+        };
         Ok(HardwareInfo {
-            model, manufacturer, firmware,
+            model,
+            manufacturer,
+            firmware,
             ap_baseline: String::new(),
             cp_baseline: String::new(),
             soc_temp: String::new(),
@@ -167,11 +192,27 @@ impl ModemVendor for QuectelModem {
         Ok(parse_cgdcont_apn(&cgdcont, &active_cids))
     }
 
-    fn set_apn(&mut self, t: &mut dyn AtTransport, cid: i32, ctx: i32, apn: &str, user: &str, pass: &str, auth: i32) -> Result<(), String> {
-        let pdp_type = match ctx { 2 => "IPV6", 3 => "IPV4V6", _ => "IP" };
+    fn set_apn(
+        &mut self,
+        t: &mut dyn AtTransport,
+        cid: i32,
+        ctx: i32,
+        apn: &str,
+        user: &str,
+        pass: &str,
+        auth: i32,
+    ) -> Result<(), String> {
+        let pdp_type = match ctx {
+            2 => "IPV6",
+            3 => "IPV4V6",
+            _ => "IP",
+        };
         t.send_at(&format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp_type, apn))?;
         if !user.is_empty() {
-            t.send_at(&format!("AT+QICSGP={},1,\"{}\",\"{}\",\"{}\",{}", cid, apn, user, pass, auth))?;
+            t.send_at(&format!(
+                "AT+QICSGP={},1,\"{}\",\"{}\",\"{}\",{}",
+                cid, apn, user, pass, auth
+            ))?;
         }
         Ok(())
     }
@@ -226,15 +267,27 @@ impl ModemVendor for QuectelModem {
         Ok(())
     }
 
-    fn query_feature_toggles(&mut self, _t: &mut dyn AtTransport) -> Result<FeatureToggles, String> {
+    fn query_feature_toggles(
+        &mut self,
+        _t: &mut dyn AtTransport,
+    ) -> Result<FeatureToggles, String> {
         Ok(FeatureToggles::default())
     }
 
-    fn set_feature_toggle(&mut self, _t: &mut dyn AtTransport, _feat: &str, _on: bool) -> Result<(), String> {
+    fn set_feature_toggle(
+        &mut self,
+        _t: &mut dyn AtTransport,
+        _feat: &str,
+        _on: bool,
+    ) -> Result<(), String> {
         Ok(())
     }
 
     fn query_qos(&mut self, _t: &mut dyn AtTransport, _cid: i32) -> Result<QosInfo, String> {
-        Ok(QosInfo { cqi: String::new(), ul_bandwidth: String::new(), dl_bandwidth: String::new() })
+        Ok(QosInfo {
+            cqi: String::new(),
+            ul_bandwidth: String::new(),
+            dl_bandwidth: String::new(),
+        })
     }
 }

@@ -1,5 +1,5 @@
-use crate::types::*;
 use crate::transport::AtTransport;
+use crate::types::*;
 
 /// Trait for modem vendor adapters
 ///
@@ -25,43 +25,56 @@ pub trait ModemVendor: Send {
     fn query_iccid(&mut self, transport: &mut dyn AtTransport) -> Result<String, String>;
 
     /// Query hardware information (model, manufacturer, firmware)
-    fn query_hardware_info(&mut self, transport: &mut dyn AtTransport
+    fn query_hardware_info(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<HardwareInfo, String>;
 
     /// Query temperature information
-    fn query_temperature(&mut self, transport: &mut dyn AtTransport
+    fn query_temperature(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<TemperatureInfo, String>;
 
     // ==================== Network Information ====================
 
     /// Query serving cell information
-    fn query_serving_cell(&mut self, transport: &mut dyn AtTransport
+    fn query_serving_cell(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<ServingCellInfo, String>;
 
     /// Query neighbor cells
-    fn query_neighbor_cells(&mut self, transport: &mut dyn AtTransport
+    fn query_neighbor_cells(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<NeighborCells, String>;
 
     /// Query signal strength (RSRP, RSRQ, SINR)
-    fn query_signal_strength(&mut self, transport: &mut dyn AtTransport
+    fn query_signal_strength(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<SignalInfo, String>;
 
     /// Query operator name
     fn query_operator(&mut self, transport: &mut dyn AtTransport) -> Result<String, String>;
 
     /// Query network registration status
-    fn query_registration_status(&mut self, transport: &mut dyn AtTransport
+    fn query_registration_status(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<String, String>;
 
     /// Query connection status (PDP context active)
-    fn query_connection_status(&mut self, transport: &mut dyn AtTransport
+    fn query_connection_status(
+        &mut self,
+        transport: &mut dyn AtTransport,
     ) -> Result<String, String>;
 
     // ==================== APN and Data ====================
 
     /// Query APN list with active status
-    fn query_apn_list(&mut self, transport: &mut dyn AtTransport
-    ) -> Result<Vec<ApnEntry>, String>;
+    fn query_apn_list(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String>;
 
     /// Set APN configuration
     fn set_apn(
@@ -76,55 +89,42 @@ pub trait ModemVendor: Send {
     ) -> Result<(), String>;
 
     /// Delete APN
-    fn delete_apn(&mut self, transport: &mut dyn AtTransport, cid: i32
-    ) -> Result<(), String>;
+    fn delete_apn(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
     /// Activate data connection
-    fn connect_data(
-        &mut self,
-        transport: &mut dyn AtTransport,
-        cid: i32
-    ) -> Result<(), String>;
+    fn connect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
     /// Deactivate data connection
-    fn disconnect_data(
-        &mut self,
-        transport: &mut dyn AtTransport,
-        cid: i32
-    ) -> Result<(), String>;
+    fn disconnect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
     /// Query IP information for a CID
     fn query_ip_info(
         &mut self,
         transport: &mut dyn AtTransport,
-        cid: i32
+        cid: i32,
     ) -> Result<IpInfo, String>;
 
     // ==================== Band Configuration ====================
 
     /// Query supported and locked bands
-    fn query_band_config(&mut self, transport: &mut dyn AtTransport
-    ) -> Result<BandConfig, String>;
+    fn query_band_config(&mut self, transport: &mut dyn AtTransport) -> Result<BandConfig, String>;
 
     /// Set LTE bands
-    fn set_lte_bands(
-        &mut self,
-        transport: &mut dyn AtTransport,
-        bands: &str
-    ) -> Result<(), String>;
+    fn set_lte_bands(&mut self, transport: &mut dyn AtTransport, bands: &str)
+        -> Result<(), String>;
 
     /// Set 5G SA bands
     fn set_nr5g_bands(
         &mut self,
         transport: &mut dyn AtTransport,
-        bands: &str
+        bands: &str,
     ) -> Result<(), String>;
 
     /// Set 5G NSA bands (if supported)
     fn set_nsa_nr5g_bands(
         &mut self,
         _transport: &mut dyn AtTransport,
-        _bands: &str
+        _bands: &str,
     ) -> Result<(), String> {
         Err("NSA NR5G bands not supported".to_string())
     }
@@ -133,7 +133,7 @@ pub trait ModemVendor: Send {
     fn set_network_mode(
         &mut self,
         transport: &mut dyn AtTransport,
-        mode: &str
+        mode: &str,
     ) -> Result<(), String>;
 
     // ==================== Traffic Statistics ====================
@@ -142,15 +142,14 @@ pub trait ModemVendor: Send {
     fn query_traffic(&mut self, transport: &mut dyn AtTransport) -> Result<TrafficInfo, String>;
 
     /// Reset traffic counters
-    fn reset_traffic(&mut self, transport: &mut dyn AtTransport
-    ) -> Result<(), String>;
+    fn reset_traffic(&mut self, transport: &mut dyn AtTransport) -> Result<(), String>;
 
     // ==================== Feature Toggles ====================
 
     /// Query feature toggles
     fn query_feature_toggles(
         &mut self,
-        transport: &mut dyn AtTransport
+        transport: &mut dyn AtTransport,
     ) -> Result<FeatureToggles, String>;
 
     /// Set feature toggle
@@ -167,27 +166,19 @@ pub trait ModemVendor: Send {
     fn reboot(&mut self, transport: &mut dyn AtTransport) -> Result<(), String>;
 
     /// Set functionality mode (AT+CFUN)
-    fn set_cfun(
-        &mut self,
-        transport: &mut dyn AtTransport,
-        mode: i32
-    ) -> Result<(), String>;
+    fn set_cfun(&mut self, transport: &mut dyn AtTransport, mode: i32) -> Result<(), String>;
 
     // ==================== QoS ====================
 
     /// Query QoS information
-    fn query_qos(
-        &mut self,
-        transport: &mut dyn AtTransport,
-        cid: i32
-    ) -> Result<QosInfo, String>;
+    fn query_qos(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<QosInfo, String>;
 
     // ==================== Combined Operations ====================
 
     /// Query full modem status (combines multiple queries)
     fn query_modem_status(
         &mut self,
-        transport: &mut dyn AtTransport
+        transport: &mut dyn AtTransport,
     ) -> Result<ModemStatus, String> {
         // Default implementation that combines individual queries
         let sim_status = self.query_sim_status(transport)?;

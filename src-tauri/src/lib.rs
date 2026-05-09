@@ -1,14 +1,23 @@
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub mod at_adapter;
 pub mod at_parser;
 
 use modem_hal::transport::AtTransport;
 use modem_hal::types::*;
+use tauri::http::Response;
+use tauri::Emitter;
+use tauri::Manager;
+use tauri::Url;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub data_cid: Arc<Mutex<i32>>,
+    /// The serial port name when connected via serial/AT (None if TCP or disconnected).
+    /// Used by the USB monitor to know if the active port was unplugged.
+    pub connected_port: Arc<Mutex<Option<String>>>,
 }
 
 // ── Port listing ──
@@ -323,6 +332,8 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
             Ok(transport) => {
                 log::info!("Connected to AT port: {}", port_name);
                 *transport_arc.lock().unwrap() = Some(Box::new(transport));
+                let cp = state.connected_port.clone();
+                *cp.lock().unwrap() = Some(port_name.clone());
                 return Ok(port_name.clone());
             }
             Err(e) => {
@@ -346,6 +357,7 @@ fn connect_serial(
     let transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
     let id = format!("serial_{}", port_name);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
+    *state.connected_port.lock().unwrap() = Some(port_name.clone());
     log::info!(
         "Connected to serial port {} at {} baud",
         port_name,
@@ -362,6 +374,8 @@ fn connect_tcp(
 ) -> Result<String, String> {
     let transport = modem_hal::transport::TcpTransport::new(&host, port)?;
     let id = format!("tcp_{}:{}", host, port);
+    // TCP is manual — clear connected_port so USB monitor won't interfere
+    *state.connected_port.lock().unwrap() = None;
     *state.transport.lock().unwrap() = Some(Box::new(transport));
     log::info!("Connected to TCP {}:{}", host, port);
     Ok(id)
@@ -374,6 +388,7 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
         transport.close();
     }
     *t = None;
+    *state.connected_port.lock().unwrap() = None;
     Ok("Disconnected".to_string())
 }
 
@@ -710,16 +725,105 @@ async fn set_usbnet_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result
     .map_err(|e| format!("Task error: {}", e))?
 }
 
+// ── USB hotplug monitor ──
+
+#[derive(Clone, serde::Serialize)]
+struct PortChangeEvent {
+    added: Vec<String>,
+    removed: Vec<String>,
+}
+
+/// Polls serial ports every 2 seconds and emits `port-changed` events to the
+/// frontend when devices are added or removed. The frontend decides whether to
+/// auto-connect (USB AT) or stay idle. This keeps the monitor stateless.
+fn start_port_monitor(app_handle: tauri::AppHandle) {
+    std::thread::Builder::new()
+        .name("usb-monitor".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut previous_ports: HashSet<String> = HashSet::new();
+                loop {
+                    std::thread::sleep(Duration::from_secs(2));
+
+                    let ports = match serialport::available_ports() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            log::warn!("[USB监控] available_ports 失败: {}", e);
+                            continue;
+                        }
+                    };
+
+                    let current_names: HashSet<String> = ports.iter().map(|p| p.port_name.clone()).collect();
+
+                    let added: Vec<String> = current_names.difference(&previous_ports).cloned().collect();
+                    let removed: Vec<String> = previous_ports.difference(&current_names).cloned().collect();
+                    previous_ports = current_names;
+
+                    if added.is_empty() && removed.is_empty() {
+                        continue;
+                    }
+
+                    log::info!("[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}", added, removed);
+
+                    if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
+                        added: added.clone(),
+                        removed: removed.clone(),
+                    }) {
+                        log::warn!("[USB监控] 发送事件失败: {}", e);
+                    }
+                }
+            }));
+            if let Err(e) = result {
+                let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "未知错误".to_string()
+                };
+                log::error!("[USB监控] 线程崩溃: {}", msg);
+            }
+        })
+        .expect("无法创建 USB 监控线程");
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Starting Modem Cat application");
 
+    let index_html: &'static str =
+        include_str!("../../src/desktop/index.html");
+
     tauri::Builder::default()
+        .register_uri_scheme_protocol("modemcat", move |_app, request| {
+            let path = request.uri().path();
+            if path == "/" || path == "/index.html" || path.is_empty() {
+                Response::builder()
+                    .status(200)
+                    .header("Content-Type", "text/html")
+                    .body(index_html.as_bytes().to_vec())
+                    .unwrap()
+            } else {
+                Response::builder()
+                    .status(404)
+                    .body(Vec::new())
+                    .unwrap()
+            }
+        })
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
+            connected_port: Arc::new(Mutex::new(None)),
+        })
+        .setup(|app| {
+            start_port_monitor(app.handle().clone());
+            if let Some(w) = app.get_webview_window("main") {
+                let url = Url::parse("modemcat://localhost/").unwrap();
+                let _ = w.navigate(url);
+            }
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             // Port / connection

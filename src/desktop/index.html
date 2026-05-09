@@ -39,7 +39,7 @@
     }
 
     body {
-      font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Ubuntu, sans-serif;
+      font-family: -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Microsoft YaHei', 'Segoe UI', sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
@@ -236,7 +236,8 @@
     .form-group input,
     .form-group select {
       width: 100%;
-      padding: 6px 8px;
+      height: 30px;
+      padding: 0 8px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
       border-radius: 4px;
@@ -244,7 +245,18 @@
       font-size: 12px;
       font-family: inherit;
       transition: border-color 0.12s;
+      box-sizing: border-box;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
     }
+    .form-group select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6' fill='%23999'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 26px;
+    }
+    .conn-select { height: 34px !important; font-size: 13px !important; }
     .form-group input:focus,
     .form-group select:focus { outline: none; border-color: var(--accent); }
 
@@ -730,7 +742,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>连接类型</label>
-            <select id="connectionType">
+            <select id="connectionType" class="conn-select">
               <option value="usb">USB Serial</option>
               <option value="ethernet">Ethernet TCP</option>
               <option value="ttl">TTL UART</option>
@@ -738,13 +750,9 @@
           </div>
           <div class="form-group">
             <label>端口 / 地址</label>
-            <select id="connectionParams">
+            <select id="connectionParams" class="conn-select">
               <option value="">-- 选择端口 --</option>
             </select>
-          </div>
-          <div class="form-group narrow">
-            <label>波特率</label>
-            <input type="number" id="baudRate" value="115200">
           </div>
           <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
             <button class="btn btn-primary" id="connectBtn" onclick="toggleConnection()">连接</button>
@@ -1214,6 +1222,7 @@
         <div class="panel-title">USB 网卡模式</div>
         <div class="form-row">
           <div class="form-group" style="flex:0 0 auto;min-width:200px;">
+            <label>USB 网卡协议</label>
             <select id="usbNetMode">
               <option value="2">MBIM 移动宽带</option>
               <option value="3">RNDIS 网卡</option>
@@ -1338,6 +1347,8 @@
       atHistory: [],
       atHistoryIdx: -1,
       bandConfig: null,
+      connectedPort: '',
+      idle: false,
     };
 
     // ── Data Connection ──
@@ -1478,6 +1489,8 @@
         state.connected = false;
         state.dataConnected = false;
         state.dataApn = '';
+        state.connectedPort = '';
+        state.idle = false;
         updateConnectionUI(false);
         updateDataConnectionUI();
         clearData();
@@ -1492,6 +1505,8 @@
         try {
           const portName = await invoke('auto_connect_at');
           state.connected = true;
+          state.idle = false;
+          state.connectedPort = portName;
           document.getElementById('connectionParams').value = portName;
           updateConnectionUI(true);
           addTerminalLine(`[连接] 已连接到 ${portName}`, 'ok');
@@ -1508,11 +1523,12 @@
           const errMsg = String(e);
           console.error('[连接] auto_connect_at 失败:', errMsg);
           addTerminalLine('[连接] ' + errMsg, 'err');
-          label.textContent = '连接失败';
-          label.style.color = 'var(--error)';
-          setTimeout(() => { label.style.color = ''; }, 5000);
+          // No AT port — go idle gracefully
           state.connected = false;
+          state.idle = true;
           updateConnectionUI(false);
+          label.textContent = '待机中';
+          label.style.color = 'var(--text-muted)';
         }
       }
     }
@@ -1526,6 +1542,7 @@
         btn.disabled = false;
         btn.className = 'btn btn-danger';
         icon.classList.add('connected');
+        label.style.color = '';
         const params = document.getElementById('connectionParams').value.trim();
         label.textContent = params || '已连接';
       } else {
@@ -1533,7 +1550,13 @@
         btn.disabled = false;
         btn.className = 'btn btn-primary';
         icon.classList.remove('connected');
-        label.textContent = '未连接';
+        if (state.idle) {
+          label.textContent = '待机中';
+          label.style.color = 'var(--text-muted)';
+        } else {
+          label.textContent = '未连接';
+          label.style.color = '';
+        }
       }
     }
 
@@ -2287,9 +2310,50 @@
     renderApnList();
     renderLockList();
 
+    // ── USB 插拔检测：监听从 Rust 后端发出的事件 ──
+    function setupUsbMonitor() {
+      const listen = window.__TAURI__?.event?.listen;
+      if (!listen) {
+        console.warn('[USB] Tauri event system not available');
+        return;
+      }
+      listen('port-changed', (event) => {
+        const { added, removed } = event.payload;
+        const activeConn = document.getElementById('connectionType').value;
+        const isUsbMode = activeConn === 'usb';
+
+        // Disconnected port matches our current connection
+        if (state.connected && state.connectedPort && removed.includes(state.connectedPort)) {
+          console.log('[USB] Connected port removed, disconnecting');
+          addTerminalLine('[USB] AT端口已拔出，断开连接', 'cmd');
+          // Force disconnect
+          if (state.dataConnected) {
+            invoke('disconnect_data').catch(() => {});
+          }
+          invoke('disconnect').catch(() => {});
+          state.connected = false;
+          state.dataConnected = false;
+          state.dataApn = '';
+          state.connectedPort = '';
+          state.idle = true;
+          updateConnectionUI(false);
+          updateDataConnectionUI();
+          clearData();
+          const label = document.getElementById('statusLabel');
+          label.textContent = '待机中';
+          label.style.color = 'var(--text-muted)';
+        }
+
+        // New port appeared and we're idle → auto-connect (only for USB mode)
+        if (!state.connected && state.idle && isUsbMode && added.length > 0) {
+          console.log('[USB] New port detected, trying auto-connect');
+          addTerminalLine('[USB] 检测到新端口，尝试自动连接...', 'info');
+          toggleConnection();
+        }
+      });
+    }
+
     async function doInit() {
-      const t0 = performance.now();
-      await invoke('mark_init_start');
       const label = document.getElementById('statusLabel');
       label.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');
@@ -2298,24 +2362,15 @@
       } catch (e) {
         addTerminalLine('[初始化] 端口列表失败: ' + e, 'err');
       }
-      // 自动连接
+      // 自动连接（USB 模式）
       try {
         await toggleConnection();
       } catch (e) {
         hideLoading();
-        label.textContent = '连接失败';
         addTerminalLine('[初始化] 连接失败: ' + e, 'err');
       }
-      await invoke('mark_init_end');
-      const totalMs = Math.round(performance.now() - t0);
-      addTerminalLine(`[时延] 总初始化耗时: ${totalMs}ms`, 'info');
-      // Fetch and display timing breakdown
-      try {
-        const stats = await invoke('get_timing_stats');
-        displayTimingStats(stats, totalMs);
-      } catch (e) {
-        console.warn('Failed to get timing stats:', e);
-      }
+      // 启动 USB 监控
+      setupUsbMonitor();
     }
 
     // Tauri v2: 等待 appinitialized 事件确保 IPC 就绪

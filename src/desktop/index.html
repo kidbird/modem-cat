@@ -256,7 +256,11 @@
       background-position: right 8px center;
       padding-right: 26px;
     }
-    .conn-select { height: 34px !important; font-size: 13px !important; }
+    .form-group select option {
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .conn-select { height: 34px !important; font-size: 13px !important; font-family: inherit !important; }
     .form-group input:focus,
     .form-group select:focus { outline: none; border-color: var(--accent); }
 
@@ -743,9 +747,8 @@
           <div class="form-group">
             <label>连接类型</label>
             <select id="connectionType" class="conn-select">
-              <option value="usb">USB Serial</option>
+              <option value="serial">USB / TTL Serial</option>
               <option value="ethernet">Ethernet TCP</option>
-              <option value="ttl">TTL UART</option>
             </select>
           </div>
           <div class="form-group">
@@ -2320,7 +2323,7 @@
       listen('port-changed', (event) => {
         const { added, removed } = event.payload;
         const activeConn = document.getElementById('connectionType').value;
-        const isUsbMode = activeConn === 'usb';
+        const isSerialMode = activeConn === 'serial';
 
         // Disconnected port matches our current connection
         if (state.connected && state.connectedPort && removed.includes(state.connectedPort)) {
@@ -2344,8 +2347,8 @@
           label.style.color = 'var(--text-muted)';
         }
 
-        // New port appeared and we're idle → auto-connect (only for USB mode)
-        if (!state.connected && state.idle && isUsbMode && added.length > 0) {
+        // New port appeared and we're idle → auto-connect (only for USB/TTL Serial mode)
+        if (!state.connected && state.idle && isSerialMode && added.length > 0) {
           console.log('[USB] New port detected, trying auto-connect');
           addTerminalLine('[USB] 检测到新端口，尝试自动连接...', 'info');
           toggleConnection();

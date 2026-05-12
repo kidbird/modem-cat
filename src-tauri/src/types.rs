@@ -2,6 +2,24 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AtTimingEntry {
+    pub command: String,
+    pub duration_ms: u64,
+    pub success: bool,
+    pub phase: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AtTimingStats {
+    pub entries: Vec<AtTimingEntry>,
+    pub total_ms: u64,
+    pub init_start_ms: u64,
+    pub init_end_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModemStatus {
     pub sim_status: String,
     pub reg_status: String,

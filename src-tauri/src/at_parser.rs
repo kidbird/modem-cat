@@ -17,7 +17,7 @@ pub fn extract_data_lines(response: &str) -> Vec<String> {
         .filter(|l| {
             // Skip echo lines (command echoed back)
             let t = l.trim();
-            !t.starts_with("AT+") && !t.eq("AT") && !t.eq("at")
+            !t.starts_with("AT+") && !t.eq("AT") && !t.eq("at") && !t.eq("ATI")
         })
         .map(|l| l.trim().to_string())
         .collect()
@@ -54,6 +54,30 @@ pub fn parse_ccid(response: &str) -> String {
         }
     }
     String::new()
+}
+
+/// Parse AT+ATI → (manufacturer, model, firmware)
+/// Real Quectel response:
+///   Quectel
+///   RM500U-CNV
+///   Revision: RM500U_RM500UCNVAA_BR0_D03.01.001
+pub fn parse_ati(response: &str) -> (String, String, String) {
+    let mut manufacturer = String::new();
+    let mut model = String::new();
+    let mut firmware = String::new();
+
+    for line in extract_data_lines(response) {
+        let t = line.trim();
+        if t.starts_with("Revision:") {
+            firmware = t.strip_prefix("Revision:").unwrap_or(t).trim().to_string();
+        } else if manufacturer.is_empty() {
+            manufacturer = t.to_string();
+        } else if model.is_empty() {
+            model = t.to_string();
+        }
+    }
+
+    (manufacturer, model, firmware)
 }
 
 pub fn parse_cgmm(response: &str) -> String {
@@ -329,6 +353,38 @@ pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
         }
     }
     (String::new(), String::new(), String::new())
+}
+
+/// Parse AT+CGDCONT? → APN list (standard 3GPP, works on Qualcomm & Unisoc)
+/// Format: +CGDCONT: <cid>,<pdp_type>,<apn>,<pdp_addr>,<d_comp>,<h_comp>,...
+pub fn parse_cgdcont(response: &str, active_cids: &[i32]) -> Vec<ApnEntry> {
+    let mut entries = Vec::new();
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+CGDCONT:") {
+            let parts: Vec<&str> = rest.trim().split(',').collect();
+            if parts.len() >= 3 {
+                let cid = parts[0].trim().parse::<i32>().unwrap_or(0);
+                let pdp_type = parts[1].trim().trim_matches('"').to_string();
+                let apn = parts[2].trim().trim_matches('"').to_string();
+                let ip_type = match pdp_type.to_uppercase().as_str() {
+                    "IP" => "IPv4",
+                    "IPV6" => "IPv6",
+                    "IPV4V6" => "IPv4v6",
+                    _ => &pdp_type,
+                };
+                let active = active_cids.contains(&cid);
+                entries.push(ApnEntry {
+                    cid,
+                    apn_name: apn,
+                    ip_type: ip_type.to_string(),
+                    auth_type: 0,
+                    username: String::new(),
+                    active,
+                });
+            }
+        }
+    }
+    entries
 }
 
 /// Parse AT+QICSGP? → APN list

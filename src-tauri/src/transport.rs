@@ -1,8 +1,26 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
+use std::sync::Mutex;
 
 use serialport::SerialPort;
+
+#[derive(Default)]
+struct GlobalTiming {
+    entries: Vec<(String, u64, bool, String)>,
+}
+
+static GLOBAL_TIMING: Mutex<GlobalTiming> = Mutex::new(GlobalTiming { entries: Vec::new() });
+
+pub fn record_at_timing(command: &str, duration_ms: u64, success: bool, phase: &str) {
+    let mut g = GLOBAL_TIMING.lock().unwrap();
+    g.entries.push((command.to_string(), duration_ms, success, phase.to_string()));
+}
+
+pub fn drain_timing_entries() -> Vec<(String, u64, bool, String)> {
+    let mut g = GLOBAL_TIMING.lock().unwrap();
+    std::mem::take(&mut g.entries)
+}
 
 /// Trait for AT command transport (Serial or TCP)
 pub trait AtTransport: Send {
@@ -94,7 +112,7 @@ impl SerialTransport {
                     {
                         // Got a complete response, do one more short read to catch any trailing data
                         let old_timeout = self.port.timeout();
-                        let _ = self.port.set_timeout(Duration::from_millis(30));
+                        let _ = self.port.set_timeout(Duration::from_millis(5));
                         while let Ok(n2) = self.port.read(&mut buf) {
                             if n2 == 0 { break; }
                             response.push_str(&String::from_utf8_lossy(&buf[..n2]));
@@ -198,9 +216,12 @@ impl TcpTransport {
 
 impl AtTransport for SerialTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        // Quick drain of any stale data
+        let phase = "transport";
+        let start = std::time::Instant::now();
+
+        // Quick drain of any stale data (1ms timeout to avoid wasting time)
         let mut drain = [0u8; 4096];
-        let _ = self.port.set_timeout(Duration::from_millis(10));
+        let _ = self.port.set_timeout(Duration::from_millis(1));
         loop {
             match self.port.read(&mut drain) {
                 Ok(0) | Err(_) => break,
@@ -218,9 +239,13 @@ impl AtTransport for SerialTransport {
         let _ = self.port.flush();
 
         let result = self.read_response();
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        let success = result.is_ok();
         if let Ok(ref resp) = result {
             log::debug!("send_at: <<< {}", resp);
         }
+        record_at_timing(command, elapsed, success, phase);
         result
     }
 
@@ -231,12 +256,19 @@ impl AtTransport for SerialTransport {
 
 impl AtTransport for TcpTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
+        let phase = "transport";
+        let start = std::time::Instant::now();
+
         self.writer
             .write_all(format!("{}\r\n", command).as_bytes())
             .map_err(|e| format!("Write error: {}", e))?;
         let _ = self.writer.flush();
 
-        self.read_response()
+        let result = self.read_response();
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        record_at_timing(command, elapsed, result.is_ok(), phase);
+        result
     }
 
     fn close(&mut self) {

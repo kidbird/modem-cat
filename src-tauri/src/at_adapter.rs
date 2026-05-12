@@ -1,14 +1,22 @@
 use crate::at_parser::*;
 use crate::transport::AtTransport;
+use crate::transport::record_at_timing;
 use crate::types::*;
 
 /// Small delay between AT commands to let the modem process
 fn cmd_delay() {
-    std::thread::sleep(std::time::Duration::from_millis(5));
+    std::thread::sleep(std::time::Duration::from_millis(2));
+}
+
+fn log_query_timing(phase: &str, elapsed_ms: u64, ok: bool) {
+    record_at_timing(phase, elapsed_ms, ok, phase);
+    log::info!("[TIMING] {} => {}ms (ok={})", phase, elapsed_ms, ok);
 }
 
 /// Query full modem status: SIM, registration, signal, cell info
-pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String> {
+/// Also returns active CIDs from CGACT for reuse by query_apn_list.
+pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<(ModemStatus, Vec<i32>), String> {
+    let phase_start = std::time::Instant::now();
     log::info!("query_modem_status: starting queries...");
 
     // SIM status
@@ -117,13 +125,18 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
 
     cmd_delay();
 
-    // Connection status from CGACT
+    // Connection status from CGACT (also collect active CIDs for reuse)
     let mut conn_status = "未连接".to_string();
+    let mut active_cids: Vec<i32> = Vec::new();
     match t.send_at("AT+CGACT?") {
         Ok(cgact_resp) => {
             log::info!("AT+CGACT? => {}", cgact_resp);
             let contexts = parse_cgact(&cgact_resp);
-            if contexts.iter().any(|(_, s)| *s == 1) {
+            active_cids = contexts.iter()
+                .filter(|(_, s)| *s == 1)
+                .map(|(cid, _)| *cid)
+                .collect();
+            if !active_cids.is_empty() {
                 conn_status = "已连接".to_string();
             }
         }
@@ -151,28 +164,26 @@ pub fn query_modem_status(t: &mut dyn AtTransport) -> Result<ModemStatus, String
     };
     log::info!("query_modem_status: done - SIM={}, REG={}, CONN={}, NET={}, OP={}",
         result.sim_status, result.reg_status, result.conn_status, result.network_type, result.operator);
-    Ok(result)
+    log_query_timing("query_modem_status", phase_start.elapsed().as_millis() as u64, true);
+    Ok((result, active_cids))
 }
 
 /// Query hardware info: model, manufacturer, firmware, baseline, temperature
 pub fn query_hardware_info(t: &mut dyn AtTransport) -> Result<HardwareInfo, String> {
-    let cgmm_resp = t.send_at("AT+CGMM")?;
-    log::info!("AT+CGMM => {}", cgmm_resp);
-    let model = parse_cgmm(&cgmm_resp);
-
-    cmd_delay();
-
-    let cgmi_resp = t.send_at("AT+CGMI")?;
-    log::info!("AT+CGMI => {}", cgmi_resp);
-    let manufacturer = parse_cgmi(&cgmi_resp);
-
-    cmd_delay();
-
-    let gmr_resp = match t.send_at("AT+GMR") {
-        Ok(r) => { log::info!("AT+GMR => {}", r); r }
-        Err(e) => { log::warn!("AT+GMR failed: {}", e); String::new() }
+    let phase_start = std::time::Instant::now();
+    let ati_resp = match t.send_at("ATI") {
+        Ok(r) => { log::info!("ATI => {}", r); r }
+        Err(e) => { log::warn!("ATI failed: {}", e); String::new() }
     };
-    let firmware = parse_gmr(&gmr_resp);
+    let (manufacturer, model, firmware) = if !ati_resp.is_empty() {
+        parse_ati(&ati_resp)
+    } else {
+        // Fallback to individual commands if ATI fails
+        let cgmm_resp = t.send_at("AT+CGMM").unwrap_or_default();
+        let cgmi_resp = t.send_at("AT+CGMI").unwrap_or_default();
+        let gmr_resp = t.send_at("AT+GMR").unwrap_or_default();
+        (parse_cgmi(&cgmi_resp), parse_cgmm(&cgmm_resp), parse_gmr(&gmr_resp))
+    };
 
     cmd_delay();
 
@@ -190,7 +201,7 @@ pub fn query_hardware_info(t: &mut dyn AtTransport) -> Result<HardwareInfo, Stri
         Err(e) => { log::warn!("AT+QTEMP failed: {}", e); (String::new(), String::new()) }
     };
 
-    Ok(HardwareInfo {
+    let hw = HardwareInfo {
         model,
         manufacturer,
         firmware,
@@ -198,16 +209,19 @@ pub fn query_hardware_info(t: &mut dyn AtTransport) -> Result<HardwareInfo, Stri
         cp_baseline,
         soc_temp,
         pa_temp,
-    })
+    };
+    log_query_timing("query_hardware_info", phase_start.elapsed().as_millis() as u64, true);
+    Ok(hw)
 }
 
 /// Query IP info via AT+QNETDEVSTATUS
 pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
+    let phase_start = std::time::Instant::now();
     let cmd = format!("AT+QNETDEVSTATUS={}", cid);
     let resp = t.send_at(&cmd)?;
     let (ipv4, mask, gw, dns, ipv6) = parse_qnetdevstatus(&resp);
 
-    Ok(IpInfo {
+    let result = IpInfo {
         ipv4_addr: ipv4,
         ipv4_mask: mask,
         ipv4_gw: gw,
@@ -215,64 +229,82 @@ pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String
         ipv6_addr: ipv6,
         ipv6_gw: String::new(),
         ipv6_dns: String::new(),
-    })
+    };
+    log_query_timing("query_ip_info", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }
 
-/// Query APN list via AT+QICSGP? and active status via AT+CGACT?
-pub fn query_apn_list(t: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String> {
-    // Get active CIDs first
-    let cgact_resp = t.send_at("AT+CGACT?")?;
-    let active_cids: Vec<i32> = parse_cgact(&cgact_resp)
-        .into_iter()
-        .filter(|(_, status)| *status == 1)
-        .map(|(cid, _)| cid)
-        .collect();
+/// Query APN list via AT+CGDCONT? (standard 3GPP, works on Qualcomm & Unisoc)
+/// If `active_cids` is provided, skip AT+CGACT? query.
+pub fn query_apn_list(t: &mut dyn AtTransport, active_cids: Option<Vec<i32>>) -> Result<Vec<ApnEntry>, String> {
+    let phase_start = std::time::Instant::now();
+    let active_cids = match active_cids {
+        Some(cids) => cids,
+        None => {
+            let cgact_resp = t.send_at("AT+CGACT?")?;
+            parse_cgact(&cgact_resp)
+                .into_iter()
+                .filter(|(_, status)| *status == 1)
+                .map(|(cid, _)| cid)
+                .collect()
+        }
+    };
 
-    cmd_delay();
-
-    let resp = t.send_at("AT+QICSGP?")?;
-    Ok(parse_qicsgp(&resp, &active_cids))
+    let resp = t.send_at("AT+CGDCONT?")?;
+    let result = parse_cgdcont(&resp, &active_cids);
+    log_query_timing("query_apn_list", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }
 
 /// Query neighbor cells via AT+QENG="neighbourcell"
 /// Returns (lte_cells, nr_cells).
 pub fn query_neighbor_cells(t: &mut dyn AtTransport) -> Result<(Vec<NeighborCell>, Vec<NeighborCell>), String> {
+    let phase_start = std::time::Instant::now();
     log::info!("AT+QENG=\"neighbourcell\" => ...");
     let resp = t.send_at(r#"AT+QENG="neighbourcell""#)?;
     log::info!("AT+QENG=\"neighbourcell\" <= {}", resp);
     let (lte_cells, nr_cells) = parse_qeng_neighbourcell(&resp);
+    log_query_timing("query_neighbor_cells", phase_start.elapsed().as_millis() as u64, true);
     Ok((lte_cells, nr_cells))
 }
 
 /// Query QoS info via AT+C5GQOSRDP=<cid>
 pub fn query_qos(t: &mut dyn AtTransport, cid: i32) -> Result<QosInfo, String> {
+    let phase_start = std::time::Instant::now();
     let cmd = format!("AT+C5GQOSRDP={}", cid);
     log::info!("{} => ...", cmd);
     let resp = t.send_at(&cmd)?;
     log::info!("{} <= {}", cmd, resp);
     let (cqi, ul_bw, dl_bw) = parse_c5gqosrdp(&resp);
 
-    Ok(QosInfo {
+    let result = QosInfo {
         cqi,
         ul_bandwidth: ul_bw,
         dl_bandwidth: dl_bw,
-    })
+    };
+    log_query_timing("query_qos", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }
 
-/// Set APN via AT+QICSGP
+/// Set APN via AT+CGDCONT (standard 3GPP, works on Qualcomm & Unisoc)
+/// `context_type`: 1=IPv4, 2=IPv6, 3=IPv4v6
+/// `username`/`password`/`auth_type` are accepted for API compat but not sent (CGDCONT has no auth fields)
 pub fn set_apn(
     t: &mut dyn AtTransport,
     cid: i32,
     context_type: i32,
     apn: &str,
-    username: &str,
-    password: &str,
-    auth_type: i32,
+    _username: &str,
+    _password: &str,
+    _auth_type: i32,
 ) -> Result<(), String> {
-    let cmd = format!(
-        "AT+QICSGP={},{},\"{}\",\"{}\",\"{}\",{}",
-        cid, context_type, apn, username, password, auth_type
-    );
+    let pdp_type = match context_type {
+        1 => "IP",
+        2 => "IPV6",
+        3 => "IPV4V6",
+        _ => "IPV4V6",
+    };
+    let cmd = format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp_type, apn);
     let resp = t.send_at(&cmd)?;
     if is_ok(&resp) {
         Ok(())
@@ -344,14 +376,59 @@ pub fn set_nr5g_band(t: &mut dyn AtTransport, band: &str) -> Result<(), String> 
     }
 }
 
+/// Look up the hardware-supported bands for a given modem model.
+/// Returns (lte_bands, nr_bands) as display names (e.g. "B1", "n78").
+fn supported_bands_for_model(model: &str) -> (Vec<String>, Vec<String>) {
+    let m = model.to_uppercase();
+
+    // RM520N-CN — Qualcomm SDX62 / 5G Sub-6
+    if m.contains("RM520N") {
+        return (
+            vec!["B1","B3","B5","B8","B34","B38","B39","B40","B41"]
+                .into_iter().map(String::from).collect(),
+            vec!["n1","n3","n5","n8","n28","n41","n78","n79"]
+                .into_iter().map(String::from).collect(),
+        );
+    }
+
+    // Fallback: empty — caller will query the modem directly
+    (Vec::new(), Vec::new())
+}
+
 /// Query all band configuration: supported bands and currently locked bands
 pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
-    // Query supported bands
-    let supported_resp = match t.send_at("AT+QNWPREFCFG=?") {
-        Ok(r) => { log::info!("AT+QNWPREFCFG=? => {}", r); r }
-        Err(e) => { log::warn!("AT+QNWPREFCFG=? failed: {}", e); String::new() }
-    };
-    let (lte_supported, nr_supported) = parse_qnwprefcfg_supported(&supported_resp);
+    let phase_start = std::time::Instant::now();
+
+    let (mut lte_supported, mut nr_supported) = (Vec::new(), Vec::new());
+
+    // Detect model via ATI and look up known band tables
+    match t.send_at("ATI") {
+        Ok(resp) => {
+            log::info!("ATI => {}", resp);
+            let (_, model, _) = parse_ati(&resp);
+            if !model.is_empty() {
+                (lte_supported, nr_supported) = supported_bands_for_model(&model);
+                if !lte_supported.is_empty() || !nr_supported.is_empty() {
+                    log::info!("Using hardcoded band table for model: {}", model);
+                }
+            }
+        }
+        Err(e) => log::warn!("ATI failed: {}", e),
+    }
+
+    // Fallback: query modem for its supported band list
+    if lte_supported.is_empty() && nr_supported.is_empty() {
+        log::info!("No hardcoded band table — querying AT+QNWPREFCFG=?");
+        match t.send_at("AT+QNWPREFCFG=?") {
+            Ok(r) => {
+                log::info!("AT+QNWPREFCFG=? => {}", r);
+                let parsed = parse_qnwprefcfg_supported(&r);
+                lte_supported = parsed.0;
+                nr_supported = parsed.1;
+            }
+            Err(e) => log::warn!("AT+QNWPREFCFG=? failed: {}", e),
+        }
+    }
 
     cmd_delay();
 
@@ -371,12 +448,14 @@ pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
     };
     let nr_locked = parse_qnwprefcfg_bands(&nr_locked_resp, "nr5g_band");
 
-    Ok(BandConfig {
+    let result = BandConfig {
         lte_supported,
         nr_supported,
         lte_locked,
         nr_locked,
-    })
+    };
+    log_query_timing("query_bands", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }
 
 /// Reset all bands via AT+QNWPREFCFG="all_band_reset"
@@ -439,6 +518,7 @@ pub fn send_raw_at(t: &mut dyn AtTransport, command: &str) -> Result<String, Str
 
 /// Query all feature toggles from modem
 pub fn query_feature_toggles(t: &mut dyn AtTransport) -> Result<FeatureToggles, String> {
+    let phase_start = std::time::Instant::now();
     let pcie_mode = match t.send_at(r#"AT+QCFG="pcie/mode""#) {
         Ok(r) => parse_qcfg_int(&r, "pcie/mode").unwrap_or(0) == 1,
         Err(e) => { log::warn!("AT+QCFG pcie/mode failed: {}", e); false }
@@ -474,14 +554,16 @@ pub fn query_feature_toggles(t: &mut dyn AtTransport) -> Result<FeatureToggles, 
         Err(e) => { log::warn!("AT+QCFG usbcfg failed: {}", e); false }
     };
 
-    Ok(FeatureToggles {
+    let result = FeatureToggles {
         pcie_mode,
         ethernet,
         proxyarp,
         uartat,
         eth_at,
         adb,
-    })
+    };
+    log_query_timing("query_feature_toggles", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }
 
 /// Set a single AT+QCFG integer toggle
@@ -539,9 +621,12 @@ pub fn set_usbnet(t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
 
 /// Query traffic statistics via AT+QGDCNT?
 pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
+    let phase_start = std::time::Instant::now();
     log::info!("AT+QGDCNT? => ...");
     let resp = t.send_at("AT+QGDCNT?")?;
     log::info!("AT+QGDCNT? <= {}", resp);
     let (ul, dl) = parse_qgdcnt(&resp);
-    Ok(TrafficInfo { ul_bytes: ul, dl_bytes: dl })
+    let result = TrafficInfo { ul_bytes: ul, dl_bytes: dl };
+    log_query_timing("query_traffic", phase_start.elapsed().as_millis() as u64, true);
+    Ok(result)
 }

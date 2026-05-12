@@ -1,4 +1,5 @@
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 pub mod at_adapter;
 pub mod at_parser;
@@ -10,9 +11,32 @@ pub mod types;
 use transport::AtTransport;
 use types::*;
 
+#[derive(Default)]
+pub struct TimingTracker {
+    pub entries: Vec<AtTimingEntry>,
+    pub init_start_ms: u64,
+    pub init_end_ms: u64,
+}
+
+impl TimingTracker {
+    pub fn record(&mut self, command: String, duration_ms: u64, success: bool, phase: String) {
+        self.entries.push(AtTimingEntry {
+            command,
+            duration_ms,
+            success,
+            phase,
+        });
+    }
+    pub fn total_ms(&self) -> u64 {
+        self.entries.iter().map(|e| e.duration_ms).sum()
+    }
+}
+
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub data_cid: Arc<Mutex<i32>>,
+    pub timing: Arc<Mutex<TimingTracker>>,
+    pub active_cids: Arc<Mutex<Vec<i32>>>,
 }
 
 // ── Port listing ──
@@ -248,6 +272,7 @@ fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Op
 /// reliable identification, matching the logic in `list_ports`.
 #[tauri::command]
 async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let phase_start = std::time::Instant::now();
     let ports = serialport::available_ports()
         .map_err(|e| format!("Failed to list ports: {}", e))?;
 
@@ -306,6 +331,9 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
         match result {
             Ok(transport) => {
+                let elapsed = phase_start.elapsed().as_millis() as u64;
+                transport::record_at_timing("auto_connect_at", elapsed, true, "auto_connect");
+                log::info!("[TIMING] auto_connect_at => {}ms", elapsed);
                 log::info!("Connected to AT port: {}", port_name);
                 *transport_arc.lock().unwrap() = Some(Box::new(transport));
                 return Ok(port_name.clone());
@@ -362,77 +390,118 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
 
 #[tauri::command]
 async fn get_modem_status(state: tauri::State<'_, AppState>) -> Result<ModemStatus, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let active_cids_arc = state.active_cids.clone();
+    let (result, active_cids) = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_modem_status(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))??;
+    // Cache active CIDs for reuse by query_apn_list
+    *active_cids_arc.lock().unwrap() = active_cids;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_modem_status_cmd", elapsed, true, "tauri_cmd");
+    log::info!("[TIMING] get_modem_status_cmd => {}ms", elapsed);
+    Ok(result)
 }
 
 #[tauri::command]
 async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<HardwareInfo, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_hardware_info(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_hardware_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_hardware_info_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let data_cid = state.data_cid.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_ip_info(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_ip_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_ip_info_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_apn_list(state: tauri::State<'_, AppState>) -> Result<Vec<ApnEntry>, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let active_cids_arc = state.active_cids.clone();
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_apn_list(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+        let active_cids = active_cids_arc.lock().unwrap().clone();
+        let active_cids_opt = if active_cids.is_empty() { None } else { Some(active_cids) };
+        at_adapter::query_apn_list(t, active_cids_opt)
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_apn_list_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_apn_list_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<NeighborCells, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let (lte, nr) = at_adapter::query_neighbor_cells(t)?;
         Ok(NeighborCells { lte, nr })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_neighbor_cells_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_neighbor_cells_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let data_cid = state.data_cid.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_qos(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_qos_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_qos_info_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_network_mode(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_network_mode_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_network_mode_cmd => {}ms", elapsed);
+    result
 }
 
 // ── Write operations (async to avoid blocking UI) ──
@@ -557,12 +626,17 @@ async fn send_raw_at(
 
 #[tauri::command]
 async fn get_bands(state: tauri::State<'_, AppState>) -> Result<BandConfig, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_bands(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_bands_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_bands_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
@@ -591,12 +665,17 @@ async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String
 
 #[tauri::command]
 async fn get_feature_toggles(state: tauri::State<'_, AppState>) -> Result<FeatureToggles, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_feature_toggles(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_feature_toggles_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_feature_toggles_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
@@ -624,22 +703,32 @@ async fn set_feature_toggle(
 
 #[tauri::command]
 async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_traffic(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_traffic_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_traffic_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
 async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
+    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    tokio::task::spawn_blocking(move || {
+    let result = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_usbnet(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let elapsed = phase_start.elapsed().as_millis() as u64;
+    transport::record_at_timing("get_usbnet_mode_cmd", elapsed, result.is_ok(), "tauri_cmd");
+    log::info!("[TIMING] get_usbnet_mode_cmd => {}ms", elapsed);
+    result
 }
 
 #[tauri::command]
@@ -655,6 +744,42 @@ async fn set_usbnet_mode(
     }).await.map_err(|e| format!("Task error: {}", e))?
 }
 
+// ── Timing ──
+
+#[tauri::command]
+fn mark_init_start(state: tauri::State<'_, AppState>) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    state.timing.lock().unwrap().init_start_ms = now;
+}
+
+#[tauri::command]
+fn mark_init_end(state: tauri::State<'_, AppState>) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    state.timing.lock().unwrap().init_end_ms = now;
+}
+
+#[tauri::command]
+fn get_timing_stats(state: tauri::State<'_, AppState>) -> AtTimingStats {
+    let mut tracker = state.timing.lock().unwrap();
+    // Merge global transport timing entries
+    let global_entries = transport::drain_timing_entries();
+    for (cmd, dur, ok, phase) in global_entries {
+        tracker.record(cmd, dur, ok, phase);
+    }
+    AtTimingStats {
+        entries: tracker.entries.clone(),
+        total_ms: tracker.total_ms(),
+        init_start_ms: tracker.init_start_ms,
+        init_end_ms: tracker.init_end_ms,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -665,6 +790,8 @@ pub fn run() {
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
+            timing: Arc::new(Mutex::new(TimingTracker::default())),
+            active_cids: Arc::new(Mutex::new(Vec::new())),
         })
         .invoke_handler(tauri::generate_handler![
             // Port / connection
@@ -699,7 +826,55 @@ pub fn run() {
             reboot_modem,
             factory_reset,
             send_raw_at,
+            // Timing
+            mark_init_start,
+            mark_init_end,
+            get_timing_stats,
         ])
+        .setup(|app| {
+            let show_item = tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
+            let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let menu = tauri::menu::MenuBuilder::new(app)
+                .item(&show_item)
+                .item(&quit_item)
+                .build()?;
+
+            let tray_icon = app.tray_by_id("main").expect("tray not configured");
+            tray_icon.set_menu(Some(menu)).unwrap();
+
+            tray_icon.on_menu_event(|app, event| {
+                match event.id.as_ref() {
+                    "show_window" => {
+                        if let Some(window) = app.webview_windows().get("main") {
+                            window.show().unwrap();
+                            window.set_focus().unwrap();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                }
+            });
+
+            tray_icon.on_tray_icon_event(|tray, event| {
+                if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                    let app = tray.app_handle();
+                    if let Some(window) = app.webview_windows().get("main") {
+                        window.show().unwrap();
+                        window.set_focus().unwrap();
+                    }
+                }
+            });
+
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                window.hide().unwrap();
+                api.prevent_close();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

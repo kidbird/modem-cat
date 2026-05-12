@@ -980,31 +980,6 @@
               <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
             </div>
           </div>
-
-          <div class="section-label" style="margin-top:20px;">5G LAN</div>
-          <div class="toggle-row">
-            <div>
-              <div class="toggle-label">开启 5G LAN</div>
-              <div class="toggle-desc">通过模组建立局域网连接</div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="toggle5gLan" onchange="on5gLanChange(this.checked)">
-              <span class="toggle-track"></span>
-            </label>
-          </div>
-          <div id="lan5gOptions" style="margin-top:10px;opacity:0.4;pointer-events:none;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <label style="font-size:12px;color:var(--text-muted);white-space:nowrap;">关联网卡</label>
-              <select id="lan5gMode" style="width:160px;" onchange="document.getElementById('lan5gUsbHint').style.display=this.value==='usb'&&document.getElementById('toggle5gLan').checked?'':'none'">
-                <option value="eth">以太网</option>
-                <option value="usb">USB 网卡</option>
-              </select>
-              <button class="btn btn-primary btn-sm" onclick="applyLan5gMode()">应用</button>
-            </div>
-            <div id="lan5gUsbHint" style="display:none;font-size:11px;color:var(--text-muted);margin-top:6px;">
-              ⚠ USB 网卡模式仅在 Linux 系统下可用
-            </div>
-          </div>
         </div>
 
         <!-- ─ Tab 3: 小区 / 频点锁定 ─ -->
@@ -1834,22 +1809,6 @@
       apnData.forEach((a, idx) => a.active = idx === i);
       renderApnList();
       addTerminalLine(`[APN] 已激活: ${apnData[i].name}`, 'ok');
-    }
-
-    // ── 5G LAN ──
-    function on5gLanChange(enabled) {
-      const opts = document.getElementById('lan5gOptions');
-      opts.style.opacity = enabled ? '1' : '0.4';
-      opts.style.pointerEvents = enabled ? '' : 'none';
-      if (!enabled) document.getElementById('lan5gUsbHint').style.display = 'none';
-      addTerminalLine(`[5G LAN] ${enabled ? '已开启' : '已关闭'}`, 'ok');
-    }
-
-    function applyLan5gMode() {
-      const sel = document.getElementById('lan5gMode');
-      const isUsb = sel.value === 'usb';
-      document.getElementById('lan5gUsbHint').style.display = isUsb ? '' : 'none';
-      addTerminalLine(`[5G LAN] 网卡模式: ${sel.selectedOptions[0].text}`, 'ok');
     }
 
     // ── 网络锁定 ──

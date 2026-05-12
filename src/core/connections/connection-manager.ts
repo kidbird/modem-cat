@@ -74,7 +74,7 @@ export class ConnectionManager {
       throw new Error('Unsupported connection type for serial connection');
     }
 
-    const { port, baudRate = 115200 } = this.connection.params;
+    const { serialPort: port, baudRate = 115200 } = this.connection.params;
     if (!port) {
       throw new Error('Port is required');
     }
@@ -170,10 +170,10 @@ export class ConnectionManager {
    */
   private generateId(type: ConnectionType, params: ConnectionParams): string {
     const prefix = type === 'ETHERNET'
-      ? `eth_${params.host}:${params.port}`
+      ? `eth_${params.host}:${params.tcpPort}`
       : type === 'USB_SERIAL'
-        ? `usb_${params.port}`
-        : `ttl_${params.port}`;
+        ? `usb_${params.serialPort}`
+        : `ttl_${params.serialPort}`;
 
     const timestamp = Date.now().toString(36);
     return `${prefix}_${timestamp}`;

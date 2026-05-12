@@ -1,0 +1,15 @@
+[package]
+name = "modem-cli-embedded"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "modem"
+path = "src/main.rs"
+
+[dependencies]
+modem-hal = { path = "../modem-hal", default-features = true }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+env_logger = "0.11"
+log = "0.4"

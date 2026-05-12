@@ -1,32 +1,7 @@
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
-use std::time::Duration;
-use std::sync::Mutex;
-
+use crate::transport::AtTransport;
 use serialport::SerialPort;
-
-#[derive(Default)]
-struct GlobalTiming {
-    entries: Vec<(String, u64, bool, String)>,
-}
-
-static GLOBAL_TIMING: Mutex<GlobalTiming> = Mutex::new(GlobalTiming { entries: Vec::new() });
-
-pub fn record_at_timing(command: &str, duration_ms: u64, success: bool, phase: &str) {
-    let mut g = GLOBAL_TIMING.lock().unwrap();
-    g.entries.push((command.to_string(), duration_ms, success, phase.to_string()));
-}
-
-pub fn drain_timing_entries() -> Vec<(String, u64, bool, String)> {
-    let mut g = GLOBAL_TIMING.lock().unwrap();
-    std::mem::take(&mut g.entries)
-}
-
-/// Trait for AT command transport (Serial or TCP)
-pub trait AtTransport: Send {
-    fn send_at(&mut self, command: &str) -> Result<String, String>;
-    fn close(&mut self);
-}
+use std::io::{Read, Write};
+use std::time::Duration;
 
 /// Serial port transport
 pub struct SerialTransport {
@@ -114,7 +89,9 @@ impl SerialTransport {
                         let old_timeout = self.port.timeout();
                         let _ = self.port.set_timeout(Duration::from_millis(5));
                         while let Ok(n2) = self.port.read(&mut buf) {
-                            if n2 == 0 { break; }
+                            if n2 == 0 {
+                                break;
+                            }
                             response.push_str(&String::from_utf8_lossy(&buf[..n2]));
                         }
                         let _ = self.port.set_timeout(old_timeout);
@@ -139,86 +116,17 @@ impl SerialTransport {
             }
         }
 
-        log::debug!("read_response: got {} bytes in {:?}", response.len(), start.elapsed());
-        Ok(response.trim().to_string())
-    }
-}
-
-/// TCP transport
-pub struct TcpTransport {
-    reader: BufReader<TcpStream>,
-    writer: TcpStream,
-}
-
-impl TcpTransport {
-    pub fn new(host: &str, port: u16) -> Result<Self, String> {
-        let addr = format!("{}:{}", host, port);
-        let stream = TcpStream::connect_timeout(
-            &addr.parse().map_err(|e| format!("Invalid address: {}", e))?,
-            Duration::from_secs(5),
-        )
-        .map_err(|e| format!("Failed to connect to {}: {}", addr, e))?;
-
-        stream
-            .set_read_timeout(Some(Duration::from_millis(500)))
-            .ok();
-        stream
-            .set_write_timeout(Some(Duration::from_secs(3)))
-            .ok();
-
-        let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
-        Ok(Self {
-            reader,
-            writer: stream,
-        })
-    }
-
-    fn read_response(&mut self) -> Result<String, String> {
-        let mut response = String::new();
-        let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(5);
-
-        loop {
-            if start.elapsed() > timeout {
-                break;
-            }
-
-            let mut line = String::new();
-            match self.reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    response.push_str(trimmed);
-                    response.push('\n');
-
-                    if trimmed == "OK"
-                        || trimmed.starts_with("ERROR")
-                        || trimmed.starts_with("+CME ERROR")
-                    {
-                        break;
-                    }
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    if !response.is_empty() {
-                        break;
-                    }
-                }
-                Err(e) => return Err(format!("Read error: {}", e)),
-            }
-        }
-
+        log::debug!(
+            "read_response: got {} bytes in {:?}",
+            response.len(),
+            start.elapsed()
+        );
         Ok(response.trim().to_string())
     }
 }
 
 impl AtTransport for SerialTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        let phase = "transport";
-        let start = std::time::Instant::now();
-
         // Quick drain of any stale data (1ms timeout to avoid wasting time)
         let mut drain = [0u8; 4096];
         let _ = self.port.set_timeout(Duration::from_millis(1));
@@ -240,12 +148,9 @@ impl AtTransport for SerialTransport {
 
         let result = self.read_response();
 
-        let elapsed = start.elapsed().as_millis() as u64;
-        let success = result.is_ok();
         if let Ok(ref resp) = result {
             log::debug!("send_at: <<< {}", resp);
         }
-        record_at_timing(command, elapsed, success, phase);
         result
     }
 
@@ -254,24 +159,3 @@ impl AtTransport for SerialTransport {
     }
 }
 
-impl AtTransport for TcpTransport {
-    fn send_at(&mut self, command: &str) -> Result<String, String> {
-        let phase = "transport";
-        let start = std::time::Instant::now();
-
-        self.writer
-            .write_all(format!("{}\r\n", command).as_bytes())
-            .map_err(|e| format!("Write error: {}", e))?;
-        let _ = self.writer.flush();
-
-        let result = self.read_response();
-
-        let elapsed = start.elapsed().as_millis() as u64;
-        record_at_timing(command, elapsed, result.is_ok(), phase);
-        result
-    }
-
-    fn close(&mut self) {
-        let _ = self.writer.shutdown(std::net::Shutdown::Both);
-    }
-}

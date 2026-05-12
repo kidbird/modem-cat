@@ -1,42 +1,24 @@
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use std::time::Duration;
 
 pub mod at_adapter;
 pub mod at_parser;
-pub mod network;
-pub mod serial;
-pub mod transport;
-pub mod types;
 
-use transport::AtTransport;
-use types::*;
-
-#[derive(Default)]
-pub struct TimingTracker {
-    pub entries: Vec<AtTimingEntry>,
-    pub init_start_ms: u64,
-    pub init_end_ms: u64,
-}
-
-impl TimingTracker {
-    pub fn record(&mut self, command: String, duration_ms: u64, success: bool, phase: String) {
-        self.entries.push(AtTimingEntry {
-            command,
-            duration_ms,
-            success,
-            phase,
-        });
-    }
-    pub fn total_ms(&self) -> u64 {
-        self.entries.iter().map(|e| e.duration_ms).sum()
-    }
-}
+use modem_hal::transport::AtTransport;
+use modem_hal::types::*;
+use tauri::http::Response;
+use tauri::Emitter;
+use tauri::Manager;
+use tauri::Url;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub data_cid: Arc<Mutex<i32>>,
-    pub timing: Arc<Mutex<TimingTracker>>,
     pub active_cids: Arc<Mutex<Vec<i32>>>,
+    /// The serial port name when connected via serial/AT (None if TCP or disconnected).
+    /// Used by the USB monitor to know if the active port was unplugged.
+    pub connected_port: Arc<Mutex<Option<String>>>,
 }
 
 // ── Port listing ──
@@ -48,7 +30,8 @@ pub struct AppState {
 /// that have a "FriendlyName" value and a child "Device Parameters" key with
 /// a "PortName" value matching "COMx".
 #[cfg(target_os = "windows")]
-fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)>
+{
     use std::collections::HashMap;
     use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
@@ -106,14 +89,15 @@ fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<Stri
 }
 
 #[cfg(not(target_os = "windows"))]
-fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> std::collections::HashMap<String, (Option<String>, Option<String>)>
+{
     std::collections::HashMap::new()
 }
 
 #[tauri::command]
 fn list_ports() -> Result<Vec<PortInfo>, String> {
-    let ports = serialport::available_ports()
-        .map_err(|e| format!("Failed to list ports: {}", e))?;
+    let ports =
+        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     // Get Windows WMI info for all ports at once (single PowerShell call)
     let win_info = get_windows_all_port_info();
@@ -140,9 +124,14 @@ fn list_ports() -> Result<Vec<PortInfo>, String> {
                 }
             }
 
-            let is_at_port = is_at_port(&port.port_name, &description.as_ref(), &manufacturer.as_ref());
+            let is_at_port = is_at_port(
+                &port.port_name,
+                &description.as_ref(),
+                &manufacturer.as_ref(),
+            );
 
-            let display_name = build_display_name(&port.port_name, &description, &manufacturer, is_at_port);
+            let display_name =
+                build_display_name(&port.port_name, &description, &manufacturer, is_at_port);
 
             PortInfo {
                 port_name: port.port_name,
@@ -222,13 +211,18 @@ fn regex_remove_com_suffix(s: &str) -> String {
 /// We check for common patterns in modem port descriptions:
 ///   - "AT Command Port", "AT Port", "AT Interface"
 ///   - Quectel RM/RG series with specific port naming
-fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Option<&String>) -> bool {
+fn is_at_port(
+    _port_name: &str,
+    description: &Option<&String>,
+    manufacturer: &Option<&String>,
+) -> bool {
     let desc_upper = description.map_or_else(String::new, |s| s.to_uppercase());
     let mfg_upper = manufacturer.map_or_else(String::new, |s| s.to_uppercase());
 
     // Strong match: description explicitly contains "AT" as a standalone keyword
     // e.g., "AT Command Port", "AT Port", "AT Interface", "AT Modem"
-    if desc_upper.split(|c: char| !c.is_alphabetic())
+    if desc_upper
+        .split(|c: char| !c.is_alphabetic())
         .any(|word| word == "AT")
     {
         return true;
@@ -250,7 +244,10 @@ fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Op
     if is_modem_manufacturer {
         // For modem manufacturers, check if description suggests this is the AT port
         // (not NMEA, not DM, not Diag)
-        if desc_upper.contains("NMEA") || desc_upper.contains("DIAG") || desc_upper.contains("DEBUG") {
+        if desc_upper.contains("NMEA")
+            || desc_upper.contains("DIAG")
+            || desc_upper.contains("DEBUG")
+        {
             return false;
         }
         // Modem manufacturer + description contains "MODEM" or "COMMAND" → likely AT
@@ -272,9 +269,8 @@ fn is_at_port(_port_name: &str, description: &Option<&String>, manufacturer: &Op
 /// reliable identification, matching the logic in `list_ports`.
 #[tauri::command]
 async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let phase_start = std::time::Instant::now();
-    let ports = serialport::available_ports()
-        .map_err(|e| format!("Failed to list ports: {}", e))?;
+    let ports =
+        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     let win_info = get_windows_all_port_info();
 
@@ -300,7 +296,11 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
             }
         }
 
-        if is_at_port(&port.port_name, &description.as_ref(), &manufacturer.as_ref()) {
+        if is_at_port(
+            &port.port_name,
+            &description.as_ref(),
+            &manufacturer.as_ref(),
+        ) {
             at_candidates.push(port.port_name.clone());
         }
     }
@@ -318,7 +318,7 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
         let pn = port_name.clone();
         let result = tokio::task::spawn_blocking(move || {
             // Open, send AT, verify OK, and return the transport
-            let mut transport = transport::SerialTransport::new(&pn, 115200)?;
+            let mut transport = modem_hal::transport::SerialTransport::new(&pn, 115200)?;
             let response = transport.send_at("AT");
             match response {
                 Ok(r) if r.trim().ends_with("OK") => Ok(transport),
@@ -331,11 +331,10 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
         match result {
             Ok(transport) => {
-                let elapsed = phase_start.elapsed().as_millis() as u64;
-                transport::record_at_timing("auto_connect_at", elapsed, true, "auto_connect");
-                log::info!("[TIMING] auto_connect_at => {}ms", elapsed);
                 log::info!("Connected to AT port: {}", port_name);
                 *transport_arc.lock().unwrap() = Some(Box::new(transport));
+                let cp = state.connected_port.clone();
+                *cp.lock().unwrap() = Some(port_name.clone());
                 return Ok(port_name.clone());
             }
             Err(e) => {
@@ -356,10 +355,15 @@ fn connect_serial(
     baud_rate: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = transport::SerialTransport::new(&port_name, baud_rate)?;
+    let transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
     let id = format!("serial_{}", port_name);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
-    log::info!("Connected to serial port {} at {} baud", port_name, baud_rate);
+    *state.connected_port.lock().unwrap() = Some(port_name.clone());
+    log::info!(
+        "Connected to serial port {} at {} baud",
+        port_name,
+        baud_rate
+    );
     Ok(id)
 }
 
@@ -369,8 +373,10 @@ fn connect_tcp(
     port: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = transport::TcpTransport::new(&host, port)?;
+    let transport = modem_hal::transport::TcpTransport::new(&host, port)?;
     let id = format!("tcp_{}:{}", host, port);
+    // TCP is manual — clear connected_port so USB monitor won't interfere
+    *state.connected_port.lock().unwrap() = None;
     *state.transport.lock().unwrap() = Some(Box::new(transport));
     log::info!("Connected to TCP {}:{}", host, port);
     Ok(id)
@@ -383,6 +389,7 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
         transport.close();
     }
     *t = None;
+    *state.connected_port.lock().unwrap() = None;
     Ok("Disconnected".to_string())
 }
 
@@ -390,118 +397,97 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
 
 #[tauri::command]
 async fn get_modem_status(state: tauri::State<'_, AppState>) -> Result<ModemStatus, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let active_cids_arc = state.active_cids.clone();
     let (result, active_cids) = tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_modem_status(t)
-    }).await.map_err(|e| format!("Task error: {}", e))??;
-    // Cache active CIDs for reuse by query_apn_list
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))??;
     *active_cids_arc.lock().unwrap() = active_cids;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_modem_status_cmd", elapsed, true, "tauri_cmd");
-    log::info!("[TIMING] get_modem_status_cmd => {}ms", elapsed);
     Ok(result)
 }
 
 #[tauri::command]
 async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<HardwareInfo, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_hardware_info(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_hardware_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_hardware_info_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let data_cid = state.data_cid.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_ip_info(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_ip_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_ip_info_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_apn_list(state: tauri::State<'_, AppState>) -> Result<Vec<ApnEntry>, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let active_cids_arc = state.active_cids.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let active_cids = active_cids_arc.lock().unwrap().clone();
         let active_cids_opt = if active_cids.is_empty() { None } else { Some(active_cids) };
         at_adapter::query_apn_list(t, active_cids_opt)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_apn_list_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_apn_list_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<NeighborCells, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let (lte, nr) = at_adapter::query_neighbor_cells(t)?;
         Ok(NeighborCells { lte, nr })
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_neighbor_cells_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_neighbor_cells_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
     let data_cid = state.data_cid.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         let cid = *data_cid.lock().unwrap();
         at_adapter::query_qos(t, if cid > 0 { cid } else { 1 })
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_qos_info_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_qos_info_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_network_mode(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_network_mode_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_network_mode_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 // ── Write operations (async to avoid blocking UI) ──
@@ -521,20 +507,21 @@ async fn set_apn_config(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_apn(t, cid, context_type, &apn, &username, &password, auth_type)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn delete_apn_config(
-    cid: i32,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::delete_apn(t, cid)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -549,7 +536,9 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
         at_adapter::connect_data(t, cid)?;
         *data_cid.lock().unwrap() = cid;
         Ok(())
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -562,7 +551,9 @@ async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String
         let cid = *data_cid.lock().unwrap();
         let cid = if cid > 0 { cid } else { 1 };
         at_adapter::disconnect_data(t, cid)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -575,20 +566,21 @@ async fn set_network_mode_cmd(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_network_mode(t, &mode)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn set_nr5g_band_cmd(
-    band: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn set_nr5g_band_cmd(band: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_nr5g_band(t, &band)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -598,7 +590,9 @@ async fn reboot_modem(state: tauri::State<'_, AppState>) -> Result<(), String> {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::reboot_modem(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -608,35 +602,33 @@ async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> 
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::factory_reset(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn send_raw_at(
-    command: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::send_raw_at(t, &command)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_bands(state: tauri::State<'_, AppState>) -> Result<BandConfig, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_bands(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_bands_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_bands_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -650,7 +642,9 @@ async fn set_bands(
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_bands(t, &lte, &nr)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -660,22 +654,21 @@ async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::reset_all_bands(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_feature_toggles(state: tauri::State<'_, AppState>) -> Result<FeatureToggles, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_feature_toggles(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_feature_toggles_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_feature_toggles_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
@@ -698,140 +691,149 @@ async fn set_feature_toggle(
             "adb" => at_adapter::set_adb(t, enabled),
             _ => Err(format!("Unknown feature: {}", feature)),
         }
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_traffic(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_traffic_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_traffic_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
-    let phase_start = std::time::Instant::now();
     let transport = state.transport.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::query_usbnet(t)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
-    let elapsed = phase_start.elapsed().as_millis() as u64;
-    transport::record_at_timing("get_usbnet_mode_cmd", elapsed, result.is_ok(), "tauri_cmd");
-    log::info!("[TIMING] get_usbnet_mode_cmd => {}ms", elapsed);
-    result
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
-async fn set_usbnet_mode(
-    mode: i32,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+async fn set_usbnet_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut guard = transport.lock().unwrap();
         let t = guard.as_deref_mut().ok_or("Not connected")?;
         at_adapter::set_usbnet(t, mode)
-    }).await.map_err(|e| format!("Task error: {}", e))?
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+// ── USB hotplug monitor ──
+
+#[derive(Clone, serde::Serialize)]
+struct PortChangeEvent {
+    added: Vec<String>,
+    removed: Vec<String>,
+}
+
+/// Polls serial ports every 2 seconds and emits `port-changed` events to the
+/// frontend when devices are added or removed. The frontend decides whether to
+/// auto-connect (USB AT) or stay idle. This keeps the monitor stateless.
+fn start_port_monitor(app_handle: tauri::AppHandle) {
+    std::thread::Builder::new()
+        .name("usb-monitor".into())
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut previous_ports: HashSet<String> = HashSet::new();
+                loop {
+                    std::thread::sleep(Duration::from_secs(2));
+
+                    let ports = match serialport::available_ports() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            log::warn!("[USB监控] available_ports 失败: {}", e);
+                            continue;
+                        }
+                    };
+
+                    let current_names: HashSet<String> = ports.iter().map(|p| p.port_name.clone()).collect();
+
+                    let added: Vec<String> = current_names.difference(&previous_ports).cloned().collect();
+                    let removed: Vec<String> = previous_ports.difference(&current_names).cloned().collect();
+                    previous_ports = current_names;
+
+                    if added.is_empty() && removed.is_empty() {
+                        continue;
+                    }
+
+                    log::info!("[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}", added, removed);
+
+                    if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
+                        added: added.clone(),
+                        removed: removed.clone(),
+                    }) {
+                        log::warn!("[USB监控] 发送事件失败: {}", e);
+                    }
+                }
+            }));
+            if let Err(e) = result {
+                let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "未知错误".to_string()
+                };
+                log::error!("[USB监控] 线程崩溃: {}", msg);
+            }
+        })
+        .expect("无法创建 USB 监控线程");
 }
 
 // ── Timing ──
-
-#[tauri::command]
-fn mark_init_start(state: tauri::State<'_, AppState>) {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-    state.timing.lock().unwrap().init_start_ms = now;
-}
-
-#[tauri::command]
-fn mark_init_end(state: tauri::State<'_, AppState>) {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-    state.timing.lock().unwrap().init_end_ms = now;
-}
-
-#[tauri::command]
-fn get_timing_stats(state: tauri::State<'_, AppState>) -> AtTimingStats {
-    let mut tracker = state.timing.lock().unwrap();
-    // Merge global transport timing entries
-    let global_entries = transport::drain_timing_entries();
-    for (cmd, dur, ok, phase) in global_entries {
-        tracker.record(cmd, dur, ok, phase);
-    }
-    AtTimingStats {
-        entries: tracker.entries.clone(),
-        total_ms: tracker.total_ms(),
-        init_start_ms: tracker.init_start_ms,
-        init_end_ms: tracker.init_end_ms,
-    }
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Starting Modem Cat application");
 
+    let index_html: &'static str =
+        include_str!("../../src/desktop/index.html");
+
     tauri::Builder::default()
+        .register_uri_scheme_protocol("modemcat", move |_app, request| {
+            let path = request.uri().path();
+            if path == "/" || path == "/index.html" || path.is_empty() {
+                Response::builder()
+                    .status(200)
+                    .header("Content-Type", "text/html")
+                    .body(index_html.as_bytes().to_vec())
+                    .unwrap()
+            } else {
+                Response::builder()
+                    .status(404)
+                    .body(Vec::new())
+                    .unwrap()
+            }
+        })
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
-            timing: Arc::new(Mutex::new(TimingTracker::default())),
             active_cids: Arc::new(Mutex::new(Vec::new())),
+            connected_port: Arc::new(Mutex::new(None)),
         })
-        .invoke_handler(tauri::generate_handler![
-            // Port / connection
-            list_ports,
-            auto_connect_at,
-            connect_serial,
-            connect_tcp,
-            disconnect,
-            // High-level queries
-            get_modem_status,
-            get_hardware_info,
-            get_ip_info,
-            get_apn_list,
-            get_neighbor_cells,
-            get_qos_info,
-            get_network_mode,
-            get_bands,
-            get_feature_toggles,
-            get_usbnet_mode,
-            get_traffic,
-            // Write operations
-            set_apn_config,
-            delete_apn_config,
-            connect_data,
-            disconnect_data,
-            set_network_mode_cmd,
-            set_nr5g_band_cmd,
-            set_bands,
-            reset_all_bands,
-            set_feature_toggle,
-            set_usbnet_mode,
-            reboot_modem,
-            factory_reset,
-            send_raw_at,
-            // Timing
-            mark_init_start,
-            mark_init_end,
-            get_timing_stats,
-        ])
         .setup(|app| {
+            start_port_monitor(app.handle().clone());
+            if let Some(w) = app.get_webview_window("main") {
+                let url = Url::parse("modemcat://localhost/").unwrap();
+                let _ = w.navigate(url);
+            }
+
             let show_item = tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
             let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
             let menu = tauri::menu::MenuBuilder::new(app)
@@ -869,6 +871,40 @@ pub fn run() {
 
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            // Port / connection
+            list_ports,
+            auto_connect_at,
+            connect_serial,
+            connect_tcp,
+            disconnect,
+            // High-level queries
+            get_modem_status,
+            get_hardware_info,
+            get_ip_info,
+            get_apn_list,
+            get_neighbor_cells,
+            get_qos_info,
+            get_network_mode,
+            get_bands,
+            get_feature_toggles,
+            get_usbnet_mode,
+            get_traffic,
+            // Write operations
+            set_apn_config,
+            delete_apn_config,
+            connect_data,
+            disconnect_data,
+            set_network_mode_cmd,
+            set_nr5g_band_cmd,
+            set_bands,
+            reset_all_bands,
+            set_feature_toggle,
+            set_usbnet_mode,
+            reboot_modem,
+            factory_reset,
+            send_raw_at,
+        ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 window.hide().unwrap();

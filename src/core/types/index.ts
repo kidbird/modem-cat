@@ -4,11 +4,11 @@ export type ConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'CONNECTING' | 'ER
 
 export interface ConnectionParams {
   // USB Serial / TTL
-  port?: string;
+  serialPort?: string;
   baudRate?: number;
   // Ethernet
   host?: string;
-  port?: number;
+  tcpPort?: number;
   protocol?: 'TCP' | 'UDP';
 }
 

@@ -50,18 +50,18 @@ export const connectCommand = {
       const baudRate = parseInt(args.baud as string || '115200', 10);
       connection = connectionManager.createConnection(
         type === 'usb' ? 'USB_SERIAL' : 'TTL',
-        { port, baudRate }
+        { serialPort: port, baudRate }
       );
     } else if (type === 'ethernet') {
       const host = args.host as string;
-      const port = args.port as string;
-      if (!host || !port) {
+      const tcpPort = args.port as string;
+      if (!host || !tcpPort) {
         throw new Error('--host and --port are required for Ethernet connection');
       }
 
       connection = connectionManager.createConnection('ETHERNET', {
         host,
-        port: parseInt(port, 10),
+        tcpPort: parseInt(tcpPort, 10),
         protocol: 'TCP',
       });
     } else {

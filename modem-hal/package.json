@@ -1,0 +1,16 @@
+{
+  "name": "modem-hal",
+  "version": "0.1.0",
+  "description": "5G modem HAL native addon",
+  "main": "index.js",
+  "napi": {
+    "name": "modem-hal",
+    "triples": {
+      "defaults": true,
+      "additional": ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu"]
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2"
+  }
+}

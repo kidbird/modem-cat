@@ -3,14 +3,8 @@
 ## Build Commands
 
 ```bash
-# Tauri Desktop (Rust + web frontend)
+# Desktop only (Tauri)
 cd src-tauri && cargo build --release
-
-# CLI (Bun/TypeScript)
-bun run src/cli/index.ts        # Run directly
-bun build src/cli/index.ts      # Build to dist/
-bun test                        # Run tests
-bun run typecheck               # TypeScript check
 ```
 
 ## Critical: Exe Lock on Rebuild
@@ -21,17 +15,15 @@ bun run typecheck               # TypeScript check
 
 ### Desktop Frontend
 - Single file: `src/desktop/index.html` (all HTML/CSS/JS inline)
-- Served by Tauri from `frontendDist: "../src/desktop"` in tauri.conf.json
+- Served by Tauri from `frontendDist: "../src/desktop"` in `tauri.conf.json`
 
 ### Rust Backend
 - `src-tauri/src/lib.rs` — main app logic, Tauri commands, system tray setup
-- `src-tauri/src/at_adapter.rs` — AT command execution
-- `src-tauri/src/serial.rs` — serial port handling
-- `src-tauri/src/transport.rs` — AT transport layer
+- `src-tauri/src/at_adapter.rs` — AT command query/write operations
+- `src-tauri/src/at_parser.rs` — parsing raw AT responses into structured data
 
-### CLI
-- `src/cli/index.ts` — entry point
-- `src/cli/commands/` — command modules
+### Shared Rust HAL
+- `modem-hal/src/` — shared transport, vendor detection, and modem abstraction used by desktop backend
 
 ## Desktop App Behavior
 

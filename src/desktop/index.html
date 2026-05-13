@@ -461,6 +461,8 @@
     .band-chip input { display: none; }
     .band-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
     .band-chip.checked { border-color: var(--accent); color: var(--accent); background: var(--bg-primary); }
+    .band-chip.invalid { border-color: #e74c3c; color: #e74c3c; opacity: 0.7; }
+    .band-chip.invalid.checked { border-color: #e74c3c; color: #e74c3c; background: rgba(231,76,60,0.1); }
 
     /* ── Toggle switch ── */
     .toggle-row {
@@ -1913,18 +1915,27 @@
     }
 
     // ── Band selection ──
-    function renderBandGrid(bands, locked, gridId) {
+    function renderBandGrid(bands, locked, gridId, invalid) {
       const grid = document.getElementById(gridId);
       if (!bands || bands.length === 0) {
-        grid.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px;">暂无数据</div>';
+        const msg = document.createElement('div');
+        msg.style.cssText = 'color:var(--text-muted);font-size:12px;padding:8px;';
+        msg.textContent = '暂无数据';
+        grid.replaceChildren(msg);
         return;
       }
       grid.innerHTML = '';
+      // Render supported bands
       bands.forEach(band => {
         const chip = document.createElement('label');
         chip.className = 'band-chip';
         chip.dataset.band = band;
-        chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        const span = document.createElement('span');
+        span.textContent = band;
+        chip.appendChild(input);
+        chip.appendChild(span);
         if (locked.includes(band)) {
           chip.classList.add('checked');
         }
@@ -1934,6 +1945,26 @@
         });
         grid.appendChild(chip);
       });
+      // Append invalid bands (locked but not hardware-supported)
+      if (invalid && invalid.length > 0) {
+        invalid.forEach(band => {
+          const chip = document.createElement('label');
+          chip.className = 'band-chip invalid checked';
+          chip.dataset.band = band;
+          chip.title = '此频段超出硬件支持范围';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          const span = document.createElement('span');
+          span.textContent = band + ' ⚠';
+          chip.appendChild(input);
+          chip.appendChild(span);
+          chip.addEventListener('click', function (e) {
+            e.preventDefault();
+            this.classList.toggle('checked');
+          });
+          grid.appendChild(chip);
+        });
+      }
     }
 
     async function refreshBands() {
@@ -1941,8 +1972,8 @@
       try {
         const cfg = await invoke('get_bands');
         state.bandConfig = cfg;
-        renderBandGrid(cfg.lteSupported, cfg.lteLocked, 'bandGridLte');
-        renderBandGrid(cfg.nrSupported, cfg.nrLocked, 'bandGridNr');
+        renderBandGrid(cfg.lteSupported, cfg.lteLocked, 'bandGridLte', cfg.lteInvalid);
+        renderBandGrid(cfg.nrSupported, cfg.nrLocked, 'bandGridNr', cfg.nrInvalid);
       } catch (e) {
         console.warn('refreshBands failed:', e);
       }

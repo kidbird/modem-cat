@@ -216,6 +216,8 @@ impl ModemVendor for TdTechModem {
             nr_supported: vec![],
             lte_locked: lte_bands,
             nr_locked: vec![],
+            lte_spec: vec![],
+            nr_spec: vec![],
         })
     }
 

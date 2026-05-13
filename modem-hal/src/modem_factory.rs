@@ -46,15 +46,13 @@ impl ModemFactory {
                 return ChipsetVendor::TdTech;
             }
         }
-        let unisoc = ["RG200U", "RG500U", "RM500U", "RG501U", "RM501U"];
+        let unisoc = ["RG200U", "RM500U"];
         for m in &unisoc {
             if upper.contains(m) {
                 return ChipsetVendor::UniSoc;
             }
         }
-        let qualcomm = [
-            "RG520N", "RM520N", "RG525F", "RG530F", "RM530N", "RG540F", "RM540N",
-        ];
+        let qualcomm = ["RM520N", "RM500Q"];
         for m in &qualcomm {
             if upper.contains(m) {
                 return ChipsetVendor::Qualcomm;
@@ -89,11 +87,15 @@ mod tests {
     #[test]
     fn detects_qualcomm_from_model() {
         assert_eq!(
-            ModemFactory::detect_vendor_from_model("RG520N-GL"),
+            ModemFactory::detect_vendor_from_model("RM520N-GL"),
             ChipsetVendor::Qualcomm
         );
         assert_eq!(
-            ModemFactory::detect_vendor_from_model("RM520N-GL"),
+            ModemFactory::detect_vendor_from_model("RM500Q-GL"),
+            ChipsetVendor::Qualcomm
+        );
+        assert_eq!(
+            ModemFactory::detect_vendor_from_model("RM500Q-CN"),
             ChipsetVendor::Qualcomm
         );
     }

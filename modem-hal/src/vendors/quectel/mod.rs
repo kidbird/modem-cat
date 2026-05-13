@@ -247,11 +247,14 @@ impl ModemVendor for QuectelModem {
         let lte_resp = t.send_at("AT+QNWPREFCFG=\"lte_band\"")?;
         cmd_delay();
         let nr_resp = t.send_at("AT+QNWPREFCFG=\"nr5g_band\"")?;
+        let (lte_spec, nr_spec) = crate::types::spec_bands_for_model(&self.model);
         Ok(BandConfig {
             lte_supported: parse_band_list(&lte_resp),
             nr_supported: parse_band_list(&nr_resp),
             lte_locked: vec![],
             nr_locked: vec![],
+            lte_spec,
+            nr_spec,
         })
     }
 

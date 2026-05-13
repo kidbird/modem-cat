@@ -438,6 +438,8 @@ pub fn query_bands(t: &mut dyn AtTransport) -> Result<BandConfig, String> {
         nr_supported,
         lte_locked,
         nr_locked,
+        lte_spec: vec![],
+        nr_spec: vec![],
     })
 }
 

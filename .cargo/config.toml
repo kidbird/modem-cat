@@ -1,0 +1,4 @@
+# Force static linking of MSVC CRT on Windows
+# Ensures no VCRUNTIME140.dll / MSVCP140.dll dependency at runtime
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

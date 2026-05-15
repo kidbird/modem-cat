@@ -461,6 +461,8 @@
     .band-chip input { display: none; }
     .band-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
     .band-chip.checked { border-color: var(--accent); color: var(--accent); background: var(--bg-primary); }
+    .band-chip.invalid { border-color: #e74c3c; color: #e74c3c; opacity: 0.7; }
+    .band-chip.invalid.checked { border-color: #e74c3c; color: #e74c3c; background: rgba(231,76,60,0.1); }
 
     /* ── Toggle switch ── */
     .toggle-row {
@@ -655,6 +657,47 @@
     }
   </style>
 
+  <!-- About dialog -->
+  <div id="aboutOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;justify-content:center;align-items:center;" onclick="if(event.target===this)hideAbout()">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:16px;padding:32px 36px;max-width:440px;width:90%;box-shadow:0 16px 48px rgba(0,0,0,0.5);">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5.5 8.5L9 12l-3.5 3.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9.5 5.5H19A1.5 1.5 0 0120.5 7v10a1.5 1.5 0 01-1.5 1.5H9.5l-4-4V9.5l4-4z" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="14" cy="12" r="3" fill="var(--accent)" opacity="0.2"/>
+          <path d="M13 11h2v2" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="14" cy="14.5" r="0.8" fill="var(--accent)"/>
+        </svg>
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text-primary);">Modem Cat</div>
+          <div style="font-size:12px;color:var(--text-muted);">v0.1.0</div>
+        </div>
+      </div>
+      <div style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+        5G Modem 调试桌面工具，支持远程/本地 AT 串口连接、实时信号监控、频段配置、网络状态查询等功能。
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;">支持的操作系统</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <tr style="border-bottom:1px solid var(--border-color);">
+          <td style="padding:6px 8px;color:var(--text-secondary);">Windows</td>
+          <td style="padding:6px 8px;color:var(--success);font-weight:500;">Windows 10 1809+</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color);">
+          <td style="padding:6px 8px;color:var(--text-secondary);">macOS</td>
+          <td style="padding:6px 8px;color:var(--success);font-weight:500;">macOS 10.15+</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 8px;color:var(--text-secondary);">Linux</td>
+          <td style="padding:6px 8px;color:var(--warning);font-weight:500;">需系统库</td>
+        </tr>
+      </table>
+      <div style="margin-top:14px;font-size:11px;color:var(--text-muted);line-height:1.6;">
+        Linux 需预装：libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 等运行库。
+      </div>
+      <button onclick="hideAbout()" style="margin-top:20px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">确定</button>
+    </div>
+  </div>
+
   <div class="sidebar">
     <div class="logo">
       <div class="logo-text">
@@ -695,9 +738,6 @@
       </div>
       <div class="nav-item" data-page="hardware">
         <span class="nav-icon">⬡</span>硬件信息
-      </div>
-      <div class="nav-item disabled" data-page="engineering">
-        <span class="nav-icon">⚙</span>工程模式
       </div>
     </nav>
 
@@ -1302,15 +1342,6 @@
     </div><!-- /page-ip -->
 
 
-    <!-- ══ 工程模式（占位）══ -->
-    <div class="page" id="page-engineering">
-      <div class="placeholder-page">
-        <div class="placeholder-icon">⚙</div>
-        <div class="placeholder-title">工程模式</div>
-        <div class="placeholder-sub">功能开发中，敬请期待</div>
-      </div>
-    </div>
-
   </div><!-- /main -->
 
   <script>
@@ -1872,18 +1903,27 @@
     }
 
     // ── Band selection ──
-    function renderBandGrid(bands, locked, gridId) {
+    function renderBandGrid(bands, locked, gridId, invalid) {
       const grid = document.getElementById(gridId);
       if (!bands || bands.length === 0) {
-        grid.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px;">暂无数据</div>';
+        const msg = document.createElement('div');
+        msg.style.cssText = 'color:var(--text-muted);font-size:12px;padding:8px;';
+        msg.textContent = '暂无数据';
+        grid.replaceChildren(msg);
         return;
       }
       grid.innerHTML = '';
+      // Render supported bands
       bands.forEach(band => {
         const chip = document.createElement('label');
         chip.className = 'band-chip';
         chip.dataset.band = band;
-        chip.innerHTML = `<input type="checkbox"><span>${band}</span>`;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        const span = document.createElement('span');
+        span.textContent = band;
+        chip.appendChild(input);
+        chip.appendChild(span);
         if (locked.includes(band)) {
           chip.classList.add('checked');
         }
@@ -1893,6 +1933,26 @@
         });
         grid.appendChild(chip);
       });
+      // Append invalid bands (locked but not hardware-supported)
+      if (invalid && invalid.length > 0) {
+        invalid.forEach(band => {
+          const chip = document.createElement('label');
+          chip.className = 'band-chip invalid checked';
+          chip.dataset.band = band;
+          chip.title = '此频段超出硬件支持范围';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          const span = document.createElement('span');
+          span.textContent = band + ' ⚠';
+          chip.appendChild(input);
+          chip.appendChild(span);
+          chip.addEventListener('click', function (e) {
+            e.preventDefault();
+            this.classList.toggle('checked');
+          });
+          grid.appendChild(chip);
+        });
+      }
     }
 
     async function refreshBands() {
@@ -1900,8 +1960,8 @@
       try {
         const cfg = await invoke('get_bands');
         state.bandConfig = cfg;
-        renderBandGrid(cfg.lteSupported, cfg.lteLocked, 'bandGridLte');
-        renderBandGrid(cfg.nrSupported, cfg.nrLocked, 'bandGridNr');
+        renderBandGrid(cfg.lteSupported, cfg.lteLocked, 'bandGridLte', cfg.lteInvalid);
+        renderBandGrid(cfg.nrSupported, cfg.nrLocked, 'bandGridNr', cfg.nrInvalid);
       } catch (e) {
         console.warn('refreshBands failed:', e);
       }
@@ -2457,6 +2517,20 @@
     // ── 频段初始化（空，等待连接后从模组加载） ──
     renderBandGrid([], [], 'bandGridLte');
     renderBandGrid([], [], 'bandGridNr');
+
+    // ── 关于对话框 ──
+    function showAbout() {
+      document.getElementById('aboutOverlay').style.display = 'flex';
+    }
+    function hideAbout() {
+      document.getElementById('aboutOverlay').style.display = 'none';
+    }
+    {
+      const listen = window.__TAURI__?.event?.listen;
+      if (listen) {
+        listen('show-about', showAbout);
+      }
+    }
   </script>
 </body>
 </html>

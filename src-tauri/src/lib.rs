@@ -8,6 +8,7 @@ pub mod at_parser;
 use modem_hal::transport::AtTransport;
 use modem_hal::types::*;
 use tauri::http::Response;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::Url;
@@ -828,6 +829,22 @@ pub fn run() {
             connected_port: Arc::new(Mutex::new(None)),
         })
         .setup(|app| {
+            // ── Build menu bar ──
+            let about = MenuItemBuilder::with_id("about", "关于 Modem Cat")
+                .build(app)?;
+            let help_menu = SubmenuBuilder::new(app, "帮助")
+                .item(&about)
+                .build()?;
+            let menu = MenuBuilder::new(app)
+                .item(&help_menu)
+                .build()?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|handle, event| {
+                if event.id() == "about" {
+                    let _ = handle.emit("show-about", ());
+                }
+            });
+
             start_port_monitor(app.handle().clone());
             if let Some(w) = app.get_webview_window("main") {
                 let url = Url::parse("modemcat://localhost/").unwrap();

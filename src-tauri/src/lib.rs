@@ -822,6 +822,13 @@ pub fn run() {
             }
         })
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Second instance launched — bring existing window to front
+            if let Some(window) = app.webview_windows().get("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),

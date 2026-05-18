@@ -173,6 +173,111 @@ pub trait ModemVendor: Send {
     /// Query QoS information
     fn query_qos(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<QosInfo, String>;
 
+    // ==================== Baseline ====================
+
+    /// Query AP/CP baseline version
+    fn query_baseline(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<BaselineInfo, String> {
+        Err("Not implemented".to_string())
+    }
+
+    // ==================== Antenna ====================
+
+    /// Query antenna RSSI values (AT+QANTRSSI?)
+    fn query_ant_rssi(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<Vec<String>, String> {
+        Ok(vec![])
+    }
+
+    // ==================== Network Mode ====================
+
+    /// Query preferred network mode (e.g., AT+QNWPREFCFG="mode_pref")
+    fn query_network_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<String, String> {
+        Err("Not implemented".to_string())
+    }
+
+    // ==================== Band Configuration (extended) ====================
+
+    /// Query full band configuration with supported, locked, and spec bands
+    fn query_bands_with_spec(
+        &mut self,
+        transport: &mut dyn AtTransport,
+    ) -> Result<BandConfig, String> {
+        self.query_band_config(transport)
+    }
+
+    /// Set LTE and NR bands (combined operation)
+    fn set_bands(
+        &mut self,
+        transport: &mut dyn AtTransport,
+        lte: &str,
+        nr: &str,
+    ) -> Result<(), String> {
+        if !lte.is_empty() {
+            self.set_lte_bands(transport, lte)?;
+        }
+        if !nr.is_empty() {
+            self.set_nr5g_bands(transport, nr)?;
+        }
+        Ok(())
+    }
+
+    /// Reset all bands to factory defaults
+    fn reset_all_bands(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    // ==================== USB Configuration ====================
+
+    /// Query USB network mode
+    fn query_usbnet_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<i32, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Set USB network mode
+/// Set USB network mode
+    fn set_usbnet_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _mode: i32,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    // ==================== Factory Reset ====================
+
+    /// Factory reset the modem
+    fn factory_reset(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    // ==================== Raw AT ====================
+
+    /// Send a raw AT command and return the response
+    fn send_raw_at(
+        &mut self,
+        transport: &mut dyn AtTransport,
+        command: &str,
+    ) -> Result<String, String> {
+        transport.send_at(command)
+    }
+
     // ==================== Combined Operations ====================
 
     /// Query full modem status (combines multiple queries)

@@ -2,11 +2,10 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub mod at_adapter;
-pub mod at_parser;
-
 use modem_hal::transport::AtTransport;
 use modem_hal::types::*;
+use modem_hal::ModemFactory;
+use modem_hal::ModemVendor;
 use tauri::http::Response;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
@@ -15,6 +14,7 @@ use tauri::Url;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
+    pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
     pub data_cid: Arc<Mutex<i32>>,
     pub active_cids: Arc<Mutex<Vec<i32>>>,
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
@@ -313,16 +313,20 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
     log::info!("AT candidates: {:?}", at_candidates);
 
     let transport_arc = state.transport.clone();
+    let vendor_arc = state.vendor.clone();
     for port_name in &at_candidates {
         log::info!("Probing port: {}", port_name);
 
         let pn = port_name.clone();
         let result = tokio::task::spawn_blocking(move || {
-            // Open, send AT, verify OK, and return the transport
+            // Open, send AT, verify OK, detect vendor, and return both
             let mut transport = modem_hal::transport::SerialTransport::new(&pn, 115200)?;
             let response = transport.send_at("AT");
             match response {
-                Ok(r) if r.trim().ends_with("OK") => Ok(transport),
+                Ok(r) if r.trim().ends_with("OK") => {
+                    let vendor_result = ModemFactory::create(&mut transport);
+                    Ok((transport, vendor_result))
+                }
                 Ok(r) => Err(format!("Port {} responded but not OK: {}", pn, r)),
                 Err(e) => Err(format!("Port {} AT probe failed: {}", pn, e)),
             }
@@ -331,9 +335,18 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
         .map_err(|e| format!("Task error: {}", e))?;
 
         match result {
-            Ok(transport) => {
+            Ok((transport, vendor_result)) => {
                 log::info!("Connected to AT port: {}", port_name);
                 *transport_arc.lock().unwrap() = Some(Box::new(transport));
+                match vendor_result {
+                    Ok(vendor) => {
+                        log::info!("Detected vendor: {:?}", vendor.vendor());
+                        *vendor_arc.lock().unwrap() = Some(vendor);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to detect modem vendor: {}", e);
+                    }
+                }
                 let cp = state.connected_port.clone();
                 *cp.lock().unwrap() = Some(port_name.clone());
                 return Ok(port_name.clone());
@@ -356,9 +369,16 @@ fn connect_serial(
     baud_rate: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
+    let mut transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
+    let vendor = ModemFactory::create(&mut transport);
     let id = format!("serial_{}", port_name);
     *state.transport.lock().unwrap() = Some(Box::new(transport));
+    if let Ok(v) = vendor {
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *state.vendor.lock().unwrap() = Some(v);
+    } else if let Err(e) = vendor {
+        log::warn!("Vendor detection failed: {}", e);
+    }
     *state.connected_port.lock().unwrap() = Some(port_name.clone());
     log::info!(
         "Connected to serial port {} at {} baud",
@@ -374,11 +394,18 @@ fn connect_tcp(
     port: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = modem_hal::transport::TcpTransport::new(&host, port)?;
+    let mut transport = modem_hal::transport::TcpTransport::new(&host, port)?;
+    let vendor = ModemFactory::create(&mut transport);
     let id = format!("tcp_{}:{}", host, port);
     // TCP is manual — clear connected_port so USB monitor won't interfere
     *state.connected_port.lock().unwrap() = None;
     *state.transport.lock().unwrap() = Some(Box::new(transport));
+    if let Ok(v) = vendor {
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *state.vendor.lock().unwrap() = Some(v);
+    } else if let Err(e) = vendor {
+        log::warn!("Vendor detection failed: {}", e);
+    }
     log::info!("Connected to TCP {}:{}", host, port);
     Ok(id)
 }
@@ -390,6 +417,7 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
         transport.close();
     }
     *t = None;
+    *state.vendor.lock().unwrap() = None;
     *state.connected_port.lock().unwrap() = None;
     Ok("Disconnected".to_string())
 }
@@ -399,25 +427,28 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
 #[tauri::command]
 async fn get_modem_status(state: tauri::State<'_, AppState>) -> Result<ModemStatus, String> {
     let transport = state.transport.clone();
-    let active_cids_arc = state.active_cids.clone();
-    let (result, active_cids) = tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_modem_status(t)
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_modem_status(t)
     })
     .await
-    .map_err(|e| format!("Task error: {}", e))??;
-    *active_cids_arc.lock().unwrap() = active_cids;
-    Ok(result)
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[tauri::command]
 async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<HardwareInfo, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_hardware_info(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_hardware_info(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -426,12 +457,15 @@ async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<Hardware
 #[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         let cid = *data_cid.lock().unwrap();
-        at_adapter::query_ip_info(t, if cid > 0 { cid } else { 1 })
+        v.query_ip_info(t, if cid > 0 { cid } else { 1 })
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -440,13 +474,13 @@ async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String
 #[tauri::command]
 async fn get_apn_list(state: tauri::State<'_, AppState>) -> Result<Vec<ApnEntry>, String> {
     let transport = state.transport.clone();
-    let active_cids_arc = state.active_cids.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        let active_cids = active_cids_arc.lock().unwrap().clone();
-        let active_cids_opt = if active_cids.is_empty() { None } else { Some(active_cids) };
-        at_adapter::query_apn_list(t, active_cids_opt)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_apn_list(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -455,11 +489,13 @@ async fn get_apn_list(state: tauri::State<'_, AppState>) -> Result<Vec<ApnEntry>
 #[tauri::command]
 async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<NeighborCells, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        let (lte, nr) = at_adapter::query_neighbor_cells(t)?;
-        Ok(NeighborCells { lte, nr })
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_neighbor_cells(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -468,12 +504,15 @@ async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<Neighbo
 #[tauri::command]
 async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         let cid = *data_cid.lock().unwrap();
-        at_adapter::query_qos(t, if cid > 0 { cid } else { 1 })
+        v.query_qos(t, if cid > 0 { cid } else { 1 })
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -482,10 +521,13 @@ async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, Stri
 #[tauri::command]
 async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_network_mode(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_network_mode(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -504,10 +546,13 @@ async fn set_apn_config(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::set_apn(t, cid, context_type, &apn, &username, &password, auth_type)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_apn(t, cid, context_type, &apn, &username, &password, auth_type)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -516,10 +561,13 @@ async fn set_apn_config(
 #[tauri::command]
 async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::delete_apn(t, cid)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.delete_apn(t, cid)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -528,13 +576,16 @@ async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Resul
 #[tauri::command]
 async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         let cid = *data_cid.lock().unwrap();
         let cid = if cid > 0 { cid } else { 1 };
-        at_adapter::connect_data(t, cid)?;
+        v.connect_data(t, cid)?;
         *data_cid.lock().unwrap() = cid;
         Ok(())
     })
@@ -545,13 +596,16 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         let cid = *data_cid.lock().unwrap();
         let cid = if cid > 0 { cid } else { 1 };
-        at_adapter::disconnect_data(t, cid)
+        v.disconnect_data(t, cid)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -563,10 +617,13 @@ async fn set_network_mode_cmd(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::set_network_mode(t, &mode)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_network_mode(t, &mode)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -575,10 +632,13 @@ async fn set_network_mode_cmd(
 #[tauri::command]
 async fn set_nr5g_band_cmd(band: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::set_nr5g_band(t, &band)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_nr5g_bands(t, &band)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -587,10 +647,13 @@ async fn set_nr5g_band_cmd(band: String, state: tauri::State<'_, AppState>) -> R
 #[tauri::command]
 async fn reboot_modem(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::reboot_modem(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.reboot(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -599,10 +662,13 @@ async fn reboot_modem(state: tauri::State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::factory_reset(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.factory_reset(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -611,10 +677,13 @@ async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> 
 #[tauri::command]
 async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::send_raw_at(t, &command)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.send_raw_at(t, &command)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -623,10 +692,13 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
 #[tauri::command]
 async fn get_bands(state: tauri::State<'_, AppState>) -> Result<BandConfig, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_bands(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_bands_with_spec(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -639,10 +711,13 @@ async fn set_bands(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::set_bands(t, &lte, &nr)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_bands(t, &lte, &nr)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -651,10 +726,13 @@ async fn set_bands(
 #[tauri::command]
 async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::reset_all_bands(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.reset_all_bands(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -663,10 +741,13 @@ async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String
 #[tauri::command]
 async fn get_feature_toggles(state: tauri::State<'_, AppState>) -> Result<FeatureToggles, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_feature_toggles(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_feature_toggles(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -679,19 +760,13 @@ async fn set_feature_toggle(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        let val = if enabled { 1 } else { 0 };
-        match feature.as_str() {
-            "pcieMode" => at_adapter::set_qcfg_toggle(t, "pcie/mode", val),
-            "ethernet" => at_adapter::set_qcfg_toggle(t, "ethernet", val),
-            "proxyArp" => at_adapter::set_qcfg_toggle(t, "proxyarp", val),
-            "uartAt" => at_adapter::set_qcfg_toggle(t, "uartat", val),
-            "ethAt" => at_adapter::set_qcfg_toggle(t, "eth_at", val),
-            "adb" => at_adapter::set_adb(t, enabled),
-            _ => Err(format!("Unknown feature: {}", feature)),
-        }
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_feature_toggle(t, &feature, enabled)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -700,10 +775,13 @@ async fn set_feature_toggle(
 #[tauri::command]
 async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_traffic(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_traffic(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -712,10 +790,13 @@ async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, S
 #[tauri::command]
 async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::query_usbnet(t)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_usbnet_mode(t)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -724,10 +805,13 @@ async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, Strin
 #[tauri::command]
 async fn set_usbnet_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut guard = transport.lock().unwrap();
-        let t = guard.as_deref_mut().ok_or("Not connected")?;
-        at_adapter::set_usbnet(t, mode)
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_usbnet_mode(t, mode)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -831,6 +915,7 @@ pub fn run() {
         }))
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
+            vendor: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
             active_cids: Arc::new(Mutex::new(Vec::new())),
             connected_port: Arc::new(Mutex::new(None)),

@@ -271,7 +271,8 @@ pub struct TemperatureInfo {
 }
 
 /// Baseline information (unified format)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BaselineInfo {
     pub ap_baseline: String,
     pub cp_baseline: String,

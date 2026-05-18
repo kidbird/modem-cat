@@ -40,6 +40,8 @@ fn is_at_response(text: &str) -> bool {
 
 #[test]
 fn test_at_with_parser() {
+    use modem_hal::vendors::quectel::parser::*;
+
     let ports = serialport::available_ports().unwrap();
     println!("\n=== AT Parser Integration Test ===\n");
 
@@ -66,52 +68,49 @@ fn test_at_with_parser() {
         // ── Parse SIM ──
         let cpin = send_at(&mut port, "AT+CPIN?");
         println!("\n[SIM] raw: {}", cpin.trim().replace('\n', " | "));
-        let sim = modem_cat_lib::at_parser::parse_cpin(&cpin);
+        let sim = parse_cpin(&cpin);
         println!("[SIM] parsed: {}", sim);
 
         // ── Parse IMEI ──
         let cgsn = send_at(&mut port, "AT+CGSN");
-        let imei = modem_cat_lib::at_parser::parse_cgsn(&cgsn);
+        let imei = parse_cgsn(&cgsn);
         println!("[IMEI] {}", imei);
 
         // ── Parse ICCID ──
         let ccid = send_at(&mut port, "AT+CCID");
-        let iccid = modem_cat_lib::at_parser::parse_ccid(&ccid);
+        let iccid = parse_iccid(&ccid);
         println!("[ICCID] {}", iccid);
 
         // ── Parse hardware ──
         let cgmi = send_at(&mut port, "AT+CGMI");
-        let mfr = modem_cat_lib::at_parser::parse_cgmi(&cgmi);
+        let mfr = parse_cgmm(&cgmi);
         let cgmm = send_at(&mut port, "AT+CGMM");
-        let model = modem_cat_lib::at_parser::parse_cgmm(&cgmm);
-        let cgmr = send_at(&mut port, "AT+CGMR");
-        let fw = modem_cat_lib::at_parser::parse_cgmr(&cgmr);
+        let model = parse_cgmm(&cgmm);
+        let cgmr = send_at(&mut port, "AT+GMR");
+        let fw = parse_gmr(&cgmr);
         println!("[HW] {} {} fw={}", mfr, model, fw);
 
         // ── Parse operator ──
         let cops = send_at(&mut port, "AT+COPS?");
-        let (op, act) = modem_cat_lib::at_parser::parse_cops(&cops);
+        let (op, act) = parse_cops_with_act(&cops);
         println!("[Operator] {} ({})", op, act);
 
         // ── Parse serving cell ──
         let qeng = send_at(&mut port, "AT+QENG=\"servingcell\"");
         println!("\n[QENG] raw: {}", qeng.trim().replace('\n', " | "));
-        if let Some(sc) = modem_cat_lib::at_parser::parse_qeng_servingcell(&qeng) {
-            println!(
-                "[Cell] tech={} connected={} mcc={} mnc={} cell={} pci={}",
-                sc.tech, sc.connected, sc.operator_mcc, sc.operator_mnc, sc.cell_id, sc.pci
-            );
-            println!(
-                "[Cell] arfcn={} band={} bw={} rsrp={} rsrq={} sinr={}",
-                sc.arfcn, sc.band, sc.bandwidth, sc.rsrp, sc.rsrq, sc.sinr
-            );
-        } else {
-            println!("[Cell] PARSE FAILED");
-        }
+        let sc = parse_qeng_serving_cell(&qeng, true);
+        println!(
+            "[Cell] tech={} connected={} mcc={} mnc={} cell={} pci={}",
+            sc.tech, sc.connected, sc.operator_mcc, sc.operator_mnc, sc.cell_id, sc.pci
+        );
+        println!(
+            "[Cell] arfcn={} band={} bw={} rsrp={} rsrq={} sinr={}",
+            sc.arfcn, sc.band, sc.bandwidth, sc.rsrp, sc.rsrq, sc.sinr
+        );
 
         // ── Parse antennas ──
         let antrssi = send_at(&mut port, "AT+QANTRSSI?");
-        let ants = modem_cat_lib::at_parser::parse_qantrssi(&antrssi);
+        let ants = parse_qantrssi(&antrssi);
         println!(
             "[ANT] {:?} (raw: {})",
             ants,
@@ -120,7 +119,7 @@ fn test_at_with_parser() {
 
         // ── Parse APN ──
         let qicsgp = send_at(&mut port, "AT+QICSGP?");
-        let apns = modem_cat_lib::at_parser::parse_qicsgp(&qicsgp);
+        let apns = parse_qicsgp(&qicsgp, &[]);
         for a in &apns {
             println!(
                 "[APN] cid={} name={} type={} auth={}",
@@ -130,14 +129,14 @@ fn test_at_with_parser() {
 
         // ── Parse CGACT ──
         let cgact = send_at(&mut port, "AT+CGACT?");
-        let acts = modem_cat_lib::at_parser::parse_cgact(&cgact);
+        let acts = parse_cgact(&cgact);
         for (cid, st) in &acts {
             println!("[CGACT] cid={} status={}", cid, st);
         }
 
         // ── Parse IP ──
         let ipresp = send_at(&mut port, "AT+QNETDEVSTATUS=1");
-        let (ip4, mask, gw, dns, ip6) = modem_cat_lib::at_parser::parse_qnetdevstatus(&ipresp);
+        let (ip4, mask, gw, dns, ip6) = parse_qnetdevstatus(&ipresp);
         println!("[IP] addr={} mask={} gw={} dns={}", ip4, mask, gw, dns);
         if !ip6.is_empty() {
             println!("[IP] ipv6={}", ip6);
@@ -145,12 +144,12 @@ fn test_at_with_parser() {
 
         // ── Parse QoS ──
         let qosresp = send_at(&mut port, "AT+C5GQOSRDP=1");
-        let (cqi, ul_bw, dl_bw) = modem_cat_lib::at_parser::parse_c5gqosrdp(&qosresp);
+        let (cqi, ul_bw, dl_bw) = parse_c5gqosrdp(&qosresp);
         println!("[QoS] 5qi={} UL={} DL={}", cqi, ul_bw, dl_bw);
 
         // ── Parse network mode ──
         let mode = send_at(&mut port, "AT+QNWPREFCFG=\"mode_pref\"");
-        let pref = modem_cat_lib::at_parser::parse_qnwprefcfg_mode(&mode);
+        let pref = parse_qnwprefcfg_mode(&mode);
         println!("[NetMode] {}", pref);
 
         println!("\n=== Test Complete ===");

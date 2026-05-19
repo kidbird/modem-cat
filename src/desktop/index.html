@@ -552,6 +552,39 @@
       flex-shrink: 0;
     }
 
+    /* ── APN modal ── */
+    .apn-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .apn-modal-overlay.active { display: flex; }
+    .apn-modal-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 24px;
+      width: 420px;
+      max-width: 90vw;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .apn-modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+    .apn-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
     /* ── Lock list ── */
     .lock-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
     .lock-item {
@@ -656,6 +689,49 @@
       filter:drop-shadow(0 0 3px var(--accent));
     }
   </style>
+
+  <!-- APN Modal overlay -->
+  <div class="apn-modal-overlay" id="apnModalOverlay" onclick="if(event.target===this)closeApnModal()">
+    <div class="apn-modal-card">
+      <div class="apn-modal-title" id="apnModalTitle">新增 APN</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>APN 名称</label>
+          <input type="text" id="apnName" placeholder="cmnet">
+        </div>
+        <div class="form-group">
+          <label>用户名</label>
+          <input type="text" id="apnUser" placeholder="（可选）">
+        </div>
+        <div class="form-group">
+          <label>密码</label>
+          <input type="password" id="apnPass" placeholder="（可选）">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>鉴权类型</label>
+          <select id="apnAuth">
+            <option value="none">None</option>
+            <option value="pap">PAP</option>
+            <option value="chap">CHAP</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>IP 类型</label>
+          <select id="apnIp">
+            <option value="ipv4">IPv4</option>
+            <option value="ipv6">IPv6</option>
+            <option value="ipv4v6">IPv4v6（双栈）</option>
+          </select>
+        </div>
+      </div>
+      <div class="apn-modal-actions">
+        <button class="btn btn-secondary" onclick="closeApnModal()">取消</button>
+        <button class="btn btn-primary" onclick="saveApn()">确认保存</button>
+      </div>
+    </div>
+  </div>
 
   <!-- About dialog -->
   <div id="aboutOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;justify-content:center;align-items:center;" onclick="if(event.target===this)hideAbout()">
@@ -951,45 +1027,7 @@
         <!-- ─ Tab 1: APN 配置 ─ -->
         <div class="tab-panel active" id="ctab-apn">
           <div class="apn-list" id="apnList"></div>
-          <div style="border-top:1px solid var(--border-color);padding-top:14px;margin-top:4px;">
-            <div class="section-label" id="apnFormTitle">新增 APN</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>APN 名称</label>
-                <input type="text" id="apnName" placeholder="cmnet">
-              </div>
-              <div class="form-group">
-                <label>用户名</label>
-                <input type="text" id="apnUser" placeholder="（可选）">
-              </div>
-              <div class="form-group">
-                <label>密码</label>
-                <input type="password" id="apnPass" placeholder="（可选）">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>鉴权类型</label>
-                <select id="apnAuth">
-                  <option value="none">None</option>
-                  <option value="pap">PAP</option>
-                  <option value="chap">CHAP</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>IP 类型</label>
-                <select id="apnIp">
-                  <option value="ipv4">IPv4</option>
-                  <option value="ipv6">IPv6</option>
-                  <option value="ipv4v6">IPv4v6（双栈）</option>
-                </select>
-              </div>
-              <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-                <button class="btn btn-primary btn-sm" onclick="saveApn()">保存</button>
-                <button class="btn btn-secondary btn-sm" id="apnCancelBtn" onclick="cancelApnEdit()" style="display:none;">取消</button>
-              </div>
-            </div>
-          </div>
+          <button class="btn btn-primary btn-sm" onclick="openApnModal()">新增 APN</button>
         </div>
 
         <!-- ─ Tab 2: 网络锁定 ─ -->
@@ -1130,6 +1168,7 @@
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CPIN?')">AT+CPIN?</button>
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGACT?')">AT+CGACT?</button>
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNETDEVSTATUS=1')">AT+QNETDEV</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QICSGP?')">AT+QICSGP?</button>
           </div>
           <div class="terminal-input">
             <span class="terminal-prompt">›</span>
@@ -1184,55 +1223,31 @@
 
       <div class="panel">
         <div class="panel-title">功能开关</div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">PCIe ↔ 以太网</div>
-            <div class="toggle-desc">切换 PCIe 接口与以太网之间的数据通路</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
+          <div class="toggle-row">
+            <div><div class="toggle-label">PCIe ↔ 以太网</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="togglePcie" onchange="applyToggle('pcieMode', this.checked)"><span class="toggle-track"></span></label>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="togglePcie" onchange="applyToggle('pcieMode', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">Ethernet</div>
-            <div class="toggle-desc">以太网接口数据通路</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">Ethernet</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleEthernet" onchange="applyToggle('ethernet', this.checked)"><span class="toggle-track"></span></label>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggleEthernet" onchange="applyToggle('ethernet', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">ETH AT</div>
-            <div class="toggle-desc">通过以太网接口发送 AT 命令</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">ETH AT</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleEthAt" onchange="applyToggle('ethAt', this.checked)"><span class="toggle-track"></span></label>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggleEthAt" onchange="applyToggle('ethAt', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">UART AT</div>
-            <div class="toggle-desc">通过 UART 接口发送 AT 命令</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">UART AT</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleUartAt" onchange="applyToggle('uartAt', this.checked)"><span class="toggle-track"></span></label>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggleUartAt" onchange="applyToggle('uartAt', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
-        </div>
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">ADB</div>
-            <div class="toggle-desc">Android Debug Bridge 调试接口</div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">ADB</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleAdb" onchange="applyToggle('adb', this.checked)"><span class="toggle-track"></span></label>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggleAdb" onchange="applyToggle('adb', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
+          <div class="toggle-row">
+            <div><div class="toggle-label">Proxy ARP</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleProxyArp" onchange="applyToggle('proxyArp', this.checked)"><span class="toggle-track"></span></label>
+          </div>
         </div>
       </div>
 
@@ -1309,19 +1324,6 @@
           <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:1px;">
             <span style="font-size:11px;color:var(--text-muted);">推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）</span>
           </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">Proxy ARP</div>
-            <div class="toggle-desc">开启后模组代替局域网设备响应 ARP 请求</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggleProxyArp" onchange="applyToggleIp('proxyArp', this.checked)">
-            <span class="toggle-track"></span>
-          </label>
         </div>
       </div>
 
@@ -1474,8 +1476,15 @@
     });
 
     async function loadHardwarePage() {
-      await refreshHardwareInfo();
-      await refreshFeatureToggles();
+      showLoading('正在加载硬件信息...', '查询模组信息与功能开关');
+      try {
+        await refreshHardwareInfo();
+        setLoadingText('正在加载硬件信息...', '查询功能开关');
+        await refreshFeatureToggles();
+      } catch (e) {
+        addTerminalLine('[硬件] 加载失败: ' + e, 'err');
+      }
+      hideLoading();
     }
 
     // ── Connection ──
@@ -1784,7 +1793,7 @@
     function renderApnList() {
       const list = document.getElementById('apnList');
       if (apnData.length === 0) {
-        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 APN，请在下方添加</div>';
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 APN，请点击下方按钮添加</div>';
         return;
       }
       list.innerHTML = apnData.map((a, i) => `
@@ -1799,6 +1808,16 @@
       `).join('');
     }
 
+    function openApnModal() {
+      editingApnIdx = -1;
+      ['apnName','apnUser','apnPass'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('apnAuth').value = 'none';
+      document.getElementById('apnIp').value = 'ipv4';
+      document.getElementById('apnModalTitle').textContent = '新增 APN';
+      document.getElementById('apnModalOverlay').classList.add('active');
+      renderApnList();
+    }
+
     function editApn(i) {
       editingApnIdx = i;
       const a = apnData[i];
@@ -1807,20 +1826,22 @@
       document.getElementById('apnPass').value = a.pass;
       document.getElementById('apnAuth').value = a.auth;
       document.getElementById('apnIp').value = a.ip;
-      document.getElementById('apnFormTitle').textContent = '编辑 APN';
-      document.getElementById('apnCancelBtn').style.display = '';
+      document.getElementById('apnModalTitle').textContent = '编辑 APN';
+      document.getElementById('apnModalOverlay').classList.add('active');
       renderApnList();
     }
 
-    function cancelApnEdit() {
+    function closeApnModal() {
+      document.getElementById('apnModalOverlay').classList.remove('active');
       editingApnIdx = -1;
-      ['apnName','apnUser','apnPass'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('apnAuth').value = 'none';
-      document.getElementById('apnIp').value = 'ipv4';
-      document.getElementById('apnFormTitle').textContent = '新增 APN';
-      document.getElementById('apnCancelBtn').style.display = 'none';
       renderApnList();
     }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && document.getElementById('apnModalOverlay').classList.contains('active')) {
+        closeApnModal();
+      }
+    });
 
     async function saveApn() {
       const name = document.getElementById('apnName').value.trim();
@@ -1843,7 +1864,7 @@
           authType: authMap[auth] || 0,
         });
         addTerminalLine(`[APN] 已保存: ${name}`, 'ok');
-        cancelApnEdit();
+        closeApnModal();
         await refreshApnList();
       } catch (e) {
         addTerminalLine('[APN] 保存失败: ' + e, 'err');
@@ -2165,20 +2186,6 @@
       addTerminalLine(`[MTU] 已设置: ${val} 字节`, 'ok');
     }
 
-    function applyToggleIp(feature, enabled) {
-      const labels = { proxyArp: 'Proxy ARP' };
-      if (!state.connected) return;
-      invoke('set_feature_toggle', { feature, enabled }).then(() => {
-        addTerminalLine(`[IP] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
-      }).catch(e => {
-        addTerminalLine(`[IP] ${labels[feature]} 设置失败: ${e}`, 'err');
-        // Revert checkbox
-        const map = { proxyArp: 'toggleProxyArp' };
-        const el = document.getElementById(map[feature]);
-        if (el) el.checked = !enabled;
-      });
-    }
-
     function applyDmz() {
       const ip = document.getElementById('dmzHost').value.trim();
       if (!ip) { alert('请输入 DMZ 主机 IP 地址'); return; }
@@ -2279,7 +2286,7 @@
     }
 
     async function applyToggle(feature, enabled) {
-      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet' };
+      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP' };
       if (!state.connected) return;
       try {
         await invoke('set_feature_toggle', { feature, enabled });
@@ -2287,7 +2294,7 @@
       } catch (e) {
         addTerminalLine(`[功能] ${labels[feature]} 设置失败: ${e}`, 'err');
         // Revert checkbox
-        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet' };
+        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet', proxyArp: 'toggleProxyArp' };
         const el = document.getElementById(map[feature]);
         if (el) el.checked = !enabled;
       }

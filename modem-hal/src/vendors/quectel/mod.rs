@@ -491,6 +491,35 @@ impl ModemVendor for QuectelModem {
         }
     }
 
+    fn query_sim_slot(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
+        let resp = send_and_delay(t, "AT+QUIMSLOT?")?;
+        for line in resp.lines() {
+            if let Some(rest) = line.trim().strip_prefix("+QUIMSLOT:") {
+                if let Ok(slot) = rest.trim().parse::<i32>() {
+                    return Ok(slot);
+                }
+            }
+        }
+        Ok(1)
+    }
+
+    fn switch_sim_slot(&mut self, t: &mut dyn AtTransport, slot: i32) -> Result<(), String> {
+        let resp = send_and_delay(t, &format!("AT+QUIMSLOT={}", slot))?;
+        if is_ok(&resp) {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return Ok(());
+        }
+        if resp.contains("+CME ERROR") || resp.contains("ERROR") {
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+            let resp2 = send_and_delay(t, &format!("AT+QUIMSLOT={}", slot))?;
+            if is_ok(&resp2) {
+                return Ok(());
+            }
+            return Err(format!("Failed to switch SIM slot: {}", resp2));
+        }
+        Err(format!("Failed to switch SIM slot: {}", resp))
+    }
+
     fn query_usbnet_mode(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
         let resp = send_and_delay(t, r#"AT+QCFG="usbnet""#)?;
         parse_qcfg_usbnet(&resp).ok_or_else(|| format!("Failed to parse usbnet: {}", resp))

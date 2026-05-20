@@ -23,9 +23,13 @@ pub fn extract_data_lines(response: &str) -> Vec<String> {
 }
 
 pub fn parse_cpin(response: &str) -> String {
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+CPIN: ") {
+    for line in response.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("+CPIN: ") {
             return rest.trim().to_string();
+        }
+        if trimmed.starts_with("+CME ERROR") || trimmed.starts_with("ERROR") {
+            return "NO SIM".to_string();
         }
     }
     "UNKNOWN".to_string()
@@ -855,5 +859,25 @@ mod tests {
     fn parse_qeng_returns_default_on_empty() {
         let info = parse_qeng_serving_cell("OK", true);
         assert!(!info.connected);
+    }
+
+    #[test]
+    fn parse_cpin_ready() {
+        assert_eq!(parse_cpin("+CPIN: READY\r\nOK"), "READY");
+    }
+
+    #[test]
+    fn parse_cpin_cme_error_returns_no_sim() {
+        assert_eq!(parse_cpin("+CME ERROR: 10\r\n"), "NO SIM");
+    }
+
+    #[test]
+    fn parse_cpin_error_returns_no_sim() {
+        assert_eq!(parse_cpin("ERROR\r\n"), "NO SIM");
+    }
+
+    #[test]
+    fn parse_cpin_unknown_when_no_data() {
+        assert_eq!(parse_cpin("OK"), "UNKNOWN");
     }
 }

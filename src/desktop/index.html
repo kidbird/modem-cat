@@ -312,6 +312,7 @@
       font-weight: 400;
       margin-top: 4px;
       color: var(--text-secondary);
+      text-align: center;
     }
     .info-row {
       display: flex;
@@ -337,6 +338,65 @@
     .info-value.good { color: var(--success); }
     .info-value.warn { color: var(--warning); }
     .info-value.muted { color: var(--text-muted); }
+    .info-value.data { color: var(--accent); font-weight: 600; }
+
+    /* ── SIM Slot Selector ── */
+    .sim-card-item { position: relative; }
+    .sim-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sim-slot-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid var(--border-color);
+      transition: background 0.15s;
+    }
+    .sim-slot-switch:hover { background: var(--border-color); }
+    .sim-slot-switch svg { transition: transform 0.2s; }
+    .sim-slot-switch.open svg { transform: rotate(180deg); }
+    .sim-slot-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 100;
+      min-width: 90px;
+      overflow: hidden;
+    }
+    .sim-slot-switch.open .sim-slot-dropdown { display: block; }
+    .sim-slot-option {
+      padding: 7px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .sim-slot-option:hover { background: var(--bg-tertiary); }
+    .sim-slot-option.active {
+      color: var(--accent);
+      font-weight: 600;
+      position: relative;
+    }
+    .sim-slot-option.active::after {
+      content: '✓';
+      position: absolute;
+      right: 10px;
+      font-size: 11px;
+    }
 
     /* ── Terminal ── */
     .terminal-wrap {
@@ -897,13 +957,19 @@
           </button>
         </div>
         <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">SIM 状态</div>
+          <div class="info-item sim-card-item">
+            <div class="sim-card-header">
+              <div class="info-label">SIM 状态</div>
+              <div class="sim-slot-switch" id="simSlotSwitch" onclick="toggleSimSlotDropdown()">
+                <span id="simSlot">SIM 1</span>
+                <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+                <div class="sim-slot-dropdown" id="simSlotDropdown">
+                  <div class="sim-slot-option active" data-slot="1" onclick="event.stopPropagation(); switchSimSlot(1)">SIM 1</div>
+                  <div class="sim-slot-option" data-slot="2" onclick="event.stopPropagation(); switchSimSlot(2)">SIM 2</div>
+                </div>
+              </div>
+            </div>
             <div class="info-value muted" id="simStatus">--</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">SIM 槽</div>
-            <div class="info-value muted" id="simSlot">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">注册状态</div>
@@ -1643,38 +1709,42 @@
 
     async function refreshModemStatus() {
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
-      showLoading('正在获取网络状态...', '查询 AT+QENG 等指令');
+      showLoading('正在获取网络状态...', '请稍候');
       addTerminalLine('[状态] 正在查询模组状态...', 'info');
       try {
         const s = await invoke('get_modem_status');
         addTerminalLine(`[状态] SIM=${s.simStatus} 注册=${s.regStatus} 连接=${s.connStatus} 网络=${s.networkType} 运营商=${s.operator}`, 'info');
-        if (s.simStatus === 'READY') setTextGood('simStatus', '已插入'); else setText('simStatus', s.simStatus || '--');
-        setText('simSlot', 'SIM 1');
+        if (s.simStatus === 'READY') setTextGood('simStatus', '已插入'); else if (s.simStatus === 'NO SIM') setTextWarn('simStatus', 'NO SIM'); else setText('simStatus', s.simStatus || '--');
+        // Query actual SIM slot and update display
+        querySimSlot(s.simStatus === 'READY');
+        const noSim = s.simStatus !== 'READY';
+        const regMap = { 'NOCONN': '已注册', 'CONNECT': '已注册', 'LIMSRV': '限制服务', 'SEARCH': '搜网' };
+        const regText = regMap[s.regStatus] || s.regStatus || '--';
         const regEl = document.getElementById('regStatus');
-        if (regEl) { regEl.textContent = s.regStatus || '--'; regEl.className = s.regStatus.includes('已注册') ? 'info-value good' : 'info-value'; }
+        if (regEl) { regEl.textContent = regText; regEl.className = (s.regStatus === 'NOCONN' || s.regStatus === 'CONNECT') ? 'info-value good' : 'info-value'; }
         const connEl = document.getElementById('connStatus');
         if (connEl) { connEl.textContent = s.connStatus || '--'; connEl.className = s.connStatus === '已连接' ? 'info-value good' : 'info-value'; }
-        setText('imei', s.imei || '--');
-        setText('iccid', s.iccid || '--');
-        setText('operator', s.operator || '--');
-        setText('networkType', s.networkType || '--');
-        setText('pci', s.pci || '--');
-        setText('cellid', s.cellId || '--');
-        setText('arfcn', s.arfcn || '--');
-        setText('bandwidth', s.bandwidth || '--');
-        setText('rsrp', s.rsrp || '--');
-        setText('rsrq', s.rsrq || '--');
-        setText('sinr', s.sinr || '--');
-        setText('txPower', s.txPower || '--');
-        setText('rxLevel', s.rxLevel || '--');
-        setText('ant0', s.antValues?.[0] || '');
-        setText('ant1', s.antValues?.[1] || '');
-        setText('ant2', s.antValues?.[2] || '');
-        setText('ant3', s.antValues?.[3] || '');
+        setTextData('imei', noSim ? '--' : (s.imei || '--'));
+        setTextData('iccid', noSim ? '--' : (s.iccid || '--'));
+        setTextData('operator', noSim ? '--' : (s.operator || '--'));
+        setTextData('networkType', noSim ? '--' : (s.networkType || '--'));
+        setTextData('pci', noSim ? '--' : (s.pci || '--'));
+        setTextData('cellid', noSim ? '--' : (s.cellId || '--'));
+        setTextData('arfcn', noSim ? '--' : (s.arfcn || '--'));
+        setTextData('bandwidth', noSim ? '--' : (s.bandwidth || '--'));
+        setTextData('rsrp', noSim ? '--' : (s.rsrp || '--'));
+        setTextData('rsrq', noSim ? '--' : (s.rsrq || '--'));
+        setTextData('sinr', noSim ? '--' : (s.sinr || '--'));
+        setTextData('txPower', noSim ? '--' : (s.txPower || '--'));
+        setTextData('rxLevel', noSim ? '--' : (s.rxLevel || '--'));
+        setTextData('ant0', noSim ? '' : (s.antValues?.[0] || ''));
+        setTextData('ant1', noSim ? '' : (s.antValues?.[1] || ''));
+        setTextData('ant2', noSim ? '' : (s.antValues?.[2] || ''));
+        setTextData('ant3', noSim ? '' : (s.antValues?.[3] || ''));
 
         // SCS display
         const scsMap = { '0': '15 KHz', '1': '30 KHz', '2': '60 KHz', '3': '120 KHz', '4': '240 KHz' };
-        setText('scs', scsMap[s.scs] || (s.scs ? s.scs + ' KHz' : '--'));
+        setTextData('scs', noSim ? '--' : (scsMap[s.scs] || (s.scs ? s.scs + ' KHz' : '--')));
 
         // Update data connection state from CGACT
         if (s.connStatus === '已连接' && !state.dataConnected) {
@@ -1697,8 +1767,64 @@
       }
     }
 
+    // ── SIM Slot Selector ──
+
+    async function querySimSlot(simReady) {
+      try {
+        const slot = await invoke('get_sim_slot');
+        updateSimSlotUI(slot, simReady);
+      } catch (e) {
+        console.warn('Query SIM slot failed:', e);
+        updateSimSlotUI(1, false);
+      }
+    }
+
+    function updateSimSlotUI(slot, simReady) {
+      const swEl = document.getElementById('simSlot');
+      if (swEl) swEl.textContent = 'SIM ' + slot;
+      document.querySelectorAll('.sim-slot-option').forEach(opt => {
+        opt.classList.toggle('active', parseInt(opt.dataset.slot) === slot);
+      });
+    }
+
+    function toggleSimSlotDropdown() {
+      const sel = document.getElementById('simSlotSwitch');
+      if (!sel) return;
+      sel.classList.toggle('open');
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+      const sel = document.getElementById('simSlotSwitch');
+      if (sel && !sel.contains(e.target)) sel.classList.remove('open');
+    });
+
+    async function switchSimSlot(slot) {
+      const sel = document.getElementById('simSlotSelector');
+      if (sel) sel.classList.remove('open');
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
+      try {
+        showLoading('切换 SIM 槽...', '请稍候');
+        addTerminalLine('[SIM] 切换到 SIM ' + slot + '...', 'info');
+        await invoke('set_sim_slot', { slot });
+        updateSimSlotUI(slot, true);
+        addTerminalLine('[SIM] 切换成功，等待网络注册...', 'ok');
+        showToast('已切换到 SIM ' + slot + '，等待网络注册...', 'ok');
+        // Wait for modem to re-register on network before querying
+        showLoading('等待网络注册...', '模组正在重新搜网');
+        await new Promise(r => setTimeout(r, 5000));
+        // Refresh all network status after SIM switch
+        await refreshModemStatus();
+      } catch (e) {
+        addTerminalLine('[SIM] 切换失败：' + e, 'err');
+        showToast('切换失败：' + e, 'err');
+      } finally {
+        hideLoading();
+      }
+    }
+
     function clearData() {
-      const ids = ['simStatus','simSlot','regStatus','connStatus','imei','iccid',
+      const ids = ['simStatus','regStatus','connStatus','imei','iccid',
         'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower','rxLevel','cqi','scs',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
         'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp',
@@ -1725,6 +1851,12 @@
     function setTextWarn(id, val) {
       const el = document.getElementById(id);
       if (el) { el.textContent = val; el.className = 'info-value warn'; }
+    }
+    function setTextData(id, val) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = val;
+      el.className = (val && val !== '--' && val !== '') ? 'info-value data' : 'info-value muted';
     }
 
     // ── AT Terminal ──
@@ -2150,7 +2282,7 @@
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       if (!confirm('确认重置为模组默认频段？')) return;
       try {
-        showLoading('正在重置频段...', '下发 all_band_reset');
+        showLoading('正在重置频段...', '请稍候');
         await invoke('reset_all_bands');
         await flushAtLog();
         hideLoading();
@@ -2390,12 +2522,12 @@
       if (!state.connected) return;
       try {
         const ip = await invoke('get_ip_info');
-        setText('ipv4Addr', ip.ipv4Addr || '--');
-        setText('ipv4Mask', ip.ipv4Mask || '--');
-        setText('ipv4Gw', ip.ipv4Gw || '--');
-        setText('ipv4Dns', ip.ipv4Dns || '--');
-        setText('ipv6Addr', ip.ipv6Addr || '--');
-        setText('ipv6Dns', ip.ipv6Dns || '--');
+        setTextData('ipv4Addr', ip.ipv4Addr || '--');
+        setTextData('ipv4Mask', ip.ipv4Mask || '--');
+        setTextData('ipv4Gw', ip.ipv4Gw || '--');
+        setTextData('ipv4Dns', ip.ipv4Dns || '--');
+        setTextData('ipv6Addr', ip.ipv6Addr || '--');
+        setTextData('ipv6Dns', ip.ipv6Dns || '--');
       } catch (e) {
         console.warn('refreshIpInfo failed:', e);
       }
@@ -2447,13 +2579,13 @@
       if (!state.connected) { addTerminalLine('[系统] 未连接', 'err'); return; }
       try {
         const hw = await invoke('get_hardware_info');
-        setText('hwModel', hw.model || '--');
-        setText('hwManufacturer', hw.manufacturer || '--');
-        setText('hwFirmware', hw.firmware || '--');
-        setText('hwApBaseline', hw.apBaseline || '--');
-        setText('hwCpBaseline', hw.cpBaseline || '--');
-        setText('hwSocTemp', hw.socTemp || '--');
-        setText('hwPaTemp', hw.paTemp || '--');
+        setTextData('hwModel', hw.model || '--');
+        setTextData('hwManufacturer', hw.manufacturer || '--');
+        setTextData('hwFirmware', hw.firmware || '--');
+        setTextData('hwApBaseline', hw.apBaseline || '--');
+        setTextData('hwCpBaseline', hw.cpBaseline || '--');
+        setTextData('hwSocTemp', hw.socTemp || '--');
+        setTextData('hwPaTemp', hw.paTemp || '--');
         if (hw.model) {
           document.getElementById('logoText').textContent = hw.model;
         }
@@ -2491,9 +2623,9 @@
       if (!state.connected) return;
       try {
         const q = await invoke('get_qos_info');
-        setText('cqi', q.cqi || '--');
-        setText('ulBandwidth', q.ulBandwidth || '--');
-        setText('dlBandwidth', q.dlBandwidth || '--');
+        setTextData('cqi', q.cqi || '--');
+        setTextData('ulBandwidth', q.ulBandwidth || '--');
+        setTextData('dlBandwidth', q.dlBandwidth || '--');
       } catch (e) {
         console.warn('refreshQos failed:', e);
       }
@@ -2511,8 +2643,8 @@
       if (!state.connected) return;
       try {
         const t = await invoke('get_traffic');
-        setText('ulTraffic', formatBytes(t.ulBytes));
-        setText('dlTraffic', formatBytes(t.dlBytes));
+        setTextData('ulTraffic', formatBytes(t.ulBytes));
+        setTextData('dlTraffic', formatBytes(t.dlBytes));
       } catch (e) {
         console.warn('refreshTraffic failed:', e);
       }

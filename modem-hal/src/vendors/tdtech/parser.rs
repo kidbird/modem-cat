@@ -73,6 +73,7 @@ pub fn parse_monsc(response: &str) -> ServingCellInfo {
                 // ^MONSC: LTE,MCC,MNC,ARFCN,Cell_ID,PCI,TAC,RSRP,RSRQ,RSSI
                 return ServingCellInfo {
                     connected: true,
+                    mobility_state: String::new(),
                     tech: "LTE".to_string(),
                     operator_mcc: parts.get(1).unwrap_or(&"").to_string(),
                     operator_mnc: parts.get(2).unwrap_or(&"").to_string(),
@@ -85,6 +86,7 @@ pub fn parse_monsc(response: &str) -> ServingCellInfo {
                     rsrq: parts.get(8).unwrap_or(&"").to_string(),
                     sinr: String::new(),
                     tx_power: String::new(),
+                    rx_level: String::new(),
                     scs: String::new(),
                 };
             }
@@ -92,6 +94,7 @@ pub fn parse_monsc(response: &str) -> ServingCellInfo {
                 // ^MONSC: NR,MCC,MNC,ARFCN,SCS,Cell_ID,PCI,TAC,RSRP,RSRQ,SINR
                 return ServingCellInfo {
                     connected: true,
+                    mobility_state: String::new(),
                     tech: "NR".to_string(),
                     operator_mcc: parts.get(1).unwrap_or(&"").to_string(),
                     operator_mnc: parts.get(2).unwrap_or(&"").to_string(),
@@ -105,6 +108,7 @@ pub fn parse_monsc(response: &str) -> ServingCellInfo {
                     rsrq: parts.get(9).unwrap_or(&"").to_string(),
                     sinr: parts.get(10).unwrap_or(&"").to_string(),
                     tx_power: String::new(),
+                    rx_level: String::new(),
                 };
             }
         }

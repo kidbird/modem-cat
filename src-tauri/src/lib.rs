@@ -756,6 +756,36 @@ async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> 
 }
 
 #[tauri::command]
+async fn get_sim_slot(state: tauri::State<'_, AppState>) -> Result<i32, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_sim_slot(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn set_sim_slot(slot: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.switch_sim_slot(t, slot)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
@@ -1082,6 +1112,8 @@ pub fn run() {
             set_usbnet_mode,
             reboot_modem,
             factory_reset,
+            get_sim_slot,
+            set_sim_slot,
             send_raw_at,
             pop_at_commands,
         ])

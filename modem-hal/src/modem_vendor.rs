@@ -276,6 +276,25 @@ pub trait ModemVendor: Send {
         Err("Not implemented".to_string())
     }
 
+    // ==================== SIM Slot ====================
+
+    /// Query current SIM slot number (1-based)
+    fn query_sim_slot(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<i32, String> {
+        Ok(1)
+    }
+
+    /// Switch to a different SIM slot
+    fn switch_sim_slot(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _slot: i32,
+    ) -> Result<(), String> {
+        Err("SIM slot switching not supported".to_string())
+    }
+
     // ==================== Raw AT ====================
 
     /// Send a raw AT command and return the response

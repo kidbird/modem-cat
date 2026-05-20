@@ -61,7 +61,6 @@ pub fn query_ip(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
                     .map(|s| hex_ip_to_string(s))
                     .unwrap_or_default(),
                 ipv6_addr: String::new(),
-                ipv6_gw: String::new(),
                 ipv6_dns: String::new(),
             });
         }

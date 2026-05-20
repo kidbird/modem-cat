@@ -1,4 +1,4 @@
-use crate::types::{ApnEntry, NeighborCell, NeighborCells, ServingCellInfo, TemperatureInfo};
+use crate::types::{ApnEntry, L5GanEntry, NeighborCell, NeighborCells, ServingCellInfo, TemperatureInfo};
 
 pub fn is_ok(response: &str) -> bool {
     let trimmed = response.trim();
@@ -163,12 +163,13 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
 
         let state = parts[1].trim().trim_matches('"');
         let tech = parts[2].trim().trim_matches('"');
-        let connected = state != "SEARCH";
+        let connected = state == "CONNECT";
 
         match tech {
-            "NR5G-SA" if parts.len() >= 16 => {
+            "NR5G-SA" if parts.len() >= 18 => {
                 return ServingCellInfo {
                     connected,
+                    mobility_state: state.to_string(),
                     tech: tech.to_string(),
                     operator_mcc: parts[4].trim().trim_matches('"').to_string(),
                     operator_mnc: parts[5].trim().trim_matches('"').to_string(),
@@ -180,8 +181,9 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     rsrp: format_rsrp(parts[12].trim()),
                     rsrq: format_rsrq(parts[13].trim()),
                     sinr: parts[14].trim().to_string(),
-                    tx_power: parts.get(16).unwrap_or(&"").trim().to_string(),
-                    scs: parts[15].trim().to_string(),
+                    tx_power: parts[15].trim().to_string(),
+                    rx_level: parts[16].trim().to_string(),
+                    scs: parts[17].trim().to_string(),
                 };
             }
             "LTE" if parts.len() >= 19 => {
@@ -193,6 +195,7 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                 };
                 return ServingCellInfo {
                     connected,
+                    mobility_state: state.to_string(),
                     tech: tech.to_string(),
                     operator_mcc: parts[4].trim().trim_matches('"').to_string(),
                     operator_mnc: parts[5].trim().trim_matches('"').to_string(),
@@ -205,12 +208,14 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     rsrq: format_rsrq(parts[13].trim()),
                     sinr: parts[16].trim().to_string(),
                     tx_power: parts[18].trim().to_string(),
+                    rx_level: String::new(),
                     scs: String::new(),
                 };
             }
             "NR5G-NSA" if parts.len() >= 15 => {
                 return ServingCellInfo {
                     connected,
+                    mobility_state: state.to_string(),
                     tech: tech.to_string(),
                     operator_mcc: parts[4].trim().trim_matches('"').to_string(),
                     operator_mnc: parts[5].trim().trim_matches('"').to_string(),
@@ -223,6 +228,7 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     rsrq: format_rsrq(parts[13].trim()),
                     sinr: parts[14].trim().to_string(),
                     tx_power: String::new(),
+                    rx_level: String::new(),
                     scs: String::new(),
                 };
             }
@@ -367,13 +373,17 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
                 .collect();
             if parts.len() >= 2 {
                 let label = parts[0].to_lowercase();
-                let value = format!("{}°C", parts[1]);
-                if label.contains("soc") && soc.is_empty() {
-                    soc = value;
-                } else if label.contains("pa5g") && pa.is_empty() {
-                    pa = value;
-                } else if label.contains("pa") && !label.contains("5g") && pa.is_empty() {
-                    pa = value;
+                let raw: i64 = parts[1].trim().parse().unwrap_or(0);
+                // Convert millidegrees (e.g. 34000 → 34.0°C) if needed
+                let value = if raw > 1000 {
+                    format!("{:.1}°C", raw as f64 / 1000.0)
+                } else {
+                    format!("{}°C", parts[1].trim())
+                };
+                if label.contains("soc") || label.contains("xo") || label.contains("modem") {
+                    if soc.is_empty() { soc = value; }
+                } else if label.contains("pa") {
+                    if pa.is_empty() { pa = value; }
                 }
             }
         }
@@ -443,6 +453,7 @@ pub fn parse_qicsgp(response: &str, active_cids: &[i32]) -> Vec<ApnEntry> {
                     "1" => "IPv4",
                     "2" => "IPv6",
                     "3" => "IPv4v6",
+                    "4" => "Ethernet",
                     _ => "IPv4",
                 };
                 let apn_name = parts
@@ -699,7 +710,8 @@ pub fn parse_qcfg_int(response: &str, key: &str) -> Option<i32> {
     let prefix = format!("+QCFG: \"{}\",", key);
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix(&prefix) {
-            return rest.trim().trim_end_matches(',').parse().ok();
+            let first = rest.trim().split(',').next().unwrap_or("").trim();
+            return first.parse().ok();
         }
     }
     None
@@ -709,8 +721,9 @@ pub fn parse_qcfg_usbcfg_adb(response: &str) -> bool {
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
             let parts: Vec<&str> = rest.split(',').collect();
-            if let Some(last) = parts.last() {
-                return last.trim() == "1";
+            // ADB flag is the second-to-last parameter
+            if parts.len() >= 2 {
+                return parts[parts.len() - 2].trim() == "1";
             }
         }
     }
@@ -791,6 +804,30 @@ pub fn parse_cgact(response: &str) -> Vec<(i32, i32)> {
         }
     }
     result
+}
+
+pub fn parse_5glan(response: &str) -> Vec<L5GanEntry> {
+    let mut entries = Vec::new();
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QCFG:") {
+            let rest = rest.trim();
+            if let Some(params) = rest.strip_prefix("\"5glan\",") {
+                let parts: Vec<&str> = params.split(',').collect();
+                if parts.len() >= 2 {
+                    if let (Ok(cid), Ok(state)) = (
+                        parts[0].trim().parse::<i32>(),
+                        parts[1].trim().parse::<i32>(),
+                    ) {
+                        entries.push(L5GanEntry {
+                            cid,
+                            enabled: state == 1,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    entries
 }
 
 #[cfg(test)]

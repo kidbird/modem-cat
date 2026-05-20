@@ -195,6 +195,24 @@ impl ModemVendor for TdTechModem {
         Ok(())
     }
 
+    fn set_apn_active(&mut self, t: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String> {
+        let state = if active { 1 } else { 0 };
+        let resp = t.send_at(&format!("AT+CGACT={},{}", state, cid))?;
+        if resp.contains("OK") {
+            Ok(())
+        } else {
+            Err(format!("Failed to {} APN: {}", if active { "activate" } else { "deactivate" }, resp))
+        }
+    }
+
+    fn query_5glan(&mut self, _t: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
+        Err("5GLAN not supported on TdTech".into())
+    }
+
+    fn set_5glan(&mut self, _t: &mut dyn AtTransport, _cid: i32, _enabled: bool) -> Result<(), String> {
+        Err("5GLAN not supported on TdTech".into())
+    }
+
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         dial::connect(t, cid, "", "", "", 0)
     }
@@ -237,9 +255,11 @@ impl ModemVendor for TdTechModem {
 
     fn set_network_mode(&mut self, t: &mut dyn AtTransport, mode: &str) -> Result<(), String> {
         let acqorder = match mode {
+            "AUTO" => "030802",
             "LTE" => "03",
-            "NR5G" | "NR" => "08",
-            "LTE:NR5G" | "LTE:NR" => "0308",
+            "NR5G" | "NR5G-SA" | "NR" => "08",
+            "NR5G-NSA" | "LTE:NR5G" | "LTE:NR" => "0308",
+            "WCDMA" => "02",
             other => other,
         };
         let resp = t.send_at("AT^SYSCFGEX?")?;
@@ -249,6 +269,24 @@ impl ModemVendor for TdTechModem {
             acqorder, lteband
         ))?;
         Ok(())
+    }
+
+    fn query_network_mode(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
+        let resp = t.send_at("AT^SYSCFGEX?")?;
+        let (acqorder, _) = parse_syscfgex(&resp);
+        let mode = match acqorder.as_str() {
+            "03" => "LTE",
+            "08" => "NR5G-SA",
+            "0308" => "NR5G-NSA",
+            "02" => "WCDMA",
+            "030802" => "AUTO",
+            s if s.contains("08") && s.contains("03") && s.contains("02") => "AUTO",
+            s if s.contains("08") && s.contains("03") => "NR5G-NSA",
+            s if s.contains("08") && s.contains("02") => "NR5G-SA",
+            s if s.contains("03") && s.contains("02") => "LTE",
+            s => s,
+        };
+        Ok(mode.to_string())
     }
 
     fn query_traffic(&mut self, t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {

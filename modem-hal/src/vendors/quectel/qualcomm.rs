@@ -22,7 +22,6 @@ pub fn query_ip_info(t: &mut dyn AtTransport, _cid: i32) -> Result<IpInfo, Strin
         ipv4_gw: String::new(),
         ipv4_dns: String::new(),
         ipv6_addr: String::new(),
-        ipv6_gw: String::new(),
         ipv6_dns: String::new(),
     };
     for line in resp.lines() {

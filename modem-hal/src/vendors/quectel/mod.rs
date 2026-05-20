@@ -13,6 +13,17 @@ fn send_and_delay(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> 
     Ok(result)
 }
 
+fn send_and_check(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> {
+    let resp = send_and_delay(t, cmd)?;
+    if is_ok(&resp) {
+        Ok(resp)
+    } else {
+        Err(format!("AT command failed: {} => {}", cmd, resp.trim()))
+    }
+}
+
+
+
 pub enum QuectelChip {
     Qualcomm,
     UniSoc,
@@ -145,7 +156,7 @@ impl ModemVendor for QuectelModem {
             Err(_) => (String::new(), String::new()),
         };
 
-        let (soc_temp, pa_temp) = match t.send_at("AT+QTEMP?") {
+        let (soc_temp, pa_temp) = match t.send_at("AT+QTEMP") {
             Ok(resp) => parse_qtemp_rich(&resp),
             Err(_) => (String::new(), String::new()),
         };
@@ -164,7 +175,7 @@ impl ModemVendor for QuectelModem {
     fn query_temperature(&mut self, t: &mut dyn AtTransport) -> Result<TemperatureInfo, String> {
         match self.chip {
             QuectelChip::UniSoc | QuectelChip::Qualcomm => {
-                let resp = send_and_delay(t, "AT+QTEMP?")?;
+                let resp = send_and_delay(t, "AT+QTEMP")?;
                 Ok(parse_qtemp(&resp))
             }
         }
@@ -181,13 +192,16 @@ impl ModemVendor for QuectelModem {
         let qicsgp_resp = send_and_delay(t, "AT+QICSGP?")?;
         let entries = parse_qicsgp(&qicsgp_resp, &active_cids);
         if !entries.is_empty() {
-            return Ok(entries);
+            return Ok(entries.into_iter().filter(|e| e.cid >= 1 && e.cid <= 8).collect());
         }
 
         let cgdcont_resp = send_and_delay(t, "AT+CGDCONT?")?;
         let cgact2 = send_and_delay(t, "AT+CGACT?")?;
         let active_set = parse_cgact_cids(&cgact2);
-        Ok(parse_cgdcont_apn(&cgdcont_resp, &active_set))
+        Ok(parse_cgdcont_apn(&cgdcont_resp, &active_set)
+            .into_iter()
+            .filter(|e| e.cid >= 1 && e.cid <= 8)
+            .collect())
     }
 
     fn query_ip_info(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
@@ -222,7 +236,7 @@ impl ModemVendor for QuectelModem {
     }
 
     fn set_network_mode(&mut self, t: &mut dyn AtTransport, mode: &str) -> Result<(), String> {
-        send_and_delay(t, &format!("AT+QNWPREFCFG=\"mode_pref\",\"{}\"", mode))?;
+        send_and_check(t, &format!(r#"AT+QNWPREFCFG="mode_pref",{}"#, mode))?;
         Ok(())
     }
 
@@ -233,10 +247,11 @@ impl ModemVendor for QuectelModem {
         nr: &str,
     ) -> Result<(), String> {
         if !lte.is_empty() {
-            send_and_delay(t, &format!(r#"AT+QNWPREFCFG="lte_band","{}""#, lte))?;
+            send_and_check(t, &format!(r#"AT+QNWPREFCFG="lte_band",{}"#, lte))?;
+            std::thread::sleep(std::time::Duration::from_millis(300));
         }
         if !nr.is_empty() {
-            send_and_delay(t, &format!(r#"AT+QNWPREFCFG="nr5g_band","{}""#, nr))?;
+            send_and_check(t, &format!(r#"AT+QNWPREFCFG="nr5g_band",{}"#, nr))?;
         }
         Ok(())
     }
@@ -302,7 +317,7 @@ impl ModemVendor for QuectelModem {
     }
 
     fn reboot(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
-        let resp = t.send_at("AT+CRESET")?;
+        let resp = t.send_at("AT+CFUN=1,1")?;
         if is_ok(&resp) {
             Ok(())
         } else {
@@ -311,7 +326,10 @@ impl ModemVendor for QuectelModem {
     }
 
     fn set_cfun(&mut self, t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
-        t.send_at(&format!("AT+CFUN={}", mode))?;
+        let resp = send_and_check(t, &format!("AT+CFUN={}", mode))?;
+        if !is_ok(&resp) {
+            return Err(format!("Failed to set CFUN: {}", resp));
+        }
         Ok(())
     }
 
@@ -331,7 +349,7 @@ impl ModemVendor for QuectelModem {
             Ok(r) => parse_qcfg_int(&r, "proxyarp").unwrap_or(0) == 1,
             Err(_) => false,
         };
-        let uartat = match send_and_delay(t, r#"AT+QCFG="uartat""#) {
+        let uart_at = match send_and_delay(t, r#"AT+QCFG="uartat""#) {
             Ok(r) => parse_qcfg_int(&r, "uartat").unwrap_or(0) == 1,
             Err(_) => false,
         };
@@ -343,14 +361,24 @@ impl ModemVendor for QuectelModem {
             Ok(r) => parse_qcfg_usbcfg_adb(&r),
             Err(_) => false,
         };
+        let napt = match send_and_delay(t, r#"AT+QCFG="napt""#) {
+            Ok(r) => parse_qcfg_int(&r, "napt").unwrap_or(0) == 1,
+            Err(_) => false,
+        };
+        let netmask = match send_and_delay(t, r#"AT+QCFG="netmask""#) {
+            Ok(r) => parse_qcfg_int(&r, "netmask").unwrap_or(0) == 1,
+            Err(_) => false,
+        };
 
         Ok(FeatureToggles {
             pcie_mode,
             ethernet,
             proxyarp,
-            uartat,
+            uart_at,
             eth_at,
             adb,
+            napt,
+            netmask,
         })
     }
 
@@ -397,9 +425,10 @@ impl ModemVendor for QuectelModem {
                 for line in extract_data_lines(&resp) {
                     if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
                         let mut parts: Vec<&str> = rest.split(',').collect();
-                        if !parts.is_empty() {
-                            let last = parts.len() - 1;
-                            parts[last] = if on { "1" } else { "0" };
+                        if parts.len() >= 2 {
+                            // ADB flag is the second-to-last parameter
+                            let adb_idx = parts.len() - 2;
+                            parts[adb_idx] = if on { "1" } else { "0" };
                             let cmd = format!(r#"AT+QCFG="usbcfg",{}"#, parts.join(","));
                             let resp2 = t.send_at(&cmd)?;
                             if !is_ok(&resp2) {
@@ -410,6 +439,18 @@ impl ModemVendor for QuectelModem {
                     }
                 }
                 return Err("Could not parse current usbcfg".to_string());
+            }
+            "napt" => {
+                let resp = send_and_delay(t, &format!(r#"AT+QCFG="napt",{}"#, val))?;
+                if !is_ok(&resp) {
+                    return Err(format!("Failed to set napt: {}", resp));
+                }
+            }
+            "netmask" => {
+                let resp = send_and_delay(t, &format!(r#"AT+QCFG="netmask",{}"#, val))?;
+                if !is_ok(&resp) {
+                    return Err(format!("Failed to set netmask: {}", resp));
+                }
             }
             _ => return Err(format!("Unknown feature: {}", feat)),
         }
@@ -490,10 +531,12 @@ impl ModemVendor for QuectelModem {
 
         let conn_status = self.query_connection_status(t).unwrap_or_else(|_| "\u{672a}\u{8fde}\u{63a5}".to_string());
 
-        let reg_status = if serving_cell.connected {
-            "\u{5df2}\u{6ce8}\u{518c}".to_string()
-        } else {
-            "\u{672a}\u{6ce8}\u{518c}".to_string()
+        let reg_status = match serving_cell.mobility_state.as_str() {
+            "CONNECT" => "\u{5df2}\u{6ce8}\u{518c}".to_string(),
+            "LIMSRV" => "\u{9650}\u{5236}\u{670d}\u{52a1}".to_string(),
+            "SEARCH" => "\u{641c}\u{7d22}\u{4e2d}".to_string(),
+            "IDLE" => "\u{7a7a}\u{95f2}".to_string(),
+            other => other.to_string(),
         };
 
         Ok(ModemStatus {
@@ -512,6 +555,7 @@ impl ModemVendor for QuectelModem {
             rsrq: serving_cell.rsrq,
             sinr: serving_cell.sinr,
             tx_power: serving_cell.tx_power,
+            rx_level: serving_cell.rx_level,
             ant_values,
             scs: serving_cell.scs,
         })
@@ -527,18 +571,10 @@ impl ModemVendor for QuectelModem {
         pass: &str,
         auth: i32,
     ) -> Result<(), String> {
-        let pdp_type = match ctx {
-            2 => "IPV6",
-            3 => "IPV4V6",
-            _ => "IP",
-        };
-        send_and_delay(t, &format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp_type, apn))?;
-        if !user.is_empty() {
-            send_and_delay(t, &format!(
-                "AT+QICSGP={},1,\"{}\",\"{}\",\"{}\",{}",
-                cid, apn, user, pass, auth
-            ))?;
-        }
+        send_and_check(t, &format!(
+            "AT+QICSGP={},{},\"{}\",\"{}\",\"{}\",{}",
+            cid, ctx, apn, user, pass, auth
+        ))?;
         Ok(())
     }
 
@@ -548,6 +584,31 @@ impl ModemVendor for QuectelModem {
             Ok(())
         } else {
             Err(format!("Failed to delete APN: {}", resp))
+        }
+    }
+
+    fn set_apn_active(&mut self, t: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String> {
+        let state = if active { 1 } else { 0 };
+        let resp = send_and_delay(t, &format!("AT+CGACT={},{}", state, cid))?;
+        if is_ok(&resp) {
+            Ok(())
+        } else {
+            Err(format!("Failed to {} APN: {}", if active { "activate" } else { "deactivate" }, resp))
+        }
+    }
+
+    fn query_5glan(&mut self, t: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
+        let resp = send_and_delay(t, r#"AT+QCFG="5glan""#)?;
+        Ok(parse_5glan(&resp))
+    }
+
+    fn set_5glan(&mut self, t: &mut dyn AtTransport, cid: i32, enabled: bool) -> Result<(), String> {
+        let state = if enabled { 1 } else { 0 };
+        let resp = send_and_delay(t, &format!(r#"AT+QCFG="5glan",{},{},1"#, cid, state))?;
+        if is_ok(&resp) {
+            Ok(())
+        } else {
+            Err(format!("Failed to set 5GLAN: {}", resp))
         }
     }
 

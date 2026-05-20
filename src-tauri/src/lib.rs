@@ -6,11 +6,9 @@ use modem_hal::transport::AtTransport;
 use modem_hal::types::*;
 use modem_hal::ModemFactory;
 use modem_hal::ModemVendor;
-use tauri::http::Response;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
 use tauri::Manager;
-use tauri::Url;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
@@ -20,6 +18,35 @@ pub struct AppState {
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
     /// Used by the USB monitor to know if the active port was unplugged.
     pub connected_port: Arc<Mutex<Option<String>>>,
+    /// Log of AT commands sent internally (not from raw AT terminal).
+    /// Populated by LoggingTransport, consumed by pop_at_commands.
+    pub at_command_log: Arc<Mutex<Vec<String>>>,
+}
+
+/// Transport wrapper that logs every sent AT command to a shared log.
+struct LoggingTransport {
+    inner: Box<dyn AtTransport>,
+    log: Arc<Mutex<Vec<String>>>,
+}
+
+impl AtTransport for LoggingTransport {
+    fn send_at(&mut self, command: &str) -> Result<String, String> {
+        self.log.lock().unwrap().push(command.to_string());
+        self.inner.send_at(command)
+    }
+    fn close(&mut self) {
+        self.inner.close();
+    }
+}
+
+fn wrap_transport(
+    transport: Box<dyn AtTransport>,
+    log: Arc<Mutex<Vec<String>>>,
+) -> Box<dyn AtTransport> {
+    Box::new(LoggingTransport {
+        inner: transport,
+        log,
+    })
 }
 
 // ── Port listing ──
@@ -337,7 +364,10 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
         match result {
             Ok((transport, vendor_result)) => {
                 log::info!("Connected to AT port: {}", port_name);
-                *transport_arc.lock().unwrap() = Some(Box::new(transport));
+                *transport_arc.lock().unwrap() = Some(wrap_transport(
+                    Box::new(transport),
+                    state.at_command_log.clone(),
+                ));
                 match vendor_result {
                     Ok(vendor) => {
                         log::info!("Detected vendor: {:?}", vendor.vendor());
@@ -372,7 +402,10 @@ fn connect_serial(
     let mut transport = modem_hal::transport::SerialTransport::new(&port_name, baud_rate)?;
     let vendor = ModemFactory::create(&mut transport);
     let id = format!("serial_{}", port_name);
-    *state.transport.lock().unwrap() = Some(Box::new(transport));
+    *state.transport.lock().unwrap() = Some(wrap_transport(
+        Box::new(transport),
+        state.at_command_log.clone(),
+    ));
     if let Ok(v) = vendor {
         log::info!("Detected vendor: {:?}", v.vendor());
         *state.vendor.lock().unwrap() = Some(v);
@@ -399,7 +432,10 @@ fn connect_tcp(
     let id = format!("tcp_{}:{}", host, port);
     // TCP is manual — clear connected_port so USB monitor won't interfere
     *state.connected_port.lock().unwrap() = None;
-    *state.transport.lock().unwrap() = Some(Box::new(transport));
+    *state.transport.lock().unwrap() = Some(wrap_transport(
+        Box::new(transport),
+        state.at_command_log.clone(),
+    ));
     if let Ok(v) = vendor {
         log::info!("Detected vendor: {:?}", v.vendor());
         *state.vendor.lock().unwrap() = Some(v);
@@ -574,6 +610,21 @@ async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
+async fn set_apn_active(cid: i32, active: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_apn_active(t, cid, active)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
@@ -588,6 +639,36 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
         v.connect_data(t, cid)?;
         *data_cid.lock().unwrap() = cid;
         Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn get_5glan(state: tauri::State<'_, AppState>) -> Result<Vec<L5GanEntry>, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_5glan(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn set_5glan(cid: i32, enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_5glan(t, cid, enabled)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
@@ -687,6 +768,13 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
+}
+
+/// Return all AT commands logged by internal operations since last call, then clear the log.
+#[tauri::command]
+fn pop_at_commands(state: tauri::State<'_, AppState>) -> Vec<String> {
+    let mut log = state.at_command_log.lock().unwrap();
+    std::mem::take(&mut *log)
 }
 
 #[tauri::command]
@@ -886,25 +974,7 @@ pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Starting Modem Cat application");
 
-    let index_html: &'static str =
-        include_str!("../../src/desktop/index.html");
-
     tauri::Builder::default()
-        .register_uri_scheme_protocol("modemcat", move |_app, request| {
-            let path = request.uri().path();
-            if path == "/" || path == "/index.html" || path.is_empty() {
-                Response::builder()
-                    .status(200)
-                    .header("Content-Type", "text/html")
-                    .body(index_html.as_bytes().to_vec())
-                    .unwrap()
-            } else {
-                Response::builder()
-                    .status(404)
-                    .body(Vec::new())
-                    .unwrap()
-            }
-        })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // Second instance launched — bring existing window to front
@@ -919,6 +989,7 @@ pub fn run() {
             data_cid: Arc::new(Mutex::new(1)),
             active_cids: Arc::new(Mutex::new(Vec::new())),
             connected_port: Arc::new(Mutex::new(None)),
+            at_command_log: Arc::new(Mutex::new(Vec::new())),
         })
         .setup(|app| {
             // ── Build menu bar ──
@@ -938,10 +1009,6 @@ pub fn run() {
             });
 
             start_port_monitor(app.handle().clone());
-            if let Some(w) = app.get_webview_window("main") {
-                let url = Url::parse("modemcat://localhost/").unwrap();
-                let _ = w.navigate(url);
-            }
 
             let show_item = tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
             let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
@@ -1002,6 +1069,9 @@ pub fn run() {
             // Write operations
             set_apn_config,
             delete_apn_config,
+            set_apn_active,
+            get_5glan,
+            set_5glan,
             connect_data,
             disconnect_data,
             set_network_mode_cmd,
@@ -1013,6 +1083,7 @@ pub fn run() {
             reboot_modem,
             factory_reset,
             send_raw_at,
+            pop_at_commands,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

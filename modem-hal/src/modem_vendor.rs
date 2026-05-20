@@ -91,6 +91,15 @@ pub trait ModemVendor: Send {
     /// Delete APN
     fn delete_apn(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
+    /// Activate or deactivate APN context (AT+CGACT=<state>,<cid>)
+    fn set_apn_active(&mut self, transport: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String>;
+
+    /// Query 5GLAN status (AT+QCFG="5glan")
+    fn query_5glan(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String>;
+
+    /// Set 5GLAN state for a CID (AT+QCFG="5glan",<cid>,<state>)
+    fn set_5glan(&mut self, transport: &mut dyn AtTransport, cid: i32, enabled: bool) -> Result<(), String>;
+
     /// Activate data connection
     fn connect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
@@ -311,6 +320,7 @@ pub trait ModemVendor: Send {
             rsrq: signal.rsrq,
             sinr: signal.sinr,
             tx_power: serving_cell.tx_power,
+            rx_level: serving_cell.rx_level,
             ant_values: signal.ant_values,
             scs: serving_cell.scs,
         })

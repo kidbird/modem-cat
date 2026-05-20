@@ -695,10 +695,16 @@
     <div class="apn-modal-card">
       <div class="apn-modal-title" id="apnModalTitle">新增 APN</div>
       <div class="form-row">
+        <div class="form-group" style="flex:0 0 80px;">
+          <label>CID</label>
+          <select id="apnCid"></select>
+        </div>
         <div class="form-group">
           <label>APN 名称</label>
           <input type="text" id="apnName" placeholder="cmnet">
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>用户名</label>
           <input type="text" id="apnUser" placeholder="（可选）">
@@ -723,6 +729,7 @@
             <option value="ipv4">IPv4</option>
             <option value="ipv6">IPv6</option>
             <option value="ipv4v6">IPv4v6（双栈）</option>
+            <option value="ethernet">Ethernet</option>
           </select>
         </div>
       </div>
@@ -746,7 +753,7 @@
         </svg>
         <div>
           <div style="font-size:18px;font-weight:700;color:var(--text-primary);">Modem Cat</div>
-          <div style="font-size:12px;color:var(--text-muted);">v0.1.0</div>
+          <div style="font-size:12px;color:var(--text-muted);">v0.1.2</div>
         </div>
       </div>
       <div style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
@@ -813,7 +820,7 @@
         <span class="nav-icon">›</span>AT调试
       </div>
       <div class="nav-item" data-page="hardware">
-        <span class="nav-icon">⬡</span>硬件信息
+        <span class="nav-icon">⬡</span>系统信息
       </div>
     </nav>
 
@@ -955,6 +962,10 @@
             <div class="info-value muted" id="txPower">--</div>
           </div>
           <div class="info-item">
+            <div class="info-label">RX Level</div>
+            <div class="info-value muted" id="rxLevel">--</div>
+          </div>
+          <div class="info-item">
             <div class="info-label">CQI</div>
             <div class="info-value muted" id="cqi">--</div>
           </div>
@@ -1022,6 +1033,7 @@
           <button class="tab-btn" onclick="switchCellularTab('netlock', this)">网络配置</button>
           <button class="tab-btn" onclick="switchCellularTab('celllock', this)">小区 / 频点锁定</button>
           <button class="tab-btn" onclick="switchCellularTab('neighbor', this)">邻区信息</button>
+          <button class="tab-btn" onclick="switchCellularTab('5glan', this)">5GLAN</button>
         </div>
 
         <!-- ─ Tab 1: APN 配置 ─ -->
@@ -1032,88 +1044,81 @@
 
         <!-- ─ Tab 2: 网络锁定 ─ -->
         <div class="tab-panel" id="ctab-netlock">
-          <div class="section-label">首选网络</div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <select id="preferredNetwork" class="conn-select" style="width:180px;">
-              <option value="auto">自动</option>
-              <option value="5gsa">仅 5G SA</option>
-              <option value="nrNsa">仅 NR NSA</option>
-              <option value="lte">仅 LTE</option>
-              <option value="wcdma">仅 WCDMA</option>
-            </select>
-            <button class="btn btn-secondary btn-sm" onclick="applyPreferredNetwork()">应用</button>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">首选网络</div>
+              <button class="btn btn-primary btn-sm" onclick="applyPreferredNetwork()">保存</button>
+            </div>
+            <div class="form-row">
+              <select id="preferredNetwork" class="conn-select" style="width:180px;">
+                <option value="auto">自动</option>
+                <option value="nr5g">5G (SA+NSA)</option>
+                <option value="5gsa">仅 5G SA</option>
+                <option value="nrNsa">仅 NR NSA</option>
+                <option value="lte">仅 LTE</option>
+                <option value="wcdma">仅 WCDMA</option>
+              </select>
+            </div>
           </div>
 
-          <div class="section-label">频段选择</div>
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">LTE</div>
-          <div id="bandGridLte" class="band-grid"></div>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">NR</div>
-          <div id="bandGridNr" class="band-grid"></div>
-          <div style="margin-top:10px;display:flex;gap:8px;">
-            <button class="btn btn-primary btn-sm" onclick="applyBandLock()">保存</button>
-            <button class="btn btn-secondary btn-sm" onclick="resetBandLock()">重置</button>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">频段设置</div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary btn-sm" onclick="applyBandLock()">保存</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetBandLock()">重置</button>
+              </div>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">LTE</div>
+            <div id="bandGridLte" class="band-grid"></div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:10px;margin-bottom:4px;">NR</div>
+            <div id="bandGridNr" class="band-grid"></div>
           </div>
 
-          <div class="section-label" style="margin-top:20px;">运营商锁定</div>
-          <div class="form-row">
-            <div class="form-group narrow">
-              <label>MCC</label>
-              <input type="text" id="lockMcc" placeholder="460" maxlength="3">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">PLMN 锁定</div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
+              </div>
             </div>
-            <div class="form-group narrow">
-              <label>MNC</label>
-              <input type="text" id="lockMnc" placeholder="00" maxlength="3">
-            </div>
-            <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-              <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
-              <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
+            <div class="form-row">
+              <div class="form-group narrow">
+                <label>MCC</label>
+                <input type="text" id="lockMcc" placeholder="460" maxlength="3">
+              </div>
+              <div class="form-group narrow">
+                <label>MNC</label>
+                <input type="text" id="lockMnc" placeholder="00" maxlength="3">
+              </div>
             </div>
           </div>
         </div>
 
         <!-- ─ Tab 3: 小区 / 频点锁定 ─ -->
         <div class="tab-panel" id="ctab-celllock">
-          <div class="lock-quota" id="lockQuota">已锁定 0 / 6 条</div>
+          <div class="lock-quota" id="lockQuota">当前锁定：无</div>
           <div class="lock-list" id="lockList"></div>
 
           <div style="border-top:1px solid var(--border-color);padding-top:14px;">
-            <div class="sub-tab-bar">
-              <button class="sub-tab-btn active" onclick="switchLockType('cell', this)">小区锁定</button>
-              <button class="sub-tab-btn" onclick="switchLockType('arfcn', this)">频点锁定</button>
-            </div>
-
-            <div id="lockform-cell">
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Cell ID</label>
-                  <input type="text" id="lockCellId" placeholder="如 0x12345678">
-                </div>
-                <div class="form-group">
-                  <label>频点（EARFCN / NR-ARFCN）</label>
-                  <input type="text" id="lockCellArfcn" placeholder="如 500300">
-                </div>
-                <div class="form-group auto" style="display:flex;align-items:flex-end;">
-                  <button class="btn btn-secondary btn-sm" onclick="addCellLock()">添加</button>
-                </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>频点（EARFCN / NR-ARFCN）</label>
+                <input type="text" id="lockArfcn" placeholder="如 500300">
               </div>
-            </div>
-
-            <div id="lockform-arfcn" style="display:none;">
-              <div class="form-row">
-                <div class="form-group">
-                  <label>EARFCN / NR-ARFCN</label>
-                  <input type="text" id="lockArfcn" placeholder="如 500300">
-                </div>
-                <div class="form-group auto" style="display:flex;align-items:flex-end;">
-                  <button class="btn btn-secondary btn-sm" onclick="addArfcnLock()">添加</button>
-                </div>
+              <div class="form-group">
+                <label>PCI（可选，不填则只锁频点）</label>
+                <input type="text" id="lockPci" placeholder="如 123">
+              </div>
+              <div class="form-group auto" style="display:flex;align-items:flex-end;">
+                <button class="btn btn-primary btn-sm" onclick="saveCellLock()">保存</button>
               </div>
             </div>
           </div>
 
-          <div style="margin-top:10px;display:flex;gap:8px;">
-            <button class="btn btn-primary btn-sm" onclick="applyAllLocks()">应用全部锁定</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearAllLocks()">清除全部</button>
+          <div style="margin-top:10px;">
+            <button class="btn btn-secondary btn-sm" onclick="clearCellLock()">清除锁定</button>
           </div>
         </div>
 
@@ -1146,6 +1151,11 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- ─ Tab 5: 5GLAN ─ -->
+        <div class="tab-panel" id="ctab-5glan">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;padding:8px 0;" id="glanToggles"></div>
         </div>
 
       </div><!-- /panel -->
@@ -1181,7 +1191,7 @@
     </div><!-- /page-at -->
 
 
-    <!-- ══ 硬件信息 ══ -->
+    <!-- ══ 系统信息 ══ -->
     <div class="page" id="page-hardware">
 
       <div class="panel">
@@ -1248,6 +1258,14 @@
             <div><div class="toggle-label">Proxy ARP</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleProxyArp" onchange="applyToggle('proxyArp', this.checked)"><span class="toggle-track"></span></label>
           </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">NAPT 端口转换</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleNapt" onchange="applyToggle('napt', this.checked)"><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label">动态子网掩码</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleNetmask" onchange="applyToggle('netmask', this.checked)"><span class="toggle-track"></span></label>
+          </div>
         </div>
       </div>
 
@@ -1257,6 +1275,7 @@
           <div class="form-group" style="flex:0 0 auto;min-width:200px;">
             <label>USB 网卡协议</label>
             <select id="usbNetMode">
+              <option value="1">ECM 网卡</option>
               <option value="2">MBIM 移动宽带</option>
               <option value="3">RNDIS 网卡</option>
               <option value="5">NCM 网卡</option>
@@ -1300,13 +1319,9 @@
             <div class="info-label">IPv6 地址</div>
             <div class="info-value muted" id="ipv6Addr" style="font-size:12px;letter-spacing:0.3px;">--</div>
           </div>
-          <div class="info-item">
-            <div class="info-label">IPv6 网关</div>
-            <div class="info-value muted" id="ipv6Gw" style="font-size:12px;">--</div>
-          </div>
-          <div class="info-item">
+          <div class="info-item" style="grid-column: span 2;">
             <div class="info-label">IPv6 DNS</div>
-            <div class="info-value muted" id="ipv6Dns" style="font-size:12px;">--</div>
+            <div class="info-value muted" id="ipv6Dns" style="font-size:12px;letter-spacing:0.3px;">--</div>
           </div>
         </div>
       </div>
@@ -1368,6 +1383,7 @@
       if (state.dataConnected) {
         try {
           await invoke('disconnect_data');
+          await flushAtLog();
           state.dataConnected = false;
           updateDataConnectionUI();
           addTerminalLine('[数据] 已断开数据连接', 'cmd');
@@ -1380,6 +1396,7 @@
         btn.classList.add('connecting');
         try {
           await invoke('connect_data');
+          await flushAtLog();
           state.dataConnected = true;
           state.dataApn = '已连接';
           updateDataConnectionUI();
@@ -1476,13 +1493,13 @@
     });
 
     async function loadHardwarePage() {
-      showLoading('正在加载硬件信息...', '查询模组信息与功能开关');
+      showLoading('正在加载系统信息...', '查询模组信息与功能开关');
       try {
         await refreshHardwareInfo();
-        setLoadingText('正在加载硬件信息...', '查询功能开关');
+        setLoadingText('正在加载系统信息...', '查询功能开关');
         await refreshFeatureToggles();
       } catch (e) {
-        addTerminalLine('[硬件] 加载失败: ' + e, 'err');
+        addTerminalLine('[系统] 加载失败: ' + e, 'err');
       }
       hideLoading();
     }
@@ -1496,6 +1513,7 @@
         if (state.dataConnected) {
           try {
             await invoke('disconnect_data');
+            await flushAtLog();
             addTerminalLine('[数据] 已挂断拨号', 'cmd');
           } catch (e) {
             addTerminalLine('[数据] 挂断拨号失败: ' + e, 'err');
@@ -1639,6 +1657,7 @@
         setText('rsrq', s.rsrq || '--');
         setText('sinr', s.sinr || '--');
         setText('txPower', s.txPower || '--');
+        setText('rxLevel', s.rxLevel || '--');
         setText('ant0', s.antValues?.[0] || '');
         setText('ant1', s.antValues?.[1] || '');
         setText('ant2', s.antValues?.[2] || '');
@@ -1671,10 +1690,10 @@
 
     function clearData() {
       const ids = ['simStatus','simSlot','regStatus','connStatus','imei','iccid',
-        'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower','cqi','scs',
+        'operator','networkType','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower','rxLevel','cqi','scs',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
         'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp',
-        'ipv4Addr','ipv4Mask','ipv4Gw','ipv4Dns','ipv6Addr','ipv6Gw','ipv6Dns'];
+        'ipv4Addr','ipv4Mask','ipv4Gw','ipv4Dns','ipv6Addr','ipv6Dns'];
       ids.forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.textContent = '--'; el.className = 'info-value muted'; }
@@ -1762,6 +1781,15 @@
       terminal.scrollTop = terminal.scrollHeight;
     }
 
+    async function flushAtLog() {
+      try {
+        const cmds = await invoke('pop_at_commands');
+        for (const cmd of cmds) {
+          addTerminalLine('›› ' + cmd, 'cmd');
+        }
+      } catch (_) {}
+    }
+
     function clearTerminal() {
       document.getElementById('terminal').innerHTML = '';
     }
@@ -1779,10 +1807,19 @@
         neighborLoaded = true;
         loadNeighborCells();
       }
-      // Lazy-load bands + network mode on first netlock tab switch
-      if (tab === 'netlock' && state.connected && !netlockLoaded) {
-        netlockLoaded = true;
+      // Load bands + network mode when switching to netlock tab
+      if (tab === 'netlock' && state.connected) {
         loadNetlockData();
+      }
+      if (tab === 'apn' && state.connected) {
+        refreshApnList();
+      }
+      if (tab === '5glan' && state.connected) {
+        refresh5Glan();
+      }
+      // Query current cell lock when switching to celllock tab
+      if (tab === 'celllock' && state.connected) {
+        queryCellLock();
       }
     }
 
@@ -1802,10 +1839,26 @@
             <div class="apn-item-name">${a.name}</div>
             <div class="apn-item-meta">${a.ip.toUpperCase()} · 鉴权: ${a.auth.toUpperCase()}${a.user ? ' · 用户: ' + a.user : ''}</div>
           </div>
-          ${a.active ? '<span class="apn-item-active">当前</span>' : `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();setActiveApn(${i})">激活</button>`}
+          <button class="btn btn-secondary btn-sm ${a.active ? 'active' : ''}" onclick="event.stopPropagation();toggleApnActive(${i})">${a.active ? '已激活' : '激活'}</button>
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();deleteApn(${i})">删除</button>
         </div>
       `).join('');
+    }
+
+    function populateCidSelect(selectedCid) {
+      const sel = document.getElementById('apnCid');
+      const usedCids = new Set(apnData.map(a => a.cid));
+      sel.innerHTML = '';
+      for (let c = 1; c <= 16; c++) {
+        if (c === selectedCid || !usedCids.has(c)) {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          if (c === selectedCid) opt.selected = true;
+          sel.appendChild(opt);
+        }
+      }
+      if (!selectedCid && sel.options.length > 0) sel.selectedIndex = 0;
     }
 
     function openApnModal() {
@@ -1814,6 +1867,7 @@
       document.getElementById('apnAuth').value = 'none';
       document.getElementById('apnIp').value = 'ipv4';
       document.getElementById('apnModalTitle').textContent = '新增 APN';
+      populateCidSelect(null);
       document.getElementById('apnModalOverlay').classList.add('active');
       renderApnList();
     }
@@ -1823,10 +1877,11 @@
       const a = apnData[i];
       document.getElementById('apnName').value = a.name;
       document.getElementById('apnUser').value = a.user;
-      document.getElementById('apnPass').value = a.pass;
+      document.getElementById('apnPass').value = '';
       document.getElementById('apnAuth').value = a.auth;
       document.getElementById('apnIp').value = a.ip;
       document.getElementById('apnModalTitle').textContent = '编辑 APN';
+      populateCidSelect(a.cid);
       document.getElementById('apnModalOverlay').classList.add('active');
       renderApnList();
     }
@@ -1844,17 +1899,19 @@
     });
 
     async function saveApn() {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       const name = document.getElementById('apnName').value.trim();
-      if (!name) { alert('请输入 APN 名称'); return; }
+      if (!name) { showToast('请输入 APN 名称', 'err'); return; }
+      const cid = parseInt(document.getElementById('apnCid').value);
       const authMap = { none: 0, pap: 1, chap: 2 };
-      const ipTypeMap = { ipv4: 1, ipv6: 2, ipv4v6: 3 };
+      const ipTypeMap = { ipv4: 1, ipv6: 2, ipv4v6: 3, ethernet: 4 };
       const auth = document.getElementById('apnAuth').value;
       const ipType = document.getElementById('apnIp').value;
       const user = document.getElementById('apnUser').value.trim();
       const pass = document.getElementById('apnPass').value;
 
       try {
-        const cid = editingApnIdx >= 0 ? apnData[editingApnIdx].cid : (apnData.length + 1);
+        showLoading('正在保存 APN...');
         await invoke('set_apn_config', {
           cid,
           contextType: ipTypeMap[ipType] || 1,
@@ -1863,10 +1920,15 @@
           password: pass,
           authType: authMap[auth] || 0,
         });
-        addTerminalLine(`[APN] 已保存: ${name}`, 'ok');
+        await flushAtLog();
+        hideLoading();
+        showToast(`APN 已保存: ${name}`, 'ok');
+        addTerminalLine(`[APN] 已保存: CID=${cid} ${name}`, 'ok');
         closeApnModal();
         await refreshApnList();
       } catch (e) {
+        hideLoading();
+        showToast('APN 保存失败: ' + e, 'err');
         addTerminalLine('[APN] 保存失败: ' + e, 'err');
       }
     }
@@ -1876,6 +1938,7 @@
       if (!state.connected) { alert('请先连接模组'); return; }
       try {
         await invoke('delete_apn_config', { cid: apnData[i].cid });
+        await flushAtLog();
         addTerminalLine(`[APN] 已删除: ${apnData[i].name}`, 'ok');
         await refreshApnList();
       } catch (e) {
@@ -1883,42 +1946,103 @@
       }
     }
 
-    function setActiveApn(i) {
-      apnData.forEach((a, idx) => a.active = idx === i);
-      renderApnList();
-      addTerminalLine(`[APN] 已激活: ${apnData[i].name}`, 'ok');
+    async function toggleApnActive(i) {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
+      const cid = apnData[i].cid;
+      const active = !apnData[i].active;
+      try {
+        showLoading(active ? '正在激活 APN...' : '正在去激活 APN...');
+        await invoke('set_apn_active', { cid, active });
+        await flushAtLog();
+        hideLoading();
+        showToast(active ? `APN 已激活: ${apnData[i].name}` : `APN 已去激活: ${apnData[i].name}`, 'ok');
+        addTerminalLine(`[APN] ${active ? '激活' : '去激活'}: CID=${cid} ${apnData[i].name}`, 'ok');
+        await refreshApnList();
+      } catch (e) {
+        hideLoading();
+        showToast('操作失败: ' + e, 'err');
+        addTerminalLine('[APN] 操作失败: ' + e, 'err');
+      }
+    }
+
+    // ── 5GLAN ──
+    let glanData = [];
+
+    function render5Glan() {
+      const container = document.getElementById('glanToggles');
+      if (!glanData.length) {
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 5GLAN 数据</div>';
+        return;
+      }
+      container.innerHTML = glanData.map(g => `
+        <div class="toggle-row" style="align-items:center;border-bottom:1px solid var(--border-color);">
+          <div><div class="toggle-label">CID ${g.cid}</div></div>
+          <label class="toggle-switch"><input type="checkbox" ${g.enabled ? 'checked' : ''} onchange="set5Glan(${g.cid}, this.checked)"><span class="toggle-track"></span></label>
+        </div>
+      `).join('');
+    }
+
+    async function refresh5Glan() {
+      if (!state.connected) { render5Glan(); return; }
+      try {
+        glanData = await invoke('get_5glan');
+        render5Glan();
+      } catch (e) {
+        console.warn('refresh5Glan failed:', e);
+        glanData = [];
+        render5Glan();
+      }
+    }
+
+    async function set5Glan(cid, enabled) {
+      if (!state.connected) return;
+      try {
+        await invoke('set_5glan', { cid, enabled });
+        await flushAtLog();
+        addTerminalLine(`[5GLAN] CID${cid} → ${enabled ? '开启' : '关闭'}`, 'ok');
+        await refresh5Glan();
+      } catch (e) {
+        showToast('5GLAN 设置失败: ' + e, 'err');
+        addTerminalLine('[5GLAN] 设置失败: ' + e, 'err');
+        await refresh5Glan();
+      }
     }
 
     // ── 网络锁定 ──
     async function loadNetlockData() {
       if (!state.connected) return;
-      showLoading('正在获取模组数据...', '查询网络配置');
-      addTerminalLine('[网络] 正在获取网络配置...', 'info');
+      // Load preferred network mode
       try {
-        // Load preferred network mode
-        try {
-          const mode = await invoke('get_network_mode');
-          const modeMap = { 'AUTO': 'auto', 'NR5G': '5gsa', 'NR5G NSA': 'nrNsa', 'LTE': 'lte', 'WCDMA': 'wcdma' };
-          const sel = document.getElementById('preferredNetwork');
-          sel.value = modeMap[mode] || 'auto';
-        } catch (e) {
-          console.warn('get_network_mode failed:', e);
-        }
-        // Load bands
-        await refreshBands();
+        const mode = await invoke('get_network_mode');
+        const modeMap = { 'AUTO': 'auto', 'NR5G': 'nr5g', 'NR5G-SA': '5gsa', 'NR5G-NSA': 'nrNsa', 'LTE': 'lte', 'WCDMA': 'wcdma' };
+        const sel = document.getElementById('preferredNetwork');
+        sel.value = modeMap[mode] || 'auto';
       } catch (e) {
-        addTerminalLine('[网络] 获取网络配置失败: ' + e, 'err');
+        console.warn('get_network_mode failed:', e);
       }
-      hideLoading();
+      // Load bands independently
+      await refreshBands();
     }
 
     async function applyPreferredNetwork() {
       const sel = document.getElementById('preferredNetwork');
-      const modeMap = { auto: 'AUTO', '5gsa': 'NR5G', nrNsa: 'NR5G NSA', lte: 'LTE', wcdma: 'WCDMA' };
+      const modeMap = { auto: 'AUTO', nr5g: 'NR5G', '5gsa': 'NR5G-SA', nrNsa: 'NR5G-NSA', lte: 'LTE', wcdma: 'WCDMA' };
       try {
+        showLoading('正在保存首选网络...');
         await invoke('set_network_mode_cmd', { mode: modeMap[sel.value] || sel.value });
+        await flushAtLog();
+        hideLoading();
+        showToast('首选网络保存成功', 'ok');
         addTerminalLine(`[网络] 首选网络: ${sel.selectedOptions[0].text}`, 'ok');
+        try {
+          const mode = await invoke('get_network_mode');
+          addTerminalLine(`[网络] 回读原始值: ${mode}`, 'info');
+          const modeMapBack = { 'AUTO': 'auto', 'NR5G': 'nr5g', 'NR5G-SA': '5gsa', 'NR5G-NSA': 'nrNsa', 'LTE': 'lte', 'WCDMA': 'wcdma' };
+          sel.value = modeMapBack[mode] || 'auto';
+        } catch (e2) { console.warn('get_network_mode after save failed:', e2); }
       } catch (e) {
+        hideLoading();
+        showToast('首选网络保存失败: ' + e, 'err');
         addTerminalLine('[网络] 设置失败: ' + e, 'err');
       }
     }
@@ -2000,6 +2124,7 @@
       try {
         showLoading('正在保存频段配置...');
         await invoke('set_bands', { lte: lteStr, nr: nrStr });
+        await flushAtLog();
         hideLoading();
         showToast('频段配置保存成功', 'ok');
         addTerminalLine(`[频段选择] LTE: ${lteChecked.length > 0 ? lteChecked.map(b => 'B' + b).join(', ') : '无'} | NR: ${nrChecked.length > 0 ? nrChecked.map(b => 'n' + b).join(', ') : '无'}`, 'ok');
@@ -2017,6 +2142,7 @@
       try {
         showLoading('正在重置频段...', '下发 all_band_reset');
         await invoke('reset_all_bands');
+        await flushAtLog();
         hideLoading();
         showToast('频段已重置为默认值', 'ok');
         addTerminalLine('[频段选择] 已重置为默认频段', 'ok');
@@ -2028,80 +2154,166 @@
       }
     }
 
-    function applyOperatorLock() {
+    async function applyOperatorLock() {
       const mcc = document.getElementById('lockMcc').value.trim();
       const mnc = document.getElementById('lockMnc').value.trim();
-      if (!mcc || !mnc) { alert('请输入 MCC 和 MNC'); return; }
-      addTerminalLine(`[运营商锁定] MCC=${mcc} MNC=${mnc}`, 'ok');
+      if (!mcc || !mnc) { showToast('请输入 MCC 和 MNC', 'err'); return; }
+      const plmn = mcc + mnc;
+      try {
+        showLoading('正在锁定PLMN...');
+        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678",2,"' + plmn + '"' });
+        await flushAtLog();
+        hideLoading();
+        showToast('PLMN 锁定成功', 'ok');
+        addTerminalLine(`[PLMN锁定] MCC=${mcc} MNC=${mnc}`, 'ok');
+      } catch (e) {
+        hideLoading();
+        showToast('PLMN 锁定失败: ' + e, 'err');
+        addTerminalLine('[PLMN锁定] 失败: ' + e, 'err');
+      }
     }
 
-    function clearOperatorLock() {
-      document.getElementById('lockMcc').value = '';
-      document.getElementById('lockMnc').value = '';
-      addTerminalLine('[运营商锁定] 已解锁', 'info');
+    async function clearOperatorLock() {
+      try {
+        showLoading('正在解锁PLMN...');
+        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678"' });
+        await flushAtLog();
+        hideLoading();
+        showToast('PLMN 已解锁', 'ok');
+        addTerminalLine('[PLMN锁定] 已解锁', 'ok');
+        document.getElementById('lockMcc').value = '';
+        document.getElementById('lockMnc').value = '';
+      } catch (e) {
+        hideLoading();
+        showToast('解锁失败: ' + e, 'err');
+        addTerminalLine('[PLMN锁定] 解锁失败: ' + e, 'err');
+      }
     }
 
     // ── 小区 / 频点锁定 ──
-    const lockEntries = []; // { type: 'cell'|'arfcn', label: string }
 
-    function switchLockType(type, btn) {
-      document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('lockform-cell').style.display = type === 'cell' ? '' : 'none';
-      document.getElementById('lockform-arfcn').style.display = type === 'arfcn' ? '' : 'none';
+    function parseLockResponse(resp, prefix) {
+      const items = [];
+      const lines = resp.split('\n').map(l => l.trim().replace(/^\+/, ''));
+      for (const line of lines) {
+        if (!line.startsWith(prefix + ':')) continue;
+        const data = line.substring(prefix.length + 1).trim();
+        const parts = data.split(',').map(s => s.trim().replace(/"/g, ''));
+        // Response format: "common/5g",<enable>,<freq>[,<pci>]
+        // or: "common/5g",<freq> (when enable is omitted, freq is present = locked)
+        if (parts.length >= 2) {
+          let freq, pci;
+          if (parts.length >= 3 && (parts[1] === '0' || parts[1] === '1')) {
+            // format: "common/5g",1,freq[,pci]
+            if (parts[1] !== '1') continue;
+            freq = parts[2];
+            pci = parts.length >= 4 ? parts[3] : '';
+          } else {
+            // format: "common/5g",freq  (no enable flag, presence = locked)
+            freq = parts[1];
+            pci = parts.length >= 3 ? parts[2] : '';
+          }
+          if (freq && freq !== '0') {
+            items.push({ freq, pci });
+          }
+        }
+      }
+      return items;
     }
 
-    function renderLockList() {
+    async function queryCellLock() {
+      if (!state.connected) return;
       const quota = document.getElementById('lockQuota');
       const list = document.getElementById('lockList');
-      quota.textContent = `已锁定 ${lockEntries.length} / 6 条`;
-      if (lockEntries.length === 0) {
-        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:4px 0;">暂无锁定条目</div>';
-        return;
+      const allItems = [];
+      try {
+        const lockResp = await invoke('send_raw_at', { command: 'AT+QNWLOCK="common/5g"' });
+        await flushAtLog();
+        addTerminalLine('[锁定查询] QNWLOCK => ' + lockResp.trim(), 'info');
+        const cellItems = parseLockResponse(lockResp, 'QNWLOCK');
+        for (const e of cellItems) {
+          allItems.push({ type: '小区', freq: e.freq, pci: e.pci });
+        }
+      } catch (e) {
+        addTerminalLine('[锁定查询] QNWLOCK 失败: ' + e, 'err');
       }
-      list.innerHTML = lockEntries.map((e, i) => `
-        <div class="lock-item">
-          <span class="lock-item-badge">${e.type === 'cell' ? '小区' : '频点'}</span>
-          <span class="lock-item-info">${e.label}</span>
-          <button class="lock-item-del" onclick="removeLock(${i})" title="删除">×</button>
-        </div>
-      `).join('');
+      try {
+        const freqResp = await invoke('send_raw_at', { command: 'AT+QNWLOCKFREQ="common/5g"' });
+        await flushAtLog();
+        addTerminalLine('[锁定查询] QNWLOCKFREQ => ' + freqResp.trim(), 'info');
+        const freqItems = parseLockResponse(freqResp, 'QNWLOCKFREQ');
+        for (const e of freqItems) {
+          allItems.push({ type: '频点', freq: e.freq, pci: '' });
+        }
+      } catch (e) {
+        addTerminalLine('[锁定查询] QNWLOCKFREQ 失败: ' + e, 'err');
+      }
+
+      if (allItems.length > 0) {
+        quota.textContent = `已锁定 ${allItems.length} 条`;
+        list.innerHTML = allItems.map(e => `
+          <div class="lock-item">
+            <span class="lock-item-badge">${e.type}</span>
+            <span class="lock-item-info">频点 ${e.freq}${e.pci ? '  PCI ' + e.pci : ''}</span>
+          </div>
+        `).join('');
+      } else {
+        quota.textContent = '当前锁定：无';
+        list.innerHTML = '';
+      }
     }
 
-    function addCellLock() {
-      if (lockEntries.length >= 6) { alert('最多锁定 6 条'); return; }
-      const cid = document.getElementById('lockCellId').value.trim();
-      const arfcn = document.getElementById('lockCellArfcn').value.trim();
-      if (!cid || !arfcn) { alert('请输入 Cell ID 和频点'); return; }
-      lockEntries.push({ type: 'cell', label: `CellID: ${cid}  ARFCN: ${arfcn}` });
-      document.getElementById('lockCellId').value = '';
-      document.getElementById('lockCellArfcn').value = '';
-      renderLockList();
-    }
-
-    function addArfcnLock() {
-      if (lockEntries.length >= 6) { alert('最多锁定 6 条'); return; }
+    async function saveCellLock() {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       const arfcn = document.getElementById('lockArfcn').value.trim();
-      if (!arfcn) { alert('请输入频点'); return; }
-      lockEntries.push({ type: 'arfcn', label: `ARFCN: ${arfcn}` });
-      document.getElementById('lockArfcn').value = '';
-      renderLockList();
+      const pci = document.getElementById('lockPci').value.trim();
+      if (!arfcn) { showToast('请输入频点', 'err'); return; }
+      try {
+        showLoading('正在保存锁定...');
+        let cmd;
+        if (pci) {
+          cmd = 'AT+QNWLOCK="common/5g",1,' + arfcn + ',' + pci;
+        } else {
+          cmd = 'AT+QNWLOCKFREQ="common/5g",1,' + arfcn;
+        }
+        const resp = await invoke('send_raw_at', { command: cmd });
+        await flushAtLog();
+        hideLoading();
+        if (resp.trim().includes('OK')) {
+          showToast('锁定保存成功', 'ok');
+          addTerminalLine(`[锁定] ${pci ? '小区+频点' : '仅频点'} 频点=${arfcn}${pci ? ' PCI=' + pci : ''}`, 'ok');
+        } else {
+          showToast('锁定失败: 模组未返回OK', 'err');
+          addTerminalLine('[锁定] 失败: ' + resp.trim(), 'err');
+        }
+        await queryCellLock();
+      } catch (e) {
+        hideLoading();
+        showToast('锁定失败: ' + e, 'err');
+        addTerminalLine('[锁定] 失败: ' + e, 'err');
+      }
     }
 
-    function removeLock(i) {
-      lockEntries.splice(i, 1);
-      renderLockList();
-    }
-
-    function applyAllLocks() {
-      if (lockEntries.length === 0) { alert('暂无锁定条目'); return; }
-      lockEntries.forEach(e => addTerminalLine(`[锁定] ${e.type === 'cell' ? '小区' : '频点'} ${e.label}`, 'ok'));
-    }
-
-    function clearAllLocks() {
-      lockEntries.length = 0;
-      renderLockList();
-      addTerminalLine('[锁定] 已清除全部', 'info');
+    async function clearCellLock() {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
+      try {
+        showLoading('正在清除锁定...');
+        // Clear both cell locks and frequency locks
+        await invoke('send_raw_at', { command: 'AT+QNWLOCK="common/5g",0' });
+        await flushAtLog();
+        await invoke('send_raw_at', { command: 'AT+QNWLOCKFREQ="common/5g",0' });
+        await flushAtLog();
+        hideLoading();
+        showToast('锁定已清除', 'ok');
+        addTerminalLine('[锁定] 已清除全部', 'ok');
+        document.getElementById('lockArfcn').value = '';
+        document.getElementById('lockPci').value = '';
+        await queryCellLock();
+      } catch (e) {
+        hideLoading();
+        showToast('清除失败: ' + e, 'err');
+        addTerminalLine('[锁定] 清除失败: ' + e, 'err');
+      }
     }
 
     // ── 邻区信息 ──
@@ -2173,7 +2385,6 @@
         setText('ipv4Gw', ip.ipv4Gw || '--');
         setText('ipv4Dns', ip.ipv4Dns || '--');
         setText('ipv6Addr', ip.ipv6Addr || '--');
-        setText('ipv6Gw', ip.ipv6Gw || '--');
         setText('ipv6Dns', ip.ipv6Dns || '--');
       } catch (e) {
         console.warn('refreshIpInfo failed:', e);
@@ -2186,20 +2397,44 @@
       addTerminalLine(`[MTU] 已设置: ${val} 字节`, 'ok');
     }
 
-    function applyDmz() {
+    async function applyDmz() {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       const ip = document.getElementById('dmzHost').value.trim();
-      if (!ip) { alert('请输入 DMZ 主机 IP 地址'); return; }
-      addTerminalLine(`[DMZ] 已设置主机: ${ip}`, 'ok');
+      if (!ip) { showToast('请输入 DMZ 主机 IP 地址', 'err'); return; }
+      try {
+        showLoading('正在设置 DMZ...');
+        await invoke('send_raw_at', { command: 'AT+QDMZ=1,4,' + ip });
+        await flushAtLog();
+        hideLoading();
+        showToast('DMZ 设置成功', 'ok');
+        addTerminalLine(`[DMZ] 已设置主机: ${ip}`, 'ok');
+      } catch (e) {
+        hideLoading();
+        showToast('DMZ 设置失败: ' + e, 'err');
+        addTerminalLine('[DMZ] 设置失败: ' + e, 'err');
+      }
     }
 
-    function clearDmz() {
-      document.getElementById('dmzHost').value = '';
-      addTerminalLine('[DMZ] 已清除', 'info');
+    async function clearDmz() {
+      if (!state.connected) { showToast('请先连接模组', 'err'); return; }
+      try {
+        showLoading('正在清除 DMZ...');
+        await invoke('send_raw_at', { command: 'AT+QDMZ=0,4' });
+        await flushAtLog();
+        hideLoading();
+        showToast('DMZ 已清除', 'ok');
+        document.getElementById('dmzHost').value = '';
+        addTerminalLine('[DMZ] 已清除', 'ok');
+      } catch (e) {
+        hideLoading();
+        showToast('DMZ 清除失败: ' + e, 'err');
+        addTerminalLine('[DMZ] 清除失败: ' + e, 'err');
+      }
     }
 
-    // ── 硬件操作 ──
+    // ── 系统操作 ──
     async function refreshHardwareInfo() {
-      if (!state.connected) { addTerminalLine('[硬件] 未连接', 'err'); return; }
+      if (!state.connected) { addTerminalLine('[系统] 未连接', 'err'); return; }
       try {
         const hw = await invoke('get_hardware_info');
         setText('hwModel', hw.model || '--');
@@ -2209,9 +2444,9 @@
         setText('hwCpBaseline', hw.cpBaseline || '--');
         setText('hwSocTemp', hw.socTemp || '--');
         setText('hwPaTemp', hw.paTemp || '--');
-        addTerminalLine(`[硬件] 型号=${hw.model} 固件=${hw.firmware}`, 'info');
+        addTerminalLine(`[系统] 型号=${hw.model} 固件=${hw.firmware}`, 'info');
       } catch (e) {
-        addTerminalLine('[硬件] 读取失败: ' + e, 'err');
+        addTerminalLine('[系统] 读取失败: ' + e, 'err');
       }
     }
 
@@ -2225,6 +2460,8 @@
         document.getElementById('toggleUartAt').checked = t.uartAt;
         document.getElementById('toggleAdb').checked = t.adb;
         document.getElementById('toggleProxyArp').checked = t.proxyarp;
+        document.getElementById('toggleNapt').checked = t.napt;
+        document.getElementById('toggleNetmask').checked = t.netmask;
       } catch (e) {
         console.warn('refreshFeatureToggles failed:', e);
       }
@@ -2276,25 +2513,40 @@
       if (!state.connected) { addTerminalLine('[USB] 未连接', 'err'); return; }
       try {
         await invoke('set_usbnet_mode', { mode: value });
+        await flushAtLog();
         addTerminalLine(`[USB] 网卡模式切换为: ${label}，正在重启...`, 'cmd');
-        // Reboot after setting
-        await invoke('reboot_modem');
-        addTerminalLine('[USB] 重启完成', 'ok');
+        // Reboot — device will disconnect, so mark disconnected immediately
+        try { await invoke('reboot_modem'); await flushAtLog(); } catch (_) {}
+        // Clean up backend transport
+        invoke('disconnect').catch(() => {});
+        // Proactively disconnect since the device is rebooting
+        state.connected = false;
+        state.dataConnected = false;
+        state.connectedPort = '';
+        state.idle = true;
+        updateConnectionUI(false);
+        updateDataConnectionUI();
+        clearData();
+        const statusLabel = document.getElementById('statusLabel');
+        statusLabel.textContent = '重启中...';
+        statusLabel.style.color = 'var(--warning, orange)';
+        addTerminalLine('[USB] 模组正在重启，等待设备重新上线...', 'info');
       } catch (e) {
         addTerminalLine('[USB] 设置失败: ' + e, 'err');
       }
     }
 
     async function applyToggle(feature, enabled) {
-      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP' };
+      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP', napt: 'NAPT 端口转换', netmask: '动态子网掩码' };
       if (!state.connected) return;
       try {
         await invoke('set_feature_toggle', { feature, enabled });
+        await flushAtLog();
         addTerminalLine(`[功能] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
       } catch (e) {
         addTerminalLine(`[功能] ${labels[feature]} 设置失败: ${e}`, 'err');
         // Revert checkbox
-        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet', proxyArp: 'toggleProxyArp' };
+        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet', proxyArp: 'toggleProxyArp', napt: 'toggleNapt', netmask: 'toggleNetmask' };
         const el = document.getElementById(map[feature]);
         if (el) el.checked = !enabled;
       }
@@ -2305,9 +2557,23 @@
       if (!confirm(`确认要执行：${labels[action]}？`)) return;
       addTerminalLine(`[操作] 正在执行: ${labels[action]}...`, 'cmd');
       try {
-        if (action === 'reboot') await invoke('reboot_modem');
-        else if (action === 'factory') await invoke('factory_reset');
-        addTerminalLine('[操作] 执行完成', 'ok');
+        if (action === 'reboot') { try { await invoke('reboot_modem'); } catch (_) {} }
+        else if (action === 'factory') { try { await invoke('factory_reset'); } catch (_) {} }
+        await flushAtLog();
+        // Clean up backend transport
+        invoke('disconnect').catch(() => {});
+        // Both actions cause reboot — mark disconnected, wait for device to come back
+        state.connected = false;
+        state.dataConnected = false;
+        state.connectedPort = '';
+        state.idle = true;
+        updateConnectionUI(false);
+        updateDataConnectionUI();
+        clearData();
+        const statusLabel = document.getElementById('statusLabel');
+        statusLabel.textContent = '重启中...';
+        statusLabel.style.color = 'var(--warning, orange)';
+        addTerminalLine('[操作] 模组正在重启，等待设备重新上线...', 'info');
       } catch (e) {
         addTerminalLine('[操作] 执行失败: ' + e, 'err');
       }
@@ -2337,7 +2603,6 @@
 
     // ── 初始化 ──
     renderApnList();
-    renderLockList();
 
     // ── USB 插拔检测：监听从 Rust 后端发出的事件 ──
     function setupUsbMonitor() {
@@ -2373,11 +2638,14 @@
           label.style.color = 'var(--text-muted)';
         }
 
-        // New port appeared and we're idle → auto-connect (only for USB/TTL Serial mode)
-        if (!state.connected && state.idle && isSerialMode && added.length > 0) {
+        // New port appeared and we're idle → auto-connect
+        if (!state.connected && state.idle && added.length > 0) {
           console.log('[USB] New port detected, trying auto-connect');
-          addTerminalLine('[USB] 检测到新端口，尝试自动连接...', 'info');
-          toggleConnection();
+          addTerminalLine('[USB] 检测到新端口，等待设备就绪后连接...', 'info');
+          // Wait for modem to fully boot before probing AT
+          setTimeout(() => {
+            if (!state.connected && state.idle) toggleConnection();
+          }, 5000);
         }
       });
     }
@@ -2402,33 +2670,32 @@
       setupUsbMonitor();
     }
 
-    // Tauri v2: 等待 appinitialized 事件确保 IPC 就绪
-    window.Tauri?.onAppInitialized(() => {
-      console.log('[Init] App initialized event received');
-      if (!state.connected) doInit();
-    });
+    // Tauri v2: withGlobalTauri ensures window.__TAURI__ is available before scripts run
+    // Guard against double-init with a flag
+    let _initStarted = false;
+    function safeDoInit() {
+      if (_initStarted || state.connected) return;
+      _initStarted = true;
+      console.log('[Init] Starting initialization');
+      doInit();
+    }
 
-    // 兜底：3 秒后强制执行
+    if (window.__TAURI__) {
+      // IPC ready, init immediately
+      console.log('[Init] __TAURI__ available, initializing immediately');
+      safeDoInit();
+    } else {
+      console.warn('[Init] __TAURI__ not available, waiting for DOMContentLoaded');
+      window.addEventListener('DOMContentLoaded', safeDoInit);
+    }
+
+    // Fallback: ensure init runs even if the above mechanisms fail
     setTimeout(() => {
-      console.log('[Init] Timeout fallback checking...');
-      if (!state.connected) {
-        console.log('[Init] Not connected, triggering init');
-        doInit();
-      } else {
-        console.log('[Init] Already connected, skipping');
+      if (!_initStarted && !state.connected) {
+        console.log('[Init] Timeout fallback triggering init');
+        safeDoInit();
       }
     }, 3000);
-
-    // 额外兜底：页面加载完成后也尝试初始化
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      console.log('[Init] Page ready, waiting for initialization');
-      setTimeout(() => {
-        if (!state.connected) {
-          console.log('[Init] Page fully loaded, triggering init');
-          doInit();
-        }
-      }, 500);
-    }
 
     // ── 刷新串口列表 ──
     async function refreshPortList() {

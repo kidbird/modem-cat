@@ -22,7 +22,6 @@ pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String
         ipv4_gw: String::new(),
         ipv4_dns: String::new(),
         ipv6_addr: String::new(),
-        ipv6_gw: String::new(),
         ipv6_dns: String::new(),
     };
     for line in resp.lines() {
@@ -33,11 +32,26 @@ pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String
                 .split(',')
                 .map(|s| s.trim().trim_matches('"'))
                 .collect();
-            if parts.len() >= 5 {
+            // Format: <status>,<ipv4_addr>,<mask>,<gw>,<empty>,<dns1>,<dns2>,<ipv6_addr>,<empty>,<empty>,<v6dns1>,<v6dns2>
+            if parts.len() >= 7 {
                 info.ipv4_addr = parts.get(1).unwrap_or(&"").to_string();
                 info.ipv4_mask = parts.get(2).unwrap_or(&"").to_string();
                 info.ipv4_gw = parts.get(3).unwrap_or(&"").to_string();
-                info.ipv4_dns = parts.get(4).unwrap_or(&"").to_string();
+                let dns1 = parts.get(5).unwrap_or(&"");
+                let dns2 = parts.get(6).unwrap_or(&"");
+                let mut dns_parts = Vec::new();
+                if !dns1.is_empty() { dns_parts.push(*dns1); }
+                if !dns2.is_empty() { dns_parts.push(*dns2); }
+                info.ipv4_dns = dns_parts.join(", ");
+            }
+            if parts.len() >= 13 {
+                info.ipv6_addr = parts.get(7).unwrap_or(&"").to_string();
+                let v6dns1 = parts.get(11).unwrap_or(&"");
+                let v6dns2 = parts.get(12).unwrap_or(&"");
+                let mut v6dns_parts = Vec::new();
+                if !v6dns1.is_empty() { v6dns_parts.push(*v6dns1); }
+                if !v6dns2.is_empty() { v6dns_parts.push(*v6dns2); }
+                info.ipv6_dns = v6dns_parts.join(", ");
             }
         }
     }

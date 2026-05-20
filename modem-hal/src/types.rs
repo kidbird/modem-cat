@@ -37,6 +37,7 @@ pub struct ModemStatus {
     pub rsrq: String,
     pub sinr: String,
     pub tx_power: String,
+    pub rx_level: String,
     pub ant_values: Vec<String>,
     pub scs: String,
 }
@@ -69,7 +70,6 @@ pub struct IpInfo {
     pub ipv4_gw: String,
     pub ipv4_dns: String,
     pub ipv6_addr: String,
-    pub ipv6_gw: String,
     pub ipv6_dns: String,
 }
 
@@ -82,6 +82,13 @@ pub struct ApnEntry {
     pub auth_type: i32,
     pub username: String,
     pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct L5GanEntry {
+    pub cid: i32,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -192,9 +199,11 @@ pub struct FeatureToggles {
     pub pcie_mode: bool,
     pub ethernet: bool,
     pub proxyarp: bool,
-    pub uartat: bool,
+    pub uart_at: bool,
     pub eth_at: bool,
     pub adb: bool,
+    pub napt: bool,
+    pub netmask: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -238,6 +247,7 @@ impl ChipsetVendor {
 #[derive(Debug, Clone, Default)]
 pub struct ServingCellInfo {
     pub connected: bool,
+    pub mobility_state: String,
     pub tech: String,
     pub operator_mcc: String,
     pub operator_mnc: String,
@@ -250,6 +260,7 @@ pub struct ServingCellInfo {
     pub rsrq: String,
     pub sinr: String,
     pub tx_power: String,
+    pub rx_level: String,
     pub scs: String,
 }
 

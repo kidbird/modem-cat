@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Modem Cat</title>
+  <title>Modem Cat v0.1.2</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -801,7 +801,7 @@
             <ellipse cx="12" cy="17" rx="1" ry="0.7" fill="var(--bg-primary)" opacity="0.6"/>
           </svg>
         </span>
-        <span>Modem Cat</span>
+        <span id="logoText">Modem Cat</span>
       </div>
       <button class="theme-toggle" onclick="toggleTheme()">☀</button>
     </div>
@@ -1573,6 +1573,10 @@
       const btn = document.getElementById('connectBtn');
       const icon = document.getElementById('statusDot');
       const label = document.getElementById('statusLabel');
+      const connType = document.getElementById('connectionType');
+      const connParams = document.getElementById('connectionParams');
+      connType.disabled = connected;
+      connParams.disabled = connected;
       if (connected) {
         btn.textContent = '断开';
         btn.disabled = false;
@@ -1611,6 +1615,11 @@
         await refreshIpInfo();
       } catch (e) {
         console.warn('refreshIpInfo failed:', e);
+      }
+      try {
+        await refreshHardwareInfo();
+      } catch (e) {
+        console.warn('refreshHardwareInfo failed:', e);
       }
       try {
         await refreshApnList();
@@ -1702,6 +1711,7 @@
         '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
       document.getElementById('nrNeighborBody').innerHTML =
         '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
+      document.getElementById('logoText').textContent = 'Modem Cat';
     }
 
     function setText(id, val) {
@@ -2444,6 +2454,9 @@
         setText('hwCpBaseline', hw.cpBaseline || '--');
         setText('hwSocTemp', hw.socTemp || '--');
         setText('hwPaTemp', hw.paTemp || '--');
+        if (hw.model) {
+          document.getElementById('logoText').textContent = hw.model;
+        }
         addTerminalLine(`[系统] 型号=${hw.model} 固件=${hw.firmware}`, 'info');
       } catch (e) {
         addTerminalLine('[系统] 读取失败: ' + e, 'err');

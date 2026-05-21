@@ -38,18 +38,20 @@ src-tauri/src/lib.rs
 ## 3. 构建环境
 
 ### 3.1 编译工具
-- **Rust 1.94.1+**
-- **MSVC Build Tools 2022**（Windows 打包/编译）
+- **Rust 1.80+**
+- **cargo-tauri v2**（首次构建时自动安装）
+- **MSVC Build Tools 2019/2022**（Windows，由 `build-win.bat` 自动定位）
+- **Xcode CLI Tools**（macOS）
 
-### 3.2 构建命令
+### 3.2 构建脚本
 
 ```bash
-# Desktop (Tauri)
-cd src-tauri && cargo build --release
-
-# Windows 可选脚本
-build-tauri.bat
+./build-mac.sh          # macOS：产出 .app + .dmg
+build-win.bat           # Windows：产出 .exe + .msi
+./bump-version.sh X.Y.Z # 升级版本号（同步所有文件）
 ```
+
+详细说明见 [docs/BUILD.md](BUILD.md)。
 
 ## 4. 当前模式
 

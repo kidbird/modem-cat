@@ -93,6 +93,15 @@ pub struct L5GanEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CellLockEntry {
+    /// "cell" (QNWLOCK, has PCI) or "freq" (QNWLOCKFREQ, no PCI)
+    pub lock_type: String,
+    pub arfcn: String,
+    pub pci: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NeighborCell {
     pub cell_id: String,
     pub pci: String,

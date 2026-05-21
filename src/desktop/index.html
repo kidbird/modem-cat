@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modem Cat v0.1.2</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -48,7 +46,7 @@
     }
 
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
@@ -104,6 +102,28 @@
       transition: all 0.15s ease;
     }
     .theme-toggle:hover {
+      background: var(--bg-primary);
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .lang-toggle {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.15s ease;
+      letter-spacing: 0;
+    }
+    .lang-toggle:hover {
       background: var(--bg-primary);
       color: var(--accent);
       border-color: var(--accent);
@@ -450,7 +470,7 @@
       margin-top: 2px;
       color: var(--text-primary);
       text-align: left;
-      font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+      font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif;
       letter-spacing: 0.2px;
     }
     .info-row {
@@ -557,7 +577,7 @@
       padding: 14px;
       overflow-y: auto;
       font-size: 13px;
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+      font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'SF Mono', monospace;
       height: 520px;
       min-height: 120px;
       resize: vertical;
@@ -590,7 +610,7 @@
       border: 1px solid var(--border-color);
       border-radius: 6px;
       color: var(--text-primary);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace;
       font-size: 13px;
       transition: all 0.15s ease;
     }
@@ -920,23 +940,23 @@
           <select id="apnCid"></select>
         </div>
         <div class="form-group">
-          <label>APN 名称</label>
-          <input type="text" id="apnName" placeholder="cmnet">
+          <label data-i18n="label_apn_name">APN 名称</label>
+          <input type="text" id="apnName" data-i18n-ph="ph_apn_name" placeholder="cmnet">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>用户名</label>
-          <input type="text" id="apnUser" placeholder="（可选）">
+          <label data-i18n="label_apn_user">用户名</label>
+          <input type="text" id="apnUser" data-i18n-ph="ph_optional" placeholder="（可选）">
         </div>
         <div class="form-group">
-          <label>密码</label>
-          <input type="password" id="apnPass" placeholder="（可选）">
+          <label data-i18n="label_apn_pass">密码</label>
+          <input type="password" id="apnPass" data-i18n-ph="ph_optional" placeholder="（可选）">
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>鉴权类型</label>
+          <label data-i18n="label_auth_type">鉴权类型</label>
           <select id="apnAuth">
             <option value="none">None</option>
             <option value="pap">PAP</option>
@@ -944,18 +964,18 @@
           </select>
         </div>
         <div class="form-group">
-          <label>IP 类型</label>
+          <label data-i18n="label_ip_type">IP 类型</label>
           <select id="apnIp">
             <option value="ipv4">IPv4</option>
             <option value="ipv6">IPv6</option>
-            <option value="ipv4v6">IPv4v6（双栈）</option>
-            <option value="ethernet">Ethernet</option>
+            <option value="ipv4v6" data-i18n="opt_ipv4v6">IPv4v6（双栈）</option>
+            <option value="ethernet" data-i18n="toggle_ethernet">Ethernet</option>
           </select>
         </div>
       </div>
       <div class="apn-modal-actions">
-        <button class="btn btn-secondary" onclick="closeApnModal()">取消</button>
-        <button class="btn btn-primary" onclick="saveApn()">确认保存</button>
+        <button class="btn btn-secondary" onclick="closeApnModal()" data-i18n="btn_cancel">取消</button>
+        <button class="btn btn-primary" onclick="saveApn()" data-i18n="btn_confirm_save">确认保存</button>
       </div>
     </div>
   </div>
@@ -976,10 +996,10 @@
           <div style="font-size:12px;color:var(--text-muted);">v0.1.2</div>
         </div>
       </div>
-      <div style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;">
+      <div style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;" data-i18n="about_desc">
         5G Modem 调试桌面工具，支持远程/本地 AT 串口连接、实时信号监控、频段配置、网络状态查询等功能。
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;">支持的操作系统</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:600;" data-i18n="about_os">支持的操作系统</div>
       <table style="width:100%;font-size:12px;border-collapse:collapse;">
         <tr style="border-bottom:1px solid var(--border-color);">
           <td style="padding:6px 8px;color:var(--text-secondary);">Windows</td>
@@ -994,10 +1014,10 @@
           <td style="padding:6px 8px;color:var(--warning);font-weight:500;">需系统库</td>
         </tr>
       </table>
-      <div style="margin-top:14px;font-size:11px;color:var(--text-muted);line-height:1.6;">
+      <div style="margin-top:14px;font-size:11px;color:var(--text-muted);line-height:1.6;" data-i18n="os_linux_note">
         Linux 需预装：libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 等运行库。
       </div>
-      <button onclick="hideAbout()" style="margin-top:20px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">确定</button>
+      <button onclick="hideAbout()" style="margin-top:20px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;" data-i18n="btn_ok">确定</button>
     </div>
   </div>
 
@@ -1023,7 +1043,10 @@
         </span>
         <span id="logoText">Modem Cat</span>
       </div>
-      <button class="theme-toggle" onclick="toggleTheme()">☀</button>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <button class="lang-toggle" id="langBtn" onclick="toggleLang()">EN</button>
+        <button class="theme-toggle" onclick="toggleTheme()">☀</button>
+      </div>
     </div>
 
     <nav class="nav">
@@ -1033,7 +1056,7 @@
           <rect x="14" y="3" width="7" height="7" rx="1" />
           <rect x="14" y="14" width="7" height="7" rx="1" />
           <rect x="3" y="14" width="7" height="7" rx="1" />
-        </svg>模组状态
+        </svg><span data-i18n="nav_status">模组状态</span>
       </div>
       <div class="nav-item" data-page="cellular">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1042,7 +1065,7 @@
           <path d="M19 12a11.9 11.9 0 0 0-14 0" />
           <path d="M21 9a16.2 16.2 0 0 0-18 0" />
           <path d="M12 22v-4" />
-        </svg>蜂窝网络
+        </svg><span data-i18n="nav_cellular">蜂窝网络</span>
       </div>
       <div class="nav-item" data-page="ip">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1052,26 +1075,26 @@
           <path d="M12 8v4" />
           <path d="M12 12H5v4" />
           <path d="M12 12h7v4" />
-        </svg>IP 信息
+        </svg><span data-i18n="nav_ip">IP 信息</span>
       </div>
       <div class="nav-item" data-page="at">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="4 17 10 11 4 5" />
           <line x1="12" y1="19" x2="20" y2="19" />
-        </svg>AT调试
+        </svg><span data-i18n="nav_at">AT调试</span>
       </div>
       <div class="nav-item" data-page="hardware">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="4" width="16" height="16" rx="2" />
           <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.1"/>
           <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" />
-        </svg>系统信息
+        </svg><span data-i18n="nav_hardware">系统信息</span>
       </div>
     </nav>
 
     <div style="padding:8px 12px;border-top:1px solid var(--border-color);display:flex;gap:8px;flex-shrink:0;">
-      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 0;" onclick="confirmAction('reboot')">重启模组</button>
-      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 0;" onclick="confirmAction('factory')">恢复出厂</button>
+      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 0;" onclick="confirmAction('reboot')" data-i18n="btn_reboot">重启模组</button>
+      <button class="btn btn-danger btn-sm" style="flex:1;font-size:11px;padding:6px 0;" onclick="confirmAction('factory')" data-i18n="btn_factory">恢复出厂</button>
     </div>
 
     <div class="status-bar">
@@ -1085,8 +1108,8 @@
             <path d="M5 12h4"/>
           </svg>
         </span>
-        <span class="status-key">模组</span>
-        <span class="status-val" id="statusLabel">初始化中...</span>
+        <span class="status-key" data-i18n="status_modem">模组</span>
+        <span class="status-val" id="statusLabel" data-i18n="status_init">初始化中...</span>
       </div>
       <div class="status-row">
         <!-- 数据连接：信号波图标 -->
@@ -1097,9 +1120,9 @@
             <circle cx="7" cy="12" r="0.8" fill="currentColor" stroke="none"/>
           </svg>
         </span>
-        <span class="status-key">数据</span>
-        <span class="status-val" id="dataStatusLabel">未连接</span>
-        <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()">连接</button>
+        <span class="status-key" data-i18n="status_data">数据</span>
+        <span class="status-val" id="dataStatusLabel" data-i18n="status_disconnected">未连接</span>
+        <button class="data-connect-btn" id="dataConnectBtn" onclick="toggleDataConnection()" data-i18n="btn_data_connect">连接</button>
       </div>
     </div>
   </div>
@@ -1110,30 +1133,30 @@
     <div class="page active" id="page-status">
 
       <div class="panel">
-        <div class="panel-title">接口配置</div>
+        <div class="panel-title" data-i18n="panel_interface">接口配置</div>
         <div class="form-row">
           <div class="form-group">
-            <label>连接类型</label>
+            <label data-i18n="label_conn_type">连接类型</label>
             <select id="connectionType" class="conn-select">
-              <option value="serial">USB / TTL Serial</option>
-              <option value="ethernet">Ethernet TCP</option>
+              <option value="serial" data-i18n="opt_usb_serial">USB / TTL Serial</option>
+              <option value="ethernet" data-i18n="opt_eth_tcp">Ethernet TCP</option>
             </select>
           </div>
           <div class="form-group">
-            <label>端口 / 地址</label>
+            <label data-i18n="label_port_addr">端口 / 地址</label>
             <select id="connectionParams" class="conn-select">
-              <option value="">-- 选择端口 --</option>
+              <option value="" data-i18n="opt_select_port">-- 选择端口 --</option>
             </select>
           </div>
           <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn btn-primary" id="connectBtn" onclick="toggleConnection()">连接</button>
+            <button class="btn btn-primary" id="connectBtn" onclick="toggleConnection()" data-i18n="btn_connect">连接</button>
           </div>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">网络状态</div>
+          <div class="panel-title" data-i18n="panel_net_status">网络状态</div>
           <button class="btn btn-secondary" onclick="refreshModemStatus()" title="刷新" style="border-color: var(--accent); color: var(--accent); padding: 6px 10px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -1149,7 +1172,7 @@
                   <path d="M19 2H10L4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z" />
                   <path d="M12 8h2v4h-2V8ZM8 12h2v4H8v-4Z" />
                 </svg>
-                <div class="info-label">SIM 状态</div>
+                <div class="info-label" data-i18n="label_sim">SIM 状态</div>
               </div>
               <div class="sim-slot-switch" id="simSlotSwitch" onclick="toggleSimSlotDropdown()">
                 <span id="simSlot">SIM 1</span>
@@ -1168,7 +1191,7 @@
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
                 <path d="m9 11 2 2 4-4" />
               </svg>
-              <div class="info-label">注册状态</div>
+              <div class="info-label" data-i18n="label_reg">注册状态</div>
             </div>
             <div class="info-value muted" id="regStatus">--</div>
           </div>
@@ -1179,7 +1202,7 @@
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 <line x1="8" y1="16" x2="16" y2="8" />
               </svg>
-              <div class="info-label">连接状态</div>
+              <div class="info-label" data-i18n="label_conn_status">连接状态</div>
             </div>
             <div class="info-value muted" id="connStatus">--</div>
           </div>
@@ -1192,7 +1215,7 @@
                 <line x1="14" y1="9" x2="14" y2="15" />
                 <line x1="18" y1="9" x2="18" y2="15" />
               </svg>
-              <div class="info-label">IMEI</div>
+              <div class="info-label" data-i18n="label_imei">IMEI</div>
             </div>
             <div class="info-value muted" id="imei" style="font-size:12px;">--</div>
           </div>
@@ -1203,7 +1226,7 @@
                 <line x1="2" y1="10" x2="22" y2="10" />
                 <line x1="6" y1="15" x2="10" y2="15" />
               </svg>
-              <div class="info-label">ICCID</div>
+              <div class="info-label" data-i18n="label_iccid">ICCID</div>
             </div>
             <div class="info-value muted" id="iccid" style="font-size:11px;letter-spacing:0.5px;">--</div>
           </div>
@@ -1213,7 +1236,7 @@
                 <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                 <line x1="4" y1="22" x2="4" y2="15" />
               </svg>
-              <div class="info-label">运营商</div>
+              <div class="info-label" data-i18n="label_operator">运营商</div>
             </div>
             <div class="info-value muted" id="operator">--</div>
           </div>
@@ -1222,7 +1245,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
-              <div class="info-label">网络类型</div>
+              <div class="info-label" data-i18n="label_net_type">网络类型</div>
             </div>
             <div class="info-value muted" id="networkType">--</div>
           </div>
@@ -1233,7 +1256,7 @@
                 <circle cx="12" cy="12" r="6" />
                 <circle cx="12" cy="12" r="2" />
               </svg>
-              <div class="info-label">PCI</div>
+              <div class="info-label" data-i18n="label_pci">PCI</div>
             </div>
             <div class="info-value muted" id="pci">--</div>
           </div>
@@ -1243,7 +1266,7 @@
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                 <circle cx="12" cy="10" r="3" />
               </svg>
-              <div class="info-label">Cell ID</div>
+              <div class="info-label" data-i18n="label_cell_id">Cell ID</div>
             </div>
             <div class="info-value muted" id="cellid">--</div>
           </div>
@@ -1252,7 +1275,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 12h3l3-9 6 18 3-9h3" />
               </svg>
-              <div class="info-label">ARFCN（频点）</div>
+              <div class="info-label" data-i18n="label_arfcn">ARFCN（频点）</div>
             </div>
             <div class="info-value muted" id="arfcn">--</div>
           </div>
@@ -1263,7 +1286,7 @@
                 <path d="m19 7 5 5-5 5" />
                 <path d="M2 12h20" />
               </svg>
-              <div class="info-label">频宽</div>
+              <div class="info-label" data-i18n="label_bandwidth">频宽</div>
             </div>
             <div class="info-value muted" id="bandwidth">--</div>
           </div>
@@ -1275,7 +1298,7 @@
                 <line x1="14" y1="20" x2="14" y2="8" />
                 <line x1="19" y1="20" x2="19" y2="4" />
               </svg>
-              <div class="info-label">RSRP</div>
+              <div class="info-label" data-i18n="label_rsrp">RSRP</div>
             </div>
             <div class="info-value muted" id="rsrp">--</div>
           </div>
@@ -1286,7 +1309,7 @@
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <div class="info-label">RSRQ</div>
+              <div class="info-label" data-i18n="label_rsrq">RSRQ</div>
             </div>
             <div class="info-value muted" id="rsrq">--</div>
           </div>
@@ -1295,7 +1318,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
               </svg>
-              <div class="info-label">SINR</div>
+              <div class="info-label" data-i18n="label_sinr">SINR</div>
             </div>
             <div class="info-value muted" id="sinr">--</div>
           </div>
@@ -1306,7 +1329,7 @@
                 <polyline points="16 12 12 8 8 12" />
                 <line x1="12" y1="16" x2="12" y2="8" />
               </svg>
-              <div class="info-label">TX Power</div>
+              <div class="info-label" data-i18n="label_tx_power">TX Power</div>
             </div>
             <div class="info-value muted" id="txPower">--</div>
           </div>
@@ -1317,7 +1340,7 @@
                 <polyline points="8 12 12 16 16 12" />
                 <line x1="12" y1="8" x2="12" y2="16" />
               </svg>
-              <div class="info-label">RX Level</div>
+              <div class="info-label" data-i18n="label_rx_level">RX Level</div>
             </div>
             <div class="info-value muted" id="rxLevel">--</div>
           </div>
@@ -1329,7 +1352,7 @@
                 <path d="M12 12h-4" />
                 <circle cx="12" cy="12" r="1.5" />
               </svg>
-              <div class="info-label">CQI</div>
+              <div class="info-label" data-i18n="label_cqi">CQI</div>
             </div>
             <div class="info-value muted" id="cqi">--</div>
           </div>
@@ -1346,7 +1369,7 @@
                 <line x1="9" y1="8" x2="15" y2="8" />
                 <line x1="17" y1="16" x2="23" y2="16" />
               </svg>
-              <div class="info-label">SCS</div>
+              <div class="info-label" data-i18n="label_scs">SCS</div>
             </div>
             <div class="info-value muted" id="scs">--</div>
           </div>
@@ -1354,14 +1377,14 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">天线信号</div>
+        <div class="panel-title" data-i18n="panel_antenna">天线信号</div>
         <div class="info-grid">
           <div class="info-item">
             <div class="info-header">
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M17 5H7M15 9H9" />
               </svg>
-              <div class="info-label">ANT 0</div>
+              <div class="info-label" data-i18n="label_ant0">ANT 0</div>
             </div>
             <div class="info-value muted" id="ant0">--</div>
           </div>
@@ -1370,7 +1393,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M17 5H7M15 9H9" />
               </svg>
-              <div class="info-label">ANT 1</div>
+              <div class="info-label" data-i18n="label_ant1">ANT 1</div>
             </div>
             <div class="info-value muted" id="ant1">--</div>
           </div>
@@ -1379,7 +1402,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M17 5H7M15 9H9" />
               </svg>
-              <div class="info-label">ANT 2</div>
+              <div class="info-label" data-i18n="label_ant2">ANT 2</div>
             </div>
             <div class="info-value muted" id="ant2">--</div>
           </div>
@@ -1388,7 +1411,7 @@
               <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 2v20M17 5H7M15 9H9" />
               </svg>
-              <div class="info-label">ANT 3</div>
+              <div class="info-label" data-i18n="label_ant3">ANT 3</div>
             </div>
             <div class="info-value muted" id="ant3">--</div>
           </div>
@@ -1396,7 +1419,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">流量统计</div>
+        <div class="panel-title" data-i18n="panel_traffic">流量统计</div>
         <div class="info-grid">
           <div class="info-item">
             <div class="info-header">
@@ -1405,7 +1428,7 @@
                 <polyline points="5 12 12 5 19 12" />
                 <line x1="5" y1="19" x2="19" y2="19" />
               </svg>
-              <div class="info-label">签约上行带宽</div>
+              <div class="info-label" data-i18n="label_ul_bw">签约上行带宽</div>
             </div>
             <div class="info-value muted" id="ulBandwidth">--</div>
           </div>
@@ -1416,7 +1439,7 @@
                 <polyline points="19 12 12 19 5 12" />
                 <line x1="5" y1="5" x2="19" y2="5" />
               </svg>
-              <div class="info-label">签约下行带宽</div>
+              <div class="info-label" data-i18n="label_dl_bw">签约下行带宽</div>
             </div>
             <div class="info-value muted" id="dlBandwidth">--</div>
           </div>
@@ -1426,7 +1449,7 @@
                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
                 <polyline points="17 6 23 6 23 12" />
               </svg>
-              <div class="info-label">上行流量</div>
+              <div class="info-label" data-i18n="label_ul_traffic">上行流量</div>
             </div>
             <div class="info-value muted" id="ulTraffic">--</div>
           </div>
@@ -1436,7 +1459,7 @@
                 <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
                 <polyline points="17 18 23 18 23 12" />
               </svg>
-              <div class="info-label">下行流量</div>
+              <div class="info-label" data-i18n="label_dl_traffic">下行流量</div>
             </div>
             <div class="info-value muted" id="dlTraffic">--</div>
           </div>
@@ -1452,44 +1475,44 @@
       <div class="panel" style="flex:1;">
         <!-- 顶部 Tab 栏 -->
         <div class="tab-bar">
-          <button class="tab-btn active" onclick="switchCellularTab('apn', this)">APN 配置</button>
-          <button class="tab-btn" onclick="switchCellularTab('netlock', this)">网络配置</button>
-          <button class="tab-btn" onclick="switchCellularTab('celllock', this)">小区 / 频点锁定</button>
-          <button class="tab-btn" onclick="switchCellularTab('neighbor', this)">邻区信息</button>
-          <button class="tab-btn" onclick="switchCellularTab('5glan', this)">5GLAN</button>
+          <button class="tab-btn active" onclick="switchCellularTab('apn', this)" data-i18n="tab_apn">APN 配置</button>
+          <button class="tab-btn" onclick="switchCellularTab('netlock', this)" data-i18n="tab_network">网络配置</button>
+          <button class="tab-btn" onclick="switchCellularTab('celllock', this)" data-i18n="tab_lock">小区 / 频点锁定</button>
+          <button class="tab-btn" onclick="switchCellularTab('neighbor', this)" data-i18n="tab_neighbor">邻区信息</button>
+          <button class="tab-btn" onclick="switchCellularTab('5glan', this)" data-i18n="tab_5glan">5GLAN</button>
         </div>
 
         <!-- ─ Tab 1: APN 配置 ─ -->
         <div class="tab-panel active" id="ctab-apn">
           <div class="apn-list" id="apnList"></div>
-          <button class="btn btn-primary btn-sm" onclick="openApnModal()">新增 APN</button>
+          <button class="btn btn-primary btn-sm" onclick="openApnModal()" data-i18n="btn_add_apn">新增 APN</button>
         </div>
 
         <!-- ─ Tab 2: 网络锁定 ─ -->
         <div class="tab-panel" id="ctab-netlock">
           <div class="panel">
             <div class="panel-header">
-              <div class="panel-title">首选网络</div>
-              <button class="btn btn-primary btn-sm" onclick="applyPreferredNetwork()">保存</button>
+              <div class="panel-title" data-i18n="panel_pref_net">首选网络</div>
+              <button class="btn btn-primary btn-sm" onclick="applyPreferredNetwork()" data-i18n="btn_save">保存</button>
             </div>
             <div class="form-row">
               <select id="preferredNetwork" class="conn-select" style="width:180px;">
-                <option value="auto">自动</option>
-                <option value="nr5g">5G (SA+NSA)</option>
-                <option value="5gsa">仅 5G SA</option>
-                <option value="nrNsa">仅 NR NSA</option>
-                <option value="lte">仅 LTE</option>
-                <option value="wcdma">仅 WCDMA</option>
+                <option value="auto" data-i18n="opt_auto">自动</option>
+                <option value="nr5g" data-i18n="opt_5g_sa_nsa">5G (SA+NSA)</option>
+                <option value="5gsa" data-i18n="opt_5g_sa_only">仅 5G SA</option>
+                <option value="nrNsa" data-i18n="opt_nr_nsa">仅 NR NSA</option>
+                <option value="lte" data-i18n="opt_lte_only">仅 LTE</option>
+                <option value="wcdma" data-i18n="opt_wcdma">仅 WCDMA</option>
               </select>
             </div>
           </div>
 
           <div class="panel">
             <div class="panel-header">
-              <div class="panel-title">频段设置</div>
+              <div class="panel-title" data-i18n="panel_band">频段设置</div>
               <div style="display:flex;gap:8px;">
-                <button class="btn btn-primary btn-sm" onclick="applyBandLock()">保存</button>
-                <button class="btn btn-secondary btn-sm" onclick="resetBandLock()">重置</button>
+                <button class="btn btn-primary btn-sm" onclick="applyBandLock()" data-i18n="btn_save">保存</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetBandLock()" data-i18n="btn_reset">重置</button>
               </div>
             </div>
             <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">LTE</div>
@@ -1500,19 +1523,19 @@
 
           <div class="panel">
             <div class="panel-header">
-              <div class="panel-title">PLMN 锁定</div>
+              <div class="panel-title" data-i18n="panel_plmn">PLMN 锁定</div>
               <div style="display:flex;gap:8px;">
-                <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()">锁定</button>
-                <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()">解锁</button>
+                <button class="btn btn-secondary btn-sm" onclick="applyOperatorLock()" data-i18n="btn_lock">锁定</button>
+                <button class="btn btn-secondary btn-sm" onclick="clearOperatorLock()" data-i18n="btn_unlock">解锁</button>
               </div>
             </div>
             <div class="form-row">
               <div class="form-group narrow">
-                <label>MCC</label>
+                <label data-i18n="label_mcc">MCC</label>
                 <input type="text" id="lockMcc" placeholder="460" maxlength="3">
               </div>
               <div class="form-group narrow">
-                <label>MNC</label>
+                <label data-i18n="label_mnc">MNC</label>
                 <input type="text" id="lockMnc" placeholder="00" maxlength="3">
               </div>
             </div>
@@ -1521,38 +1544,38 @@
 
         <!-- ─ Tab 3: 小区 / 频点锁定 ─ -->
         <div class="tab-panel" id="ctab-celllock">
-          <div class="lock-quota" id="lockQuota">当前锁定：无</div>
+          <div class="lock-quota" id="lockQuota" data-i18n="lock_none">当前锁定：无</div>
           <div class="lock-list" id="lockList"></div>
 
           <div style="border-top:1px solid var(--border-color);padding-top:14px;">
             <div class="form-row">
               <div class="form-group">
-                <label>频点（EARFCN / NR-ARFCN）</label>
-                <input type="text" id="lockArfcn" placeholder="如 500300">
+                <label data-i18n="label_arfcn_input">频点（EARFCN / NR-ARFCN）</label>
+                <input type="text" id="lockArfcn" data-i18n-ph="ph_arfcn" placeholder="如 500300">
               </div>
               <div class="form-group">
-                <label>PCI（可选，不填则只锁频点）</label>
-                <input type="text" id="lockPci" placeholder="如 123">
+                <label data-i18n="label_pci_optional">PCI（可选，不填则只锁频点）</label>
+                <input type="text" id="lockPci" data-i18n-ph="ph_pci" placeholder="如 123">
               </div>
               <div class="form-group auto" style="display:flex;align-items:flex-end;">
-                <button class="btn btn-primary btn-sm" onclick="saveCellLock()">保存</button>
+                <button class="btn btn-primary btn-sm" onclick="saveCellLock()" data-i18n="btn_save_lock">保存</button>
               </div>
             </div>
           </div>
 
           <div style="margin-top:10px;">
-            <button class="btn btn-secondary btn-sm" onclick="clearCellLock()">清除锁定</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearCellLock()" data-i18n="btn_clear_lock">清除锁定</button>
           </div>
         </div>
 
         <!-- ─ Tab 4: 邻区信息 ─ -->
         <div class="tab-panel" id="ctab-neighbor">
           <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-            <button class="btn btn-secondary btn-sm" onclick="refreshNeighbors()">刷新</button>
+            <button class="btn btn-secondary btn-sm" onclick="refreshNeighbors()" data-i18n="btn_neighbor_refresh">刷新</button>
           </div>
           <div class="sub-tab-bar">
-            <button class="sub-tab-btn active" onclick="switchNeighborTab('lte', this)">LTE 邻区</button>
-            <button class="sub-tab-btn" onclick="switchNeighborTab('nr', this)">NR 邻区</button>
+            <button class="sub-tab-btn active" onclick="switchNeighborTab('lte', this)" data-i18n="subtab_lte">LTE 邻区</button>
+            <button class="sub-tab-btn" onclick="switchNeighborTab('nr', this)" data-i18n="subtab_nr">NR 邻区</button>
           </div>
           <div class="tab-panel active" id="tab-lte">
             <table class="data-table">
@@ -1560,7 +1583,7 @@
                 <tr><th>PCI</th><th>RSRP</th><th>RSRQ</th><th>EARFCN</th></tr>
               </thead>
               <tbody id="lteNeighborBody">
-                <tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+                <tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:20px" data-i18n="no_data">暂无数据</td></tr>
               </tbody>
             </table>
           </div>
@@ -1570,7 +1593,7 @@
                 <tr><th>PCI</th><th>RSRP</th><th>RSRQ</th><th>SINR</th><th>NR-ARFCN</th></tr>
               </thead>
               <tbody id="nrNeighborBody">
-                <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>
+                <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px" data-i18n="no_data">暂无数据</td></tr>
               </tbody>
             </table>
           </div>
@@ -1588,7 +1611,7 @@
     <!-- ══ AT 调试 ══ -->
     <div class="page" id="page-at">
       <div class="panel">
-        <div class="panel-title">AT 命令终端</div>
+        <div class="panel-title" data-i18n="panel_at">AT 命令终端</div>
         <div class="terminal-wrap">
           <div class="terminal" id="terminal">
             <div class="terminal-line info">› Modem Cat AT Terminal — 等待连接</div>
@@ -1605,9 +1628,9 @@
           </div>
           <div class="terminal-input">
             <span class="terminal-prompt">›</span>
-            <input type="text" id="atCommand" placeholder="输入 AT 命令..." onkeydown="handleAtKey(event)">
-            <button class="btn btn-primary" onclick="sendAtCommand()">发送</button>
-            <button class="btn btn-secondary" onclick="clearTerminal()">清除</button>
+            <input type="text" id="atCommand" data-i18n-ph="ph_at_cmd" placeholder="输入 AT 命令..." onkeydown="handleAtKey(event)">
+            <button class="btn btn-primary" onclick="sendAtCommand()" data-i18n="btn_send">发送</button>
+            <button class="btn btn-secondary" onclick="clearTerminal()" data-i18n="btn_clear_at">清除</button>
           </div>
         </div>
       </div>
@@ -1619,93 +1642,101 @@
 
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">模组信息</div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshHardwareInfo()">刷新</button>
+          <div class="panel-title" data-i18n="panel_hw_info">模组信息</div>
+          <button class="btn btn-secondary btn-sm" onclick="refreshHardwareInfo()" data-i18n="btn_hw_refresh">刷新</button>
         </div>
         <div class="info-grid-2">
           <div class="info-row">
-            <span class="info-label">模组型号</span>
+            <span class="info-label" data-i18n="label_model">模组型号</span>
             <span class="info-value" id="hwModel">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">生产厂家</span>
+            <span class="info-label" data-i18n="label_manufacturer">生产厂家</span>
             <span class="info-value" id="hwManufacturer">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">固件版本</span>
+            <span class="info-label" data-i18n="label_firmware">固件版本</span>
             <span class="info-value" id="hwFirmware">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">AP 基线版本</span>
+            <span class="info-label" data-i18n="label_ap_baseline">AP 基线版本</span>
             <span class="info-value" id="hwApBaseline">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">CP 基线版本</span>
+            <span class="info-label" data-i18n="label_cp_baseline">CP 基线版本</span>
             <span class="info-value" id="hwCpBaseline">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">SOC 温度</span>
+            <span class="info-label" data-i18n="label_soc_temp">SOC 温度</span>
             <span class="info-value" id="hwSocTemp">--</span>
           </div>
           <div class="info-row">
-            <span class="info-label">PA 温度</span>
+            <span class="info-label" data-i18n="label_pa_temp">PA 温度</span>
             <span class="info-value" id="hwPaTemp">--</span>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">功能开关</div>
+        <div class="panel-title" data-i18n="panel_toggles">功能开关</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
           <div class="toggle-row">
-            <div><div class="toggle-label">PCIe ↔ 以太网</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_pcie">PCIe ↔ 以太网</div></div>
             <label class="toggle-switch"><input type="checkbox" id="togglePcie" onchange="applyToggle('pcieMode', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">Ethernet</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_ethernet">Ethernet</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleEthernet" onchange="applyToggle('ethernet', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">ETH AT</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_eth_at">ETH AT</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleEthAt" onchange="applyToggle('ethAt', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">UART AT</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_uart_at">UART AT</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleUartAt" onchange="applyToggle('uartAt', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">ADB</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_adb">ADB</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleAdb" onchange="applyToggle('adb', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">Proxy ARP</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_proxy_arp">Proxy ARP</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleProxyArp" onchange="applyToggle('proxyArp', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">NAPT 端口转换</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_napt">NAPT 端口转换</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleNapt" onchange="applyToggle('napt', this.checked)"><span class="toggle-track"></span></label>
           </div>
           <div class="toggle-row">
-            <div><div class="toggle-label">动态子网掩码</div></div>
+            <div><div class="toggle-label" data-i18n="toggle_netmask">动态子网掩码</div></div>
             <label class="toggle-switch"><input type="checkbox" id="toggleNetmask" onchange="applyToggle('netmask', this.checked)"><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label" data-i18n="toggle_arm_log">ARM LOG</div><div class="toggle-desc" data-i18n="toggle_arm_log_desc">ARM 侧日志输出</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleArmLog" onchange="applyToggle('armLog', this.checked)"><span class="toggle-track"></span></label>
+          </div>
+          <div class="toggle-row">
+            <div><div class="toggle-label" data-i18n="toggle_cp_log">CP LOG</div><div class="toggle-desc" data-i18n="toggle_cp_log_desc">CP 侧日志输出</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleCpLog" onchange="applyToggle('cpLog', this.checked)"><span class="toggle-track"></span></label>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">USB 网卡模式</div>
+        <div class="panel-title" data-i18n="panel_usb_mode">USB 网卡模式</div>
         <div class="form-row">
           <div class="form-group" style="flex:0 0 auto;min-width:200px;">
-            <label>USB 网卡协议</label>
+            <label data-i18n="label_usb_proto">USB 网卡协议</label>
             <select id="usbNetMode">
-              <option value="1">ECM 网卡</option>
-              <option value="2">MBIM 移动宽带</option>
-              <option value="3">RNDIS 网卡</option>
-              <option value="5">NCM 网卡</option>
+              <option value="1" data-i18n="opt_ecm">ECM 网卡</option>
+              <option value="2" data-i18n="opt_mbim">MBIM 移动宽带</option>
+              <option value="3" data-i18n="opt_rndis">RNDIS 网卡</option>
+              <option value="5" data-i18n="opt_ncm">NCM 网卡</option>
             </select>
           </div>
           <div class="form-group auto" style="display:flex;align-items:flex-end;">
-            <button class="btn btn-danger btn-sm" onclick="saveUsbNetMode()">保存并重启</button>
+            <button class="btn btn-danger btn-sm" onclick="saveUsbNetMode()" data-i18n="btn_save_reboot">保存并重启</button>
           </div>
         </div>
       </div>
@@ -1718,49 +1749,49 @@
 
       <div class="panel">
         <div class="panel-header">
-          <div class="panel-title">IP 地址</div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshIpInfo()">刷新</button>
+          <div class="panel-title" data-i18n="panel_ip">IP 地址</div>
+          <button class="btn btn-secondary btn-sm" onclick="refreshIpInfo()" data-i18n="btn_ip_refresh">刷新</button>
         </div>
         <div class="info-grid-2">
           <div class="info-item">
-            <div class="info-label">IPv4 地址</div>
+            <div class="info-label" data-i18n="label_ipv4">IPv4 地址</div>
             <div class="info-value muted" id="ipv4Addr" style="font-size:13px;">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">IPv4 子网掩码</div>
+            <div class="info-label" data-i18n="label_ipv4_mask">IPv4 子网掩码</div>
             <div class="info-value muted" id="ipv4Mask" style="font-size:13px;">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">IPv4 网关</div>
+            <div class="info-label" data-i18n="label_ipv4_gw">IPv4 网关</div>
             <div class="info-value muted" id="ipv4Gw" style="font-size:13px;">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">IPv4 DNS</div>
+            <div class="info-label" data-i18n="label_ipv4_dns">IPv4 DNS</div>
             <div class="info-value muted" id="ipv4Dns" style="font-size:13px;">--</div>
           </div>
           <div class="info-item" style="grid-column: span 2;">
-            <div class="info-label">IPv6 地址</div>
+            <div class="info-label" data-i18n="label_ipv6">IPv6 地址</div>
             <div class="info-value muted" id="ipv6Addr" style="font-size:12px;letter-spacing:0.3px;">--</div>
           </div>
           <div class="info-item" style="grid-column: span 2;">
-            <div class="info-label">IPv6 DNS</div>
+            <div class="info-label" data-i18n="label_ipv6_dns">IPv6 DNS</div>
             <div class="info-value muted" id="ipv6Dns" style="font-size:12px;letter-spacing:0.3px;">--</div>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <div class="panel-title">MTU 配置</div>
+        <div class="panel-title" data-i18n="panel_mtu">MTU 配置</div>
         <div class="form-row">
           <div class="form-group narrow" style="min-width:160px;">
-            <label>MTU 值（字节）</label>
+            <label data-i18n="label_mtu">MTU 值（字节）</label>
             <input type="number" id="mtuValue" value="1500" min="576" max="9000" placeholder="1500">
           </div>
           <div class="form-group auto" style="display:flex;align-items:flex-end;">
-            <button class="btn btn-primary btn-sm" onclick="applyMtu()">应用</button>
+            <button class="btn btn-primary btn-sm" onclick="applyMtu()" data-i18n="btn_apply">应用</button>
           </div>
           <div class="form-group" style="display:flex;align-items:flex-end;padding-bottom:1px;">
-            <span style="font-size:11px;color:var(--text-muted);">推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）</span>
+            <span style="font-size:11px;color:var(--text-muted);" data-i18n="mtu_hint">推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）</span>
           </div>
         </div>
       </div>
@@ -1768,15 +1799,15 @@
       <div class="panel">
         <div class="form-row">
           <div class="form-group">
-            <label>DMZ 主机 IP 地址</label>
-            <input type="text" id="dmzHost" placeholder="如 192.168.1.100">
+            <label data-i18n="label_dmz">DMZ 主机 IP 地址</label>
+            <input type="text" id="dmzHost" data-i18n-ph="ph_dmz" placeholder="如 192.168.1.100">
           </div>
           <div class="form-group auto" style="display:flex;gap:8px;align-items:flex-end;">
-            <button class="btn btn-primary btn-sm" onclick="applyDmz()">应用</button>
-            <button class="btn btn-secondary btn-sm" onclick="clearDmz()">清除</button>
+            <button class="btn btn-primary btn-sm" onclick="applyDmz()" data-i18n="btn_apply_dmz">应用</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearDmz()" data-i18n="btn_clear_dmz">清除</button>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">DMZ 主机将接收所有未映射的入站流量，请确保主机具备必要的安全防护。</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;" data-i18n="dmz_warn">DMZ 主机将接收所有未映射的入站流量，请确保主机具备必要的安全防护。</div>
       </div>
 
     </div><!-- /page-ip -->
@@ -1798,6 +1829,7 @@
       bandConfig: null,
       connectedPort: '',
       idle: false,
+      lang: localStorage.getItem('lang') || 'zh',
     };
 
     // ── Data Connection ──
@@ -1868,6 +1900,174 @@
       localStorage.setItem('theme', theme);
       document.querySelector('.theme-toggle').textContent = state.isDark ? '☾' : '☀';
     }
+
+    // ── i18n ──
+    const LANG = {
+      zh: {
+        nav_status: '模组状态', nav_cellular: '蜂窝网络', nav_ip: 'IP 信息',
+        nav_at: 'AT 调试', nav_hardware: '系统信息',
+        btn_reboot: '重启模组', btn_factory: '恢复出厂',
+        status_modem: '模组', status_init: '初始化中...', status_data: '数据',
+        status_disconnected: '未连接', btn_data_connect: '连接',
+        panel_interface: '接口配置', label_conn_type: '连接类型',
+        opt_usb_serial: 'USB / TTL Serial', opt_eth_tcp: 'Ethernet TCP',
+        label_port_addr: '端口 / 地址', opt_select_port: '-- 选择端口 --',
+        btn_connect: '连接', panel_net_status: '网络状态',
+        label_sim: 'SIM 状态', label_reg: '注册状态', label_conn_status: '连接状态',
+        label_imei: 'IMEI', label_iccid: 'ICCID', label_operator: '运营商',
+        label_net_type: '网络类型', label_pci: 'PCI', label_cell_id: 'Cell ID',
+        label_arfcn: 'ARFCN（频点）', label_bandwidth: '频宽',
+        label_rsrp: 'RSRP', label_rsrq: 'RSRQ', label_sinr: 'SINR',
+        label_tx_power: 'TX Power', label_rx_level: 'RX Level',
+        label_cqi: 'CQI', label_scs: 'SCS',
+        panel_antenna: '天线信号', label_ant0: 'ANT 0', label_ant1: 'ANT 1',
+        label_ant2: 'ANT 2', label_ant3: 'ANT 3',
+        panel_traffic: '流量统计', label_ul_bw: '签约上行带宽',
+        label_dl_bw: '签约下行带宽', label_ul_traffic: '上行流量',
+        label_dl_traffic: '下行流量',
+        tab_apn: 'APN 配置', tab_network: '网络配置',
+        tab_lock: '小区 / 频点锁定', tab_neighbor: '邻区信息', tab_5glan: '5GLAN',
+        btn_add_apn: '新增 APN', panel_pref_net: '首选网络', btn_save: '保存',
+        opt_auto: '自动', opt_5g_sa_nsa: '5G (SA+NSA)', opt_5g_sa_only: '仅 5G SA',
+        opt_nr_nsa: '仅 NR NSA', opt_lte_only: '仅 LTE', opt_wcdma: '仅 WCDMA',
+        panel_band: '频段设置', btn_reset: '重置', panel_plmn: 'PLMN 锁定',
+        btn_lock: '锁定', btn_unlock: '解锁', label_mcc: 'MCC', label_mnc: 'MNC',
+        lock_none: '当前锁定：无',
+        label_arfcn_input: '频点（EARFCN / NR-ARFCN）',
+        label_pci_optional: 'PCI（可选，不填则只锁频点）',
+        btn_save_lock: '保存', btn_clear_lock: '清除锁定',
+        btn_neighbor_refresh: '刷新',
+        subtab_lte: 'LTE 邻区', subtab_nr: 'NR 邻区', no_data: '暂无数据',
+        panel_at: 'AT 命令终端', btn_send: '发送', btn_clear_at: '清除',
+        panel_hw_info: '模组信息', btn_hw_refresh: '刷新',
+        label_model: '模组型号', label_manufacturer: '生产厂家',
+        label_firmware: '固件版本', label_ap_baseline: 'AP 基线版本',
+        label_cp_baseline: 'CP 基线版本', label_soc_temp: 'SOC 温度',
+        label_pa_temp: 'PA 温度', panel_toggles: '功能开关',
+        toggle_pcie: 'PCIe ↔ 以太网', toggle_ethernet: 'Ethernet',
+        toggle_eth_at: 'ETH AT', toggle_uart_at: 'UART AT', toggle_adb: 'ADB',
+        toggle_proxy_arp: 'Proxy ARP', toggle_napt: 'NAPT 端口转换',
+        toggle_netmask: '动态子网掩码', toggle_arm_log: 'ARM LOG',
+        toggle_arm_log_desc: 'ARM 侧日志输出', toggle_cp_log: 'CP LOG',
+        toggle_cp_log_desc: 'CP 侧日志输出',
+        panel_usb_mode: 'USB 网卡模式', label_usb_proto: 'USB 网卡协议',
+        opt_ecm: 'ECM 网卡', opt_mbim: 'MBIM 移动宽带',
+        opt_rndis: 'RNDIS 网卡', opt_ncm: 'NCM 网卡',
+        btn_save_reboot: '保存并重启', panel_ip: 'IP 地址', btn_ip_refresh: '刷新',
+        label_ipv4: 'IPv4 地址', label_ipv4_mask: 'IPv4 子网掩码',
+        label_ipv4_gw: 'IPv4 网关', label_ipv4_dns: 'IPv4 DNS',
+        label_ipv6: 'IPv6 地址', label_ipv6_dns: 'IPv6 DNS',
+        panel_mtu: 'MTU 配置', label_mtu: 'MTU 值（字节）', btn_apply: '应用',
+        mtu_hint: '推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）',
+        label_dmz: 'DMZ 主机 IP 地址', btn_apply_dmz: '应用', btn_clear_dmz: '清除',
+        dmz_warn: 'DMZ 主机将接收所有未映射的入站流量，请确保主机具备必要的安全防护。',
+        label_apn_name: 'APN 名称', label_apn_user: '用户名', label_apn_pass: '密码',
+        label_auth_type: '鉴权类型', label_ip_type: 'IP 类型',
+        opt_ipv4v6: 'IPv4v6（双栈）', btn_cancel: '取消', btn_confirm_save: '确认保存',
+        about_desc: '5G Modem 调试桌面工具，支持远程/本地 AT 串口连接、实时信号监控、频段配置、网络状态查询等功能。',
+        about_os: '支持的操作系统',
+        os_linux_note: 'Linux 需预装：libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 等运行库。',
+        btn_ok: '确定',
+        ph_apn_name: 'cmnet', ph_arfcn: '如 500300', ph_at_cmd: '输入 AT 命令...',
+        ph_dmz: '如 192.168.1.100', ph_optional: '（可选）', ph_pci: '如 123',
+      },
+      en: {
+        nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Info',
+        nav_at: 'AT Debug', nav_hardware: 'System Info',
+        btn_reboot: 'Reboot', btn_factory: 'Factory Reset',
+        status_modem: 'Modem', status_init: 'Initializing...', status_data: 'Data',
+        status_disconnected: 'Disconnected', btn_data_connect: 'Connect',
+        panel_interface: 'Interface', label_conn_type: 'Connection Type',
+        opt_usb_serial: 'USB / TTL Serial', opt_eth_tcp: 'Ethernet TCP',
+        label_port_addr: 'Port / Address', opt_select_port: '-- Select Port --',
+        btn_connect: 'Connect', panel_net_status: 'Network Status',
+        label_sim: 'SIM Status', label_reg: 'Registration',
+        label_conn_status: 'Conn. Status', label_imei: 'IMEI', label_iccid: 'ICCID',
+        label_operator: 'Operator', label_net_type: 'Network Type',
+        label_pci: 'PCI', label_cell_id: 'Cell ID', label_arfcn: 'ARFCN',
+        label_bandwidth: 'Bandwidth', label_rsrp: 'RSRP', label_rsrq: 'RSRQ',
+        label_sinr: 'SINR', label_tx_power: 'TX Power', label_rx_level: 'RX Level',
+        label_cqi: 'CQI', label_scs: 'SCS',
+        panel_antenna: 'Antenna Signal', label_ant0: 'ANT 0', label_ant1: 'ANT 1',
+        label_ant2: 'ANT 2', label_ant3: 'ANT 3',
+        panel_traffic: 'Traffic Stats', label_ul_bw: 'UL Bandwidth',
+        label_dl_bw: 'DL Bandwidth', label_ul_traffic: 'Upload',
+        label_dl_traffic: 'Download',
+        tab_apn: 'APN Config', tab_network: 'Network Config',
+        tab_lock: 'Cell / Freq Lock', tab_neighbor: 'Neighbor Cells', tab_5glan: '5GLAN',
+        btn_add_apn: 'Add APN', panel_pref_net: 'Preferred Network', btn_save: 'Save',
+        opt_auto: 'Auto', opt_5g_sa_nsa: '5G (SA+NSA)', opt_5g_sa_only: '5G SA Only',
+        opt_nr_nsa: 'NR NSA Only', opt_lte_only: 'LTE Only', opt_wcdma: 'WCDMA Only',
+        panel_band: 'Band Settings', btn_reset: 'Reset', panel_plmn: 'PLMN Lock',
+        btn_lock: 'Lock', btn_unlock: 'Unlock', label_mcc: 'MCC', label_mnc: 'MNC',
+        lock_none: 'Current Lock: None',
+        label_arfcn_input: 'Frequency (EARFCN / NR-ARFCN)',
+        label_pci_optional: 'PCI (optional, freq-only if blank)',
+        btn_save_lock: 'Save', btn_clear_lock: 'Clear Lock',
+        btn_neighbor_refresh: 'Refresh',
+        subtab_lte: 'LTE Neighbors', subtab_nr: 'NR Neighbors', no_data: 'No Data',
+        panel_at: 'AT Terminal', btn_send: 'Send', btn_clear_at: 'Clear',
+        panel_hw_info: 'Module Info', btn_hw_refresh: 'Refresh',
+        label_model: 'Model', label_manufacturer: 'Manufacturer',
+        label_firmware: 'Firmware', label_ap_baseline: 'AP Baseline',
+        label_cp_baseline: 'CP Baseline', label_soc_temp: 'SOC Temp',
+        label_pa_temp: 'PA Temp', panel_toggles: 'Feature Toggles',
+        toggle_pcie: 'PCIe ↔ Ethernet', toggle_ethernet: 'Ethernet',
+        toggle_eth_at: 'ETH AT', toggle_uart_at: 'UART AT', toggle_adb: 'ADB',
+        toggle_proxy_arp: 'Proxy ARP', toggle_napt: 'NAPT',
+        toggle_netmask: 'Dynamic Netmask', toggle_arm_log: 'ARM LOG',
+        toggle_arm_log_desc: 'ARM side log output', toggle_cp_log: 'CP LOG',
+        toggle_cp_log_desc: 'CP side log output',
+        panel_usb_mode: 'USB Mode', label_usb_proto: 'USB Protocol',
+        opt_ecm: 'ECM', opt_mbim: 'MBIM', opt_rndis: 'RNDIS', opt_ncm: 'NCM',
+        btn_save_reboot: 'Save & Reboot', panel_ip: 'IP Address',
+        btn_ip_refresh: 'Refresh', label_ipv4: 'IPv4 Address',
+        label_ipv4_mask: 'IPv4 Netmask', label_ipv4_gw: 'IPv4 Gateway',
+        label_ipv4_dns: 'IPv4 DNS', label_ipv6: 'IPv6 Address',
+        label_ipv6_dns: 'IPv6 DNS', panel_mtu: 'MTU Config',
+        label_mtu: 'MTU (bytes)', btn_apply: 'Apply',
+        mtu_hint: 'Recommended: 1500 (Ethernet) / 1480 (PPPoE) / 1400 (VPN)',
+        label_dmz: 'DMZ Host IP', btn_apply_dmz: 'Apply', btn_clear_dmz: 'Clear',
+        dmz_warn: 'DMZ host receives all unmapped inbound traffic. Ensure it is properly secured.',
+        label_apn_name: 'APN Name', label_apn_user: 'Username',
+        label_apn_pass: 'Password', label_auth_type: 'Auth Type',
+        label_ip_type: 'IP Type', opt_ipv4v6: 'IPv4v6 (Dual Stack)',
+        btn_cancel: 'Cancel', btn_confirm_save: 'Save',
+        about_desc: '5G Modem debugging desktop app. Supports AT serial/TCP, real-time signal monitoring, band configuration, and network diagnostics.',
+        about_os: 'Supported OS',
+        os_linux_note: 'Linux requires: libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 and other runtime libraries.',
+        btn_ok: 'OK',
+        ph_apn_name: 'e.g. internet', ph_arfcn: 'e.g. 500300',
+        ph_at_cmd: 'Enter AT command...', ph_dmz: 'e.g. 192.168.1.100',
+        ph_optional: '(optional)', ph_pci: 'e.g. 123',
+      },
+    };
+
+    function t(key) {
+      return (LANG[state.lang] || LANG.zh)[key] || key;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const text = t(el.getAttribute('data-i18n'));
+        if (text) el.textContent = text;
+      });
+      document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const text = t(el.getAttribute('data-i18n-ph'));
+        if (text) el.placeholder = text;
+      });
+      const btn = document.getElementById('langBtn');
+      if (btn) btn.textContent = state.lang === 'zh' ? 'EN' : '中';
+      document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
+    }
+
+    function toggleLang() {
+      state.lang = state.lang === 'zh' ? 'en' : 'zh';
+      localStorage.setItem('lang', state.lang);
+      applyI18n();
+    }
+
+    applyI18n();
 
     // ── Loading overlay ──
     function showLoading(text, sub) {
@@ -2660,7 +2860,7 @@
       const plmn = mcc + mnc;
       try {
         showLoading('正在锁定PLMN...');
-        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678",2,"' + plmn + '"' });
+        await invoke('set_plmn_lock', { plmn });
         await flushAtLog();
         hideLoading();
         showToast('PLMN 锁定成功', 'ok');
@@ -2675,7 +2875,7 @@
     async function clearOperatorLock() {
       try {
         showLoading('正在解锁PLMN...');
-        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678"' });
+        await invoke('clear_plmn_lock');
         await flushAtLog();
         hideLoading();
         showToast('PLMN 已解锁', 'ok');
@@ -2691,74 +2891,28 @@
 
     // ── 小区 / 频点锁定 ──
 
-    function parseLockResponse(resp, prefix) {
-      const items = [];
-      const lines = resp.split('\n').map(l => l.trim().replace(/^\+/, ''));
-      for (const line of lines) {
-        if (!line.startsWith(prefix + ':')) continue;
-        const data = line.substring(prefix.length + 1).trim();
-        const parts = data.split(',').map(s => s.trim().replace(/"/g, ''));
-        // Response format: "common/5g",<enable>,<freq>[,<pci>]
-        // or: "common/5g",<freq> (when enable is omitted, freq is present = locked)
-        if (parts.length >= 2) {
-          let freq, pci;
-          if (parts.length >= 3 && (parts[1] === '0' || parts[1] === '1')) {
-            // format: "common/5g",1,freq[,pci]
-            if (parts[1] !== '1') continue;
-            freq = parts[2];
-            pci = parts.length >= 4 ? parts[3] : '';
-          } else {
-            // format: "common/5g",freq  (no enable flag, presence = locked)
-            freq = parts[1];
-            pci = parts.length >= 3 ? parts[2] : '';
-          }
-          if (freq && freq !== '0') {
-            items.push({ freq, pci });
-          }
-        }
-      }
-      return items;
-    }
-
     async function queryCellLock() {
       if (!state.connected) return;
       const quota = document.getElementById('lockQuota');
       const list = document.getElementById('lockList');
-      const allItems = [];
       try {
-        const lockResp = await invoke('send_raw_at', { command: 'AT+QNWLOCK="common/5g"' });
+        const items = await invoke('query_cell_lock');
         await flushAtLog();
-        addTerminalLine('[锁定查询] QNWLOCK => ' + lockResp.trim(), 'info');
-        const cellItems = parseLockResponse(lockResp, 'QNWLOCK');
-        for (const e of cellItems) {
-          allItems.push({ type: '小区', freq: e.freq, pci: e.pci });
+        addTerminalLine(`[锁定查询] 共 ${items.length} 条锁定`, 'info');
+        if (items.length > 0) {
+          quota.textContent = `已锁定 ${items.length} 条`;
+          list.innerHTML = items.map(e => `
+            <div class="lock-item">
+              <span class="lock-item-badge">${e.lockType === 'cell' ? '小区' : '频点'}</span>
+              <span class="lock-item-info">频点 ${e.arfcn}${e.pci ? '  PCI ' + e.pci : ''}</span>
+            </div>
+          `).join('');
+        } else {
+          quota.textContent = '当前锁定：无';
+          list.innerHTML = '';
         }
       } catch (e) {
-        addTerminalLine('[锁定查询] QNWLOCK 失败: ' + e, 'err');
-      }
-      try {
-        const freqResp = await invoke('send_raw_at', { command: 'AT+QNWLOCKFREQ="common/5g"' });
-        await flushAtLog();
-        addTerminalLine('[锁定查询] QNWLOCKFREQ => ' + freqResp.trim(), 'info');
-        const freqItems = parseLockResponse(freqResp, 'QNWLOCKFREQ');
-        for (const e of freqItems) {
-          allItems.push({ type: '频点', freq: e.freq, pci: '' });
-        }
-      } catch (e) {
-        addTerminalLine('[锁定查询] QNWLOCKFREQ 失败: ' + e, 'err');
-      }
-
-      if (allItems.length > 0) {
-        quota.textContent = `已锁定 ${allItems.length} 条`;
-        list.innerHTML = allItems.map(e => `
-          <div class="lock-item">
-            <span class="lock-item-badge">${e.type}</span>
-            <span class="lock-item-info">频点 ${e.freq}${e.pci ? '  PCI ' + e.pci : ''}</span>
-          </div>
-        `).join('');
-      } else {
-        quota.textContent = '当前锁定：无';
-        list.innerHTML = '';
+        addTerminalLine('[锁定查询] 失败: ' + e, 'err');
       }
     }
 
@@ -2769,22 +2923,11 @@
       if (!arfcn) { showToast('请输入频点', 'err'); return; }
       try {
         showLoading('正在保存锁定...');
-        let cmd;
-        if (pci) {
-          cmd = 'AT+QNWLOCK="common/5g",1,' + arfcn + ',' + pci;
-        } else {
-          cmd = 'AT+QNWLOCKFREQ="common/5g",1,' + arfcn;
-        }
-        const resp = await invoke('send_raw_at', { command: cmd });
+        await invoke('set_cell_lock', { arfcn, pci });
         await flushAtLog();
         hideLoading();
-        if (resp.trim().includes('OK')) {
-          showToast('锁定保存成功', 'ok');
-          addTerminalLine(`[锁定] ${pci ? '小区+频点' : '仅频点'} 频点=${arfcn}${pci ? ' PCI=' + pci : ''}`, 'ok');
-        } else {
-          showToast('锁定失败: 模组未返回OK', 'err');
-          addTerminalLine('[锁定] 失败: ' + resp.trim(), 'err');
-        }
+        showToast('锁定保存成功', 'ok');
+        addTerminalLine(`[锁定] ${pci ? '小区+频点' : '仅频点'} 频点=${arfcn}${pci ? ' PCI=' + pci : ''}`, 'ok');
         await queryCellLock();
       } catch (e) {
         hideLoading();
@@ -2797,10 +2940,7 @@
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       try {
         showLoading('正在清除锁定...');
-        // Clear both cell locks and frequency locks
-        await invoke('send_raw_at', { command: 'AT+QNWLOCK="common/5g",0' });
-        await flushAtLog();
-        await invoke('send_raw_at', { command: 'AT+QNWLOCKFREQ="common/5g",0' });
+        await invoke('clear_cell_lock');
         await flushAtLog();
         hideLoading();
         showToast('锁定已清除', 'ok');
@@ -2964,6 +3104,8 @@
         document.getElementById('toggleProxyArp').checked = t.proxyarp;
         document.getElementById('toggleNapt').checked = t.napt;
         document.getElementById('toggleNetmask').checked = t.netmask;
+        document.getElementById('toggleArmLog').checked = t.armLog ?? false;
+        document.getElementById('toggleCpLog').checked = t.cpLog ?? false;
       } catch (e) {
         console.warn('refreshFeatureToggles failed:', e);
       }
@@ -3039,7 +3181,7 @@
     }
 
     async function applyToggle(feature, enabled) {
-      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP', napt: 'NAPT 端口转换', netmask: '动态子网掩码' };
+      const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP', napt: 'NAPT 端口转换', netmask: '动态子网掩码', armLog: 'ARM LOG', cpLog: 'CP LOG' };
       if (!state.connected) return;
       try {
         await invoke('set_feature_toggle', { feature, enabled });
@@ -3048,7 +3190,7 @@
       } catch (e) {
         addTerminalLine(`[功能] ${labels[feature]} 设置失败: ${e}`, 'err');
         // Revert checkbox
-        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet', proxyArp: 'toggleProxyArp', napt: 'toggleNapt', netmask: 'toggleNetmask' };
+        const map = { adb: 'toggleAdb', ethAt: 'toggleEthAt', uartAt: 'toggleUartAt', pcieMode: 'togglePcie', ethernet: 'toggleEthernet', proxyArp: 'toggleProxyArp', napt: 'toggleNapt', netmask: 'toggleNetmask', armLog: 'toggleArmLog', cpLog: 'toggleCpLog' };
         const el = document.getElementById(map[feature]);
         if (el) el.checked = !enabled;
       }

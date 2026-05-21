@@ -22,7 +22,39 @@ fn send_and_check(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> 
     }
 }
 
-
+/// Parse `AT+QNWLOCK` or `AT+QNWLOCKFREQ` response.
+/// Returns (arfcn, pci) pairs for each active lock entry.
+fn parse_qnwlock_response(resp: &str, prefix: &str) -> Vec<(String, String)> {
+    let mut items = Vec::new();
+    for line in resp.lines() {
+        let line = line.trim().trim_start_matches('+');
+        let key = format!("{}:", prefix);
+        if !line.starts_with(&key) {
+            continue;
+        }
+        let data = line[key.len()..].trim();
+        let parts: Vec<&str> = data.split(',').map(|s| s.trim().trim_matches('"')).collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let (arfcn, pci) = if parts.len() >= 3 && (parts[1] == "0" || parts[1] == "1") {
+            // format: "common/5g",<enable>,<arfcn>[,<pci>]
+            if parts[1] != "1" { continue; }
+            let arfcn = parts[2].to_string();
+            let pci = parts.get(3).unwrap_or(&"").to_string();
+            (arfcn, pci)
+        } else {
+            // format: "common/5g",<arfcn>[,<pci>]  (presence = locked)
+            let arfcn = parts[1].to_string();
+            let pci = parts.get(2).unwrap_or(&"").to_string();
+            (arfcn, pci)
+        };
+        if !arfcn.is_empty() && arfcn != "0" {
+            items.push((arfcn, pci));
+        }
+    }
+    items
+}
 
 pub enum QuectelChip {
     Qualcomm,
@@ -452,7 +484,64 @@ impl ModemVendor for QuectelModem {
                     return Err(format!("Failed to set netmask: {}", resp));
                 }
             }
+            // UI-only stubs — AT command to be wired up later
+            "armLog" | "cpLog" => {}
             _ => return Err(format!("Unknown feature: {}", feat)),
+        }
+        Ok(())
+    }
+
+    fn query_cell_lock(&mut self, t: &mut dyn AtTransport) -> Result<Vec<CellLockEntry>, String> {
+        let mut entries = Vec::new();
+
+        if let Ok(resp) = t.send_at(r#"AT+QNWLOCK="common/5g""#) {
+            for (arfcn, pci) in parse_qnwlock_response(&resp, "QNWLOCK") {
+                entries.push(CellLockEntry { lock_type: "cell".to_string(), arfcn, pci });
+            }
+        }
+        if let Ok(resp) = t.send_at(r#"AT+QNWLOCKFREQ="common/5g""#) {
+            for (arfcn, _) in parse_qnwlock_response(&resp, "QNWLOCKFREQ") {
+                entries.push(CellLockEntry { lock_type: "freq".to_string(), arfcn, pci: String::new() });
+            }
+        }
+        Ok(entries)
+    }
+
+    fn set_cell_lock(&mut self, t: &mut dyn AtTransport, arfcn: &str, pci: &str) -> Result<(), String> {
+        let cmd = if !pci.is_empty() {
+            format!(r#"AT+QNWLOCK="common/5g",1,{},{}"#, arfcn, pci)
+        } else {
+            format!(r#"AT+QNWLOCKFREQ="common/5g",1,{}"#, arfcn)
+        };
+        let resp = t.send_at(&cmd)?;
+        if !is_ok(&resp) {
+            return Err(format!("Cell lock failed: {}", resp.trim()));
+        }
+        Ok(())
+    }
+
+    fn clear_cell_lock(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
+        let r1 = t.send_at(r#"AT+QNWLOCK="common/5g",0"#)?;
+        let r2 = t.send_at(r#"AT+QNWLOCKFREQ="common/5g",0"#)?;
+        if !is_ok(&r1) || !is_ok(&r2) {
+            return Err(format!("Failed to clear cell lock: {} / {}", r1.trim(), r2.trim()));
+        }
+        Ok(())
+    }
+
+    fn set_plmn_lock(&mut self, t: &mut dyn AtTransport, plmn: &str) -> Result<(), String> {
+        let cmd = format!(r#"AT+QSIMLOCK="PN","12345678",2,"{}""#, plmn);
+        let resp = t.send_at(&cmd)?;
+        if !is_ok(&resp) {
+            return Err(format!("PLMN lock failed: {}", resp.trim()));
+        }
+        Ok(())
+    }
+
+    fn clear_plmn_lock(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
+        let resp = t.send_at(r#"AT+QSIMLOCK="PN","12345678""#)?;
+        if !is_ok(&resp) {
+            return Err(format!("PLMN unlock failed: {}", resp.trim()));
         }
         Ok(())
     }

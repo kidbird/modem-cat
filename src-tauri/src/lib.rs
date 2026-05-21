@@ -14,7 +14,6 @@ pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
     pub data_cid: Arc<Mutex<i32>>,
-    pub active_cids: Arc<Mutex<Vec<i32>>>,
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
     /// Used by the USB monitor to know if the active port was unplugged.
     pub connected_port: Arc<Mutex<Option<String>>>,
@@ -31,7 +30,11 @@ struct LoggingTransport {
 
 impl AtTransport for LoggingTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        self.log.lock().unwrap().push(command.to_string());
+        let mut log = self.log.lock().unwrap();
+        if log.len() < 1000 {
+            log.push(command.to_string());
+        }
+        drop(log);
         self.inner.send_at(command)
     }
     fn close(&mut self) {
@@ -455,6 +458,7 @@ fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
     *t = None;
     *state.vendor.lock().unwrap() = None;
     *state.connected_port.lock().unwrap() = None;
+    *state.data_cid.lock().unwrap() = 1;
     Ok("Disconnected".to_string())
 }
 
@@ -800,6 +804,85 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
     .map_err(|e| format!("Task error: {}", e))?
 }
 
+#[tauri::command]
+async fn query_cell_lock(state: tauri::State<'_, AppState>) -> Result<Vec<CellLockEntry>, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_cell_lock(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn set_cell_lock(
+    arfcn: String,
+    pci: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_cell_lock(t, &arfcn, &pci)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.clear_cell_lock(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn set_plmn_lock(plmn: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_plmn_lock(t, &plmn)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn clear_plmn_lock(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.clear_plmn_lock(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
 /// Return all AT commands logged by internal operations since last call, then clear the log.
 #[tauri::command]
 fn pop_at_commands(state: tauri::State<'_, AppState>) -> Vec<String> {
@@ -1017,7 +1100,6 @@ pub fn run() {
             transport: Arc::new(Mutex::new(None)),
             vendor: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
-            active_cids: Arc::new(Mutex::new(Vec::new())),
             connected_port: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(Vec::new())),
         })
@@ -1116,6 +1198,12 @@ pub fn run() {
             set_sim_slot,
             send_raw_at,
             pop_at_commands,
+            // Cell lock / PLMN lock
+            query_cell_lock,
+            set_cell_lock,
+            clear_cell_lock,
+            set_plmn_lock,
+            clear_plmn_lock,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

@@ -5,46 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modem Cat v0.1.2</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --bg-primary: #1a1a1a;
-      --bg-secondary: #242424;
-      --bg-tertiary: #2d2d2d;
-      --border-color: #3d3d3d;
-      --text-primary: #ffffff;
-      --text-secondary: #f5f5f5;
-      --text-muted: #d8d8d8;
-      --accent: #f97316;
-      --accent-hover: #fb923c;
-      --success: #22c55e;
-      --error: #ef4444;
-      --warning: #f59e0b;
-      --danger: #dc2626;
-      --danger-hover: #ef4444;
+      --bg-primary: #0a0e1a;       /* Midnight blue background */
+      --bg-secondary: #101524;     /* Deep navy container bg */
+      --bg-tertiary: #171d30;      /* Card/input bg */
+      --border-color: #1e2945;     /* Tech blue border */
+      --border-hover: #38bdf8;     /* Cyber cyan border on focus/hover */
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;   /* Light gray-blue text */
+      --text-muted: #475569;
+      --accent: #f97316;           /* Neon orange accent */
+      --accent-hover: #ea580c;
+      --accent-glow: rgba(249, 115, 22, 0.25);
+      --success: #10b981;          /* Tech green */
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --error: #f43f5e;            /* Tech red/rose */
+      --warning: #f59e0b;          /* Tech amber */
+      --danger: #e11d48;           /* Danger red */
+      --danger-hover: #f43f5e;
+      --cyan: #06b6d4;             /* Cyber cyan */
     }
 
     [data-theme="light"] {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f5f5f5;
-      --bg-tertiary: #ebebeb;
-      --border-color: #d4d4d4;
-      --text-primary: #000000;
-      --text-secondary: #333333;
-      --text-muted: #666666;
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --border-color: #cbd5e1;
+      --border-hover: #0284c7;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
       --accent: #ea580c;
-      --accent-hover: #f97316;
+      --accent-hover: #c2410c;
+      --accent-glow: rgba(234, 88, 12, 0.15);
       --danger: #b91c1c;
       --danger-hover: #dc2626;
+      --cyan: #0891b2;
     }
 
     body {
-      font-family: -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Microsoft YaHei', 'Segoe UI', sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
       display: flex;
-      font-size: 14px;
+      font-size: 14.5px;
       line-height: 1.5;
       overflow: hidden;
     }
@@ -56,8 +65,8 @@
 
     /* ── Sidebar ── */
     .sidebar {
-      width: 200px;
-      min-width: 200px;
+      width: 210px;
+      min-width: 210px;
       background: var(--bg-secondary);
       border-right: 1px solid var(--border-color);
       display: flex;
@@ -65,125 +74,164 @@
     }
 
     .logo {
-      padding: 14px 16px;
-      font-size: 14px;
-      font-weight: 600;
+      padding: 16px 20px;
+      font-size: 15px;
+      font-weight: 700;
       color: var(--text-primary);
       border-bottom: 1px solid var(--border-color);
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-shrink: 0;
+      letter-spacing: 0.5px;
     }
 
-    .logo-text { display: flex; align-items: center; gap: 8px; }
-    .logo-icon { color: var(--accent); display: flex; align-items: center; }
+    .logo-text { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { color: var(--accent); display: flex; align-items: center; filter: drop-shadow(0 0 4px var(--accent-glow)); }
 
     .theme-toggle {
-      background: none;
+      background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 3px 7px;
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-secondary);
-      font-family: inherit;
-      transition: all 0.12s;
+      transition: all 0.15s ease;
     }
-    .theme-toggle:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .theme-toggle:hover {
+      background: var(--bg-primary);
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
 
-    .nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+    .nav { flex: 1; padding: 12px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 
     .nav-item {
-      padding: 9px 16px;
+      padding: 10px 14px;
       cursor: pointer;
       color: var(--text-secondary);
-      font-size: 13px;
+      font-size: 13.5px;
+      font-weight: 500;
       display: flex;
       align-items: center;
       gap: 10px;
-      border-left: 2px solid transparent;
-      transition: background 0.12s, color 0.12s;
+      border-radius: 8px;
+      transition: all 0.15s ease;
       user-select: none;
     }
     .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-    .nav-item.active { background: var(--bg-tertiary); color: var(--accent); border-left-color: var(--accent); }
-    .nav-item.disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.45; }
+    .nav-item.active {
+      background: var(--bg-tertiary);
+      color: var(--accent);
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .nav-item.disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.4; }
     .nav-item.disabled:hover { background: none; color: var(--text-muted); }
 
-    .nav-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
+    .nav-icon {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2px;
+      display: inline-block;
+      color: var(--text-secondary);
+      transition: color 0.12s;
+    }
+    .nav-item.active .nav-icon {
+      color: var(--accent);
+      filter: drop-shadow(0 0 3px var(--accent-glow));
+    }
 
     .status-bar {
       border-top: 1px solid var(--border-color);
-      padding: 10px 14px;
+      padding: 12px 16px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 8px;
       flex-shrink: 0;
+      background: rgba(0,0,0,0.08);
     }
     .status-row {
       display: flex;
       align-items: center;
-      gap: 7px;
-      height: 22px;
+      gap: 8px;
+      height: 24px;
     }
     .status-icon {
-      width: 14px; height: 14px;
+      width: 16px; height: 16px;
       flex-shrink: 0;
-      color: var(--text-muted);
-      transition: color 0.3s, filter 0.3s;
+      color: var(--text-secondary);
+      transition: all 0.3s;
       display: flex; align-items: center; justify-content: center;
     }
-    .status-icon svg { width: 14px; height: 14px; }
-    .status-icon.connected { color: var(--success); filter: drop-shadow(0 0 3px var(--success)); }
-    .status-icon.data-on   { color: var(--accent);  filter: drop-shadow(0 0 3px var(--accent)); }
+    .status-icon svg { width: 15px; height: 15px; }
+    .status-icon.connected { color: var(--success); filter: drop-shadow(0 0 4px var(--success-glow)); }
+    .status-icon.data-on   { color: var(--accent);  filter: drop-shadow(0 0 4px var(--accent-glow)); }
     .status-key {
-      font-size: 10px;
-      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
       flex-shrink: 0;
-      width: 26px;
+      width: 32px;
     }
     .status-val {
-      font-size: 11px;
-      color: var(--text-secondary);
+      font-size: 12px;
+      color: var(--text-primary);
       flex: 1;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .status-val.ok { color: var(--success); }
-    .status-val.active { color: var(--accent); }
+    .status-val.ok { color: var(--success); font-weight: 600; }
+    .status-val.active { color: var(--accent); font-weight: 600; }
     .data-connect-btn {
       margin-left: auto;
-      padding: 2px 8px;
-      font-size: 10px;
-      border-radius: 3px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
       border: 1px solid var(--border-color);
       background: var(--bg-tertiary);
-      color: var(--text-secondary);
+      color: var(--text-primary);
       cursor: pointer;
       font-family: inherit;
       flex-shrink: 0;
-      transition: all 0.12s;
+      transition: all 0.15s ease;
     }
-    .data-connect-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .data-connect-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
     .data-connect-btn.active { border-color: var(--accent); color: var(--accent); }
     .data-connect-btn.connecting { opacity: 0.6; cursor: not-allowed; }
-    .data-connect-btn.connected { background: var(--success); border-color: var(--success); color: #fff; }
+    .data-connect-btn.connected {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+      box-shadow: 0 0 8px var(--success-glow);
+    }
 
     /* ── Main content ── */
     .main {
       flex: 1;
       overflow-y: auto;
-      padding: 6px 16px;
+      padding: 16px 20px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
       min-width: 0;
       min-height: 0;
     }
 
-    .page { display: none; flex-direction: column; gap: 14px; }
+    .page { display: none; flex-direction: column; gap: 16px; }
     .page.active { display: flex; }
     #page-at { flex: 1; }
 
@@ -191,154 +239,251 @@
     .panel {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 16px;
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+      transition: border-color 0.15s ease;
+    }
+    .panel:hover {
+      border-color: rgba(56, 189, 248, 0.15);
     }
 
     .panel-title {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 14px;
+      letter-spacing: 0.8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .panel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
     .panel-header .panel-title { margin-bottom: 0; }
 
     /* ── Forms ── */
     .form-row {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       align-items: flex-end;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
       flex-wrap: wrap;
     }
     .form-row:last-child { margin-bottom: 0; }
 
     .form-group { flex: 1; min-width: 120px; }
-    .form-group.narrow { flex: 0 0 auto; min-width: 80px; }
+    .form-group.narrow { flex: 0 0 auto; min-width: 85px; }
     .form-group.auto { flex: 0 0 auto; }
 
     .form-group label {
       display: block;
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      letter-spacing: 0.3px;
     }
 
     .form-group input,
     .form-group select {
       width: 100%;
-      height: 30px;
-      padding: 0 8px;
+      height: 34px;
+      padding: 0 10px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 4px;
+      border-radius: 6px;
       color: var(--text-primary);
-      font-size: 12px;
+      font-size: 13px;
       font-family: inherit;
-      transition: border-color 0.12s;
+      transition: all 0.15s ease;
       box-sizing: border-box;
       -webkit-appearance: none;
       appearance: none;
       cursor: pointer;
     }
     .form-group select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6' fill='%23999'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 8px center;
-      padding-right: 26px;
+      background-position: right 10px center;
+      padding-right: 28px;
     }
     .form-group select option {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
       font-family: inherit;
-      font-size: 12px;
+      font-size: 13px;
     }
-    .conn-select { height: 34px !important; font-size: 13px !important; font-family: inherit !important; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); -webkit-appearance: none; appearance: none; cursor: pointer; box-sizing: border-box; padding: 0 26px 0 8px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6' fill='%23999'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+    .conn-select {
+      height: 34px !important;
+      font-size: 13px !important;
+      font-family: inherit !important;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-primary);
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      box-sizing: border-box;
+      padding: 0 28px 0 10px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      transition: all 0.15s ease;
+    }
+    .conn-select:focus,
     .form-group input:focus,
-    .form-group select:focus { outline: none; border-color: var(--accent); }
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--border-hover);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.15);
+    }
 
     /* ── Buttons ── */
     .btn {
-      padding: 6px 14px;
-      border-radius: 4px;
+      padding: 7px 16px;
+      border-radius: 6px;
       border: 1px solid var(--border-color);
       cursor: pointer;
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 600;
       font-family: inherit;
       white-space: nowrap;
-      transition: all 0.12s;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-    .btn-secondary { background: var(--bg-tertiary); color: var(--text-secondary); }
-    .btn-secondary:hover { background: var(--bg-primary); color: var(--text-primary); }
-    .btn-danger { background: transparent; border-color: var(--accent); color: var(--accent); }
-    .btn-danger:hover { background: var(--accent); border-color: var(--accent-hover); color: #fff; }
-    .btn-sm { padding: 4px 10px; font-size: 11px; }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 6px var(--accent-glow);
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border-color: var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-primary);
+      border-color: var(--text-muted);
+    }
+    .btn-danger {
+      background: transparent;
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .btn-danger:hover {
+      background: var(--accent);
+      border-color: var(--accent-hover);
+      color: #fff;
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+    .btn-sm { padding: 5px 12px; font-size: 11.5px; }
 
     /* ── Info grid ── */
     .info-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
+      gap: 8px;
     }
     .info-grid-2 {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      gap: 8px;
     }
 
     .info-item {
       background: var(--bg-tertiary);
       padding: 10px 12px;
-      border-radius: 4px;
+      border-radius: 8px;
       border: 1px solid var(--border-color);
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 64px;
+    }
+    .info-item:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px var(--accent-glow);
+      transform: translateY(-1px);
+    }
+    .info-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .info-icon {
+      width: 13px;
+      height: 13px;
+      stroke-width: 2px;
+      color: var(--accent);
+      opacity: 0.85;
+      flex-shrink: 0;
     }
     .info-label {
-      font-size: 11px;
-      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
     }
     .info-value {
-      font-size: 13px;
-      font-weight: 400;
-      margin-top: 4px;
-      color: var(--text-secondary);
-      text-align: center;
+      font-size: 14.5px;
+      font-weight: 700;
+      margin-top: 2px;
+      color: var(--text-primary);
+      text-align: left;
+      font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+      letter-spacing: 0.2px;
     }
     .info-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       background: var(--bg-tertiary);
-      padding: 8px 12px;
-      border-radius: 4px;
+      padding: 10px 14px;
+      border-radius: 8px;
       border: 1px solid var(--border-color);
+      transition: all 0.15s ease;
+    }
+    .info-row:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px var(--accent-glow);
     }
     .info-row .info-label {
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       text-transform: none;
       letter-spacing: 0;
     }
     .info-row .info-value {
-      font-size: 13px;
-      font-weight: 400;
+      font-size: 13.5px;
+      font-weight: 600;
       margin-top: 0;
       color: var(--text-primary);
+      text-align: right;
     }
     .info-value.good { color: var(--success); }
     .info-value.warn { color: var(--warning); }
-    .info-value.muted { color: var(--text-muted); }
-    .info-value.data { color: var(--accent); font-weight: 600; }
+    .info-value.muted { color: var(--text-secondary); opacity: 0.6; }
+    .info-value.data { color: var(--accent); font-weight: 700; }
 
     /* ── SIM Slot Selector ── */
     .sim-card-item { position: relative; }
@@ -346,22 +491,24 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      width: 100%;
     }
     .sim-slot-switch {
       position: relative;
       display: inline-flex;
       align-items: center;
-      gap: 3px;
-      padding: 2px 8px;
+      gap: 4px;
+      padding: 2px 6px;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: 10px;
+      font-weight: 600;
       color: var(--accent);
       cursor: pointer;
       user-select: none;
       border: 1px solid var(--border-color);
-      transition: background 0.15s;
+      transition: all 0.15s ease;
     }
-    .sim-slot-switch:hover { background: var(--border-color); }
+    .sim-slot-switch:hover { background: var(--bg-primary); border-color: var(--accent); }
     .sim-slot-switch svg { transition: transform 0.2s; }
     .sim-slot-switch.open svg { transform: rotate(180deg); }
     .sim-slot-dropdown {
@@ -372,23 +519,23 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
       border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
       z-index: 100;
       min-width: 90px;
       overflow: hidden;
     }
     .sim-slot-switch.open .sim-slot-dropdown { display: block; }
     .sim-slot-option {
-      padding: 7px 12px;
-      font-size: 12px;
+      padding: 8px 12px;
+      font-size: 11.5px;
       color: var(--text-secondary);
       cursor: pointer;
-      transition: background 0.1s;
+      transition: all 0.1s ease;
     }
-    .sim-slot-option:hover { background: var(--bg-tertiary); }
+    .sim-slot-option:hover { background: var(--bg-tertiary); color: var(--text-primary); }
     .sim-slot-option.active {
       color: var(--accent);
-      font-weight: 600;
+      font-weight: 700;
       position: relative;
     }
     .sim-slot-option.active::after {
@@ -404,60 +551,67 @@
       flex-direction: column;
     }
     .terminal {
-      background: var(--bg-primary);
+      background: #05070f;
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 10px;
+      border-radius: 8px;
+      padding: 14px;
       overflow-y: auto;
-      font-size: 12px;
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace;
-      height: 640px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+      height: 520px;
       min-height: 120px;
       resize: vertical;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
     }
-    .terminal-line { margin-bottom: 2px; line-height: 1.6; }
-    .terminal-line.cmd { color: var(--accent); }
-    .terminal-line.resp { color: var(--text-secondary); }
+    .terminal-line { margin-bottom: 4px; line-height: 1.6; }
+    .terminal-line.cmd { color: var(--accent); font-weight: 600; }
+    .terminal-line.resp { color: #e2e8f0; }
     .terminal-line.ok { color: var(--success); }
     .terminal-line.err { color: var(--error); }
-    .terminal-line.info { color: var(--text-muted); }
+    .terminal-line.info { color: var(--text-secondary); opacity: 0.6; }
 
     .shortcut-bar {
       display: flex;
       gap: 6px;
-      margin-top: 8px;
+      margin-top: 10px;
       flex-wrap: wrap;
     }
 
     .terminal-input {
       display: flex;
       gap: 8px;
-      margin-top: 8px;
+      margin-top: 10px;
       align-items: center;
     }
     .terminal-input input {
       flex: 1;
-      padding: 6px 10px;
+      padding: 8px 12px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 4px;
+      border-radius: 6px;
       color: var(--text-primary);
-      font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', 'Menlo', 'Monaco', monospace;
-      font-size: 12px;
-      transition: border-color 0.12s;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      transition: all 0.15s ease;
     }
-    .terminal-input input:focus { outline: none; border-color: var(--accent); }
-    .terminal-prompt { color: var(--accent); font-size: 14px; flex-shrink: 0; }
+    .terminal-input input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+    .terminal-prompt { color: var(--accent); font-size: 15px; font-weight: bold; flex-shrink: 0; }
 
     /* ── Tabs ── */
     .tab-bar {
       display: flex;
       border-bottom: 1px solid var(--border-color);
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      gap: 4px;
     }
     .tab-btn {
-      padding: 7px 16px;
-      font-size: 12px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
       font-family: inherit;
       background: none;
       border: none;
@@ -465,7 +619,7 @@
       cursor: pointer;
       color: var(--text-secondary);
       margin-bottom: -1px;
-      transition: color 0.12s;
+      transition: all 0.15s ease;
     }
     .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab-btn:hover:not(.active) { color: var(--text-primary); }
@@ -477,25 +631,25 @@
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      font-size: 13px;
     }
     .data-table th {
       text-align: left;
-      padding: 6px 10px;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-muted);
+      padding: 8px 12px;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.4px;
-      border-bottom: 1px solid var(--border-color);
+      letter-spacing: 0.6px;
+      border-bottom: 2px solid var(--border-color);
     }
     .data-table td {
-      padding: 7px 10px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--border-color);
-      color: var(--text-secondary);
+      color: var(--text-primary);
     }
     .data-table tr:last-child td { border-bottom: none; }
-    .data-table tr:hover td { background: var(--bg-tertiary); color: var(--text-primary); }
+    .data-table tr:hover td { background: var(--bg-tertiary); }
 
     /* ── Band grid ── */
     .band-grid {
@@ -507,39 +661,39 @@
     .band-chip {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      padding: 4px 9px;
+      gap: 6px;
+      padding: 5px 10px;
       border: 1px solid var(--border-color);
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
-      font-size: 11px;
-      color: var(--text-secondary);
+      font-size: 11.5px;
+      color: var(--text-primary);
       background: var(--bg-tertiary);
       user-select: none;
-      transition: all 0.12s;
+      transition: all 0.12s ease;
     }
     .band-chip input { display: none; }
-    .band-chip:hover { border-color: var(--text-muted); color: var(--text-primary); }
-    .band-chip.checked { border-color: var(--accent); color: var(--accent); background: var(--bg-primary); }
-    .band-chip.invalid { border-color: #e74c3c; color: #e74c3c; opacity: 0.7; }
-    .band-chip.invalid.checked { border-color: #e74c3c; color: #e74c3c; background: rgba(231,76,60,0.1); }
+    .band-chip:hover { border-color: var(--text-secondary); background: var(--bg-secondary); }
+    .band-chip.checked { border-color: var(--accent); color: var(--accent); background: rgba(249, 115, 22, 0.08); font-weight: 600; }
+    .band-chip.invalid { border-color: var(--error); color: var(--error); opacity: 0.7; }
+    .band-chip.invalid.checked { border-color: var(--error); color: var(--error); background: rgba(244, 63, 94, 0.08); }
 
     /* ── Toggle switch ── */
     .toggle-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 11px 0;
+      padding: 12px 0;
       border-bottom: 1px solid var(--border-color);
     }
     .toggle-row:last-child { border-bottom: none; }
-    .toggle-label { font-size: 13px; color: var(--text-primary); }
-    .toggle-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .toggle-label { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+    .toggle-desc { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
 
     .toggle-switch {
       position: relative;
-      width: 36px;
-      height: 20px;
+      width: 38px;
+      height: 22px;
       flex-shrink: 0;
     }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
@@ -547,18 +701,18 @@
       position: absolute;
       inset: 0;
       background: var(--border-color);
-      border-radius: 20px;
+      border-radius: 22px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
     }
     .toggle-track::after {
       content: '';
       position: absolute;
       left: 3px; top: 3px;
-      width: 14px; height: 14px;
+      width: 16px; height: 16px;
       background: #fff;
       border-radius: 50%;
-      transition: transform 0.2s;
+      transition: all 0.2s ease;
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
     .toggle-switch input:checked + .toggle-track { background: var(--accent); }
@@ -567,49 +721,52 @@
     /* ── Danger zone ── */
     .danger-zone {
       border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 14px 16px;
+      border-radius: 12px;
+      padding: 16px 20px;
       background: var(--bg-secondary);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     }
-    .danger-zone .panel-title { color: var(--text-muted); margin-bottom: 10px; }
+    .danger-zone .panel-title { color: var(--text-primary); margin-bottom: 12px; }
     .danger-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
     /* ── Section label ── */
     .section-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin: 16px 0 8px;
+      letter-spacing: 0.8px;
+      margin: 18px 0 10px;
     }
     .section-label:first-child { margin-top: 0; }
 
     /* ── APN list ── */
-    .apn-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .apn-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
     .apn-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
+      gap: 12px;
+      padding: 12px 14px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 4px;
+      border-radius: 8px;
       cursor: pointer;
-      transition: border-color 0.12s;
+      transition: all 0.15s ease;
     }
-    .apn-item:hover { border-color: var(--text-muted); }
-    .apn-item.selected { border-color: var(--accent); }
+    .apn-item:hover { border-color: var(--text-secondary); }
+    .apn-item.selected { border-color: var(--accent); box-shadow: 0 2px 8px var(--accent-glow); }
     .apn-item-info { flex: 1; min-width: 0; }
-    .apn-item-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-    .apn-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .apn-item-name { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
+    .apn-item-meta { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
     .apn-item-active {
-      font-size: 10px;
+      font-size: 10.5px;
+      font-weight: 700;
       background: var(--accent);
       color: #fff;
-      padding: 2px 6px;
-      border-radius: 3px;
+      padding: 2.5px 7px;
+      border-radius: 4px;
       flex-shrink: 0;
+      box-shadow: 0 2px 6px var(--accent-glow);
     }
 
     /* ── APN modal ── */
@@ -617,80 +774,83 @@
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.45);
+      background: rgba(0,0,0,0.55);
       z-index: 100;
       justify-content: center;
       align-items: center;
+      backdrop-filter: blur(4px);
     }
     .apn-modal-overlay.active { display: flex; }
     .apn-modal-card {
       background: var(--bg-secondary);
       border: 1px solid var(--border-color);
-      border-radius: 8px;
+      border-radius: 12px;
       padding: 24px;
       width: 420px;
       max-width: 90vw;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
     }
     .apn-modal-title {
-      font-size: 14px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 700;
       color: var(--text-primary);
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     }
     .apn-modal-actions {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
-      margin-top: 16px;
+      gap: 10px;
+      margin-top: 20px;
     }
 
     /* ── Lock list ── */
-    .lock-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .lock-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
     .lock-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 9px 12px;
+      gap: 12px;
+      padding: 10px 14px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      font-size: 12px;
+      border-radius: 8px;
+      font-size: 13px;
     }
     .lock-item-badge {
-      font-size: 10px;
-      font-weight: 600;
+      font-size: 10.5px;
+      font-weight: 700;
       color: var(--accent);
       background: rgba(249,115,22,0.12);
       border: 1px solid rgba(249,115,22,0.3);
-      padding: 2px 7px;
-      border-radius: 3px;
+      padding: 2.5px 8px;
+      border-radius: 4px;
       flex-shrink: 0;
     }
-    .lock-item-info { flex: 1; color: var(--text-secondary); }
+    .lock-item-info { flex: 1; color: var(--text-primary); }
     .lock-item-del {
       background: none;
       border: none;
-      color: var(--text-muted);
+      color: var(--text-secondary);
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1;
-      padding: 0 2px;
+      padding: 0 4px;
       flex-shrink: 0;
+      transition: color 0.12s;
     }
     .lock-item-del:hover { color: var(--error); }
-    .lock-quota { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+    .lock-quota { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 12px; }
 
     /* ── Neighbor sub-tabs ── */
     .sub-tab-bar {
       display: flex;
       gap: 0;
       border-bottom: 1px solid var(--border-color);
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .sub-tab-btn {
-      padding: 6px 14px;
-      font-size: 11px;
+      padding: 7px 16px;
+      font-size: 12px;
+      font-weight: 600;
       font-family: inherit;
       background: none;
       border: none;
@@ -698,7 +858,7 @@
       cursor: pointer;
       color: var(--text-secondary);
       margin-bottom: -1px;
-      transition: color 0.12s;
+      transition: all 0.12s ease;
     }
     .sub-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .sub-tab-btn:hover:not(.active) { color: var(--text-primary); }
@@ -710,13 +870,13 @@
       align-items: center;
       justify-content: center;
       flex-direction: column;
-      gap: 12px;
-      color: var(--text-muted);
+      gap: 14px;
+      color: var(--text-secondary);
       min-height: 300px;
     }
-    .placeholder-icon { font-size: 36px; opacity: 0.25; }
-    .placeholder-title { font-size: 15px; font-weight: 600; }
-    .placeholder-sub { font-size: 12px; }
+    .placeholder-icon { font-size: 40px; opacity: 0.3; color: var(--accent); }
+    .placeholder-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .placeholder-sub { font-size: 12.5px; opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -868,19 +1028,44 @@
 
     <nav class="nav">
       <div class="nav-item active" data-page="status">
-        <span class="nav-icon">●</span>模组状态
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+        </svg>模组状态
       </div>
       <div class="nav-item" data-page="cellular">
-        <span class="nav-icon">◎</span>蜂窝网络
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h.01" />
+          <path d="M17 15a7.5 7.5 0 0 0-10 0" />
+          <path d="M19 12a11.9 11.9 0 0 0-14 0" />
+          <path d="M21 9a16.2 16.2 0 0 0-18 0" />
+          <path d="M12 22v-4" />
+        </svg>蜂窝网络
       </div>
       <div class="nav-item" data-page="ip">
-        <span class="nav-icon">⌥</span>IP 信息
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="16" y="16" width="6" height="6" rx="1" />
+          <rect x="2" y="16" width="6" height="6" rx="1" />
+          <rect x="9" y="2" width="6" height="6" rx="1" />
+          <path d="M12 8v4" />
+          <path d="M12 12H5v4" />
+          <path d="M12 12h7v4" />
+        </svg>IP 信息
       </div>
       <div class="nav-item" data-page="at">
-        <span class="nav-icon">›</span>AT调试
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>AT调试
       </div>
       <div class="nav-item" data-page="hardware">
-        <span class="nav-icon">⬡</span>系统信息
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.1"/>
+          <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" />
+        </svg>系统信息
       </div>
     </nav>
 
@@ -959,7 +1144,13 @@
         <div class="info-grid">
           <div class="info-item sim-card-item">
             <div class="sim-card-header">
-              <div class="info-label">SIM 状态</div>
+              <div class="info-header" style="margin-bottom:0;">
+                <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 2H10L4 8v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z" />
+                  <path d="M12 8h2v4h-2V8ZM8 12h2v4H8v-4Z" />
+                </svg>
+                <div class="info-label">SIM 状态</div>
+              </div>
               <div class="sim-slot-switch" id="simSlotSwitch" onclick="toggleSimSlotDropdown()">
                 <span id="simSlot">SIM 1</span>
                 <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
@@ -972,71 +1163,191 @@
             <div class="info-value muted" id="simStatus">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">注册状态</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                <path d="m9 11 2 2 4-4" />
+              </svg>
+              <div class="info-label">注册状态</div>
+            </div>
             <div class="info-value muted" id="regStatus">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">连接状态</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                <line x1="8" y1="16" x2="16" y2="8" />
+              </svg>
+              <div class="info-label">连接状态</div>
+            </div>
             <div class="info-value muted" id="connStatus">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">IMEI</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <line x1="6" y1="9" x2="6" y2="15" />
+                <line x1="10" y1="9" x2="10" y2="15" />
+                <line x1="14" y1="9" x2="14" y2="15" />
+                <line x1="18" y1="9" x2="18" y2="15" />
+              </svg>
+              <div class="info-label">IMEI</div>
+            </div>
             <div class="info-value muted" id="imei" style="font-size:12px;">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">ICCID</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <line x1="2" y1="10" x2="22" y2="10" />
+                <line x1="6" y1="15" x2="10" y2="15" />
+              </svg>
+              <div class="info-label">ICCID</div>
+            </div>
             <div class="info-value muted" id="iccid" style="font-size:11px;letter-spacing:0.5px;">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">运营商</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                <line x1="4" y1="22" x2="4" y2="15" />
+              </svg>
+              <div class="info-label">运营商</div>
+            </div>
             <div class="info-value muted" id="operator">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">网络类型</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              <div class="info-label">网络类型</div>
+            </div>
             <div class="info-value muted" id="networkType">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">PCI</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+              <div class="info-label">PCI</div>
+            </div>
             <div class="info-value muted" id="pci">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Cell ID</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <div class="info-label">Cell ID</div>
+            </div>
             <div class="info-value muted" id="cellid">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">ARFCN（频点）</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12h3l3-9 6 18 3-9h3" />
+              </svg>
+              <div class="info-label">ARFCN（频点）</div>
+            </div>
             <div class="info-value muted" id="arfcn">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">频宽</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m5 17-5-5 5-5" />
+                <path d="m19 7 5 5-5 5" />
+                <path d="M2 12h20" />
+              </svg>
+              <div class="info-label">频宽</div>
+            </div>
             <div class="info-value muted" id="bandwidth">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">RSRP</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="20" x2="4" y2="16" />
+                <line x1="9" y1="20" x2="9" y2="12" />
+                <line x1="14" y1="20" x2="14" y2="8" />
+                <line x1="19" y1="20" x2="19" y2="4" />
+              </svg>
+              <div class="info-label">RSRP</div>
+            </div>
             <div class="info-value muted" id="rsrp">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">RSRQ</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <div class="info-label">RSRQ</div>
+            </div>
             <div class="info-value muted" id="rsrq">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">SINR</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+              </svg>
+              <div class="info-label">SINR</div>
+            </div>
             <div class="info-value muted" id="sinr">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">TX Power</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="16 12 12 8 8 12" />
+                <line x1="12" y1="16" x2="12" y2="8" />
+              </svg>
+              <div class="info-label">TX Power</div>
+            </div>
             <div class="info-value muted" id="txPower">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">RX Level</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="8 12 12 16 16 12" />
+                <line x1="12" y1="8" x2="12" y2="16" />
+              </svg>
+              <div class="info-label">RX Level</div>
+            </div>
             <div class="info-value muted" id="rxLevel">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">CQI</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a10 10 0 0 1 10 10c0 2.2-.7 4.3-2 6" />
+                <path d="M12 22a10 10 0 0 1-10-10c0-2.2.7-4.3 2-6" />
+                <path d="M12 12h-4" />
+                <circle cx="12" cy="12" r="1.5" />
+              </svg>
+              <div class="info-label">CQI</div>
+            </div>
             <div class="info-value muted" id="cqi">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">SCS</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+              <div class="info-label">SCS</div>
+            </div>
             <div class="info-value muted" id="scs">--</div>
           </div>
         </div>
@@ -1046,19 +1357,39 @@
         <div class="panel-title">天线信号</div>
         <div class="info-grid">
           <div class="info-item">
-            <div class="info-label">ANT 0</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v20M17 5H7M15 9H9" />
+              </svg>
+              <div class="info-label">ANT 0</div>
+            </div>
             <div class="info-value muted" id="ant0">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">ANT 1</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v20M17 5H7M15 9H9" />
+              </svg>
+              <div class="info-label">ANT 1</div>
+            </div>
             <div class="info-value muted" id="ant1">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">ANT 2</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v20M17 5H7M15 9H9" />
+              </svg>
+              <div class="info-label">ANT 2</div>
+            </div>
             <div class="info-value muted" id="ant2">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">ANT 3</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v20M17 5H7M15 9H9" />
+              </svg>
+              <div class="info-label">ANT 3</div>
+            </div>
             <div class="info-value muted" id="ant3">--</div>
           </div>
         </div>
@@ -1068,19 +1399,45 @@
         <div class="panel-title">流量统计</div>
         <div class="info-grid">
           <div class="info-item">
-            <div class="info-label">签约上行带宽</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+                <line x1="5" y1="19" x2="19" y2="19" />
+              </svg>
+              <div class="info-label">签约上行带宽</div>
+            </div>
             <div class="info-value muted" id="ulBandwidth">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">签约下行带宽</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <polyline points="19 12 12 19 5 12" />
+                <line x1="5" y1="5" x2="19" y2="5" />
+              </svg>
+              <div class="info-label">签约下行带宽</div>
+            </div>
             <div class="info-value muted" id="dlBandwidth">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">上行流量</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                <polyline points="17 6 23 6 23 12" />
+              </svg>
+              <div class="info-label">上行流量</div>
+            </div>
             <div class="info-value muted" id="ulTraffic">--</div>
           </div>
           <div class="info-item">
-            <div class="info-label">下行流量</div>
+            <div class="info-header">
+              <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+                <polyline points="17 18 23 18 23 12" />
+              </svg>
+              <div class="info-label">下行流量</div>
+            </div>
             <div class="info-value muted" id="dlTraffic">--</div>
           </div>
         </div>

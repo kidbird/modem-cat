@@ -2,130 +2,121 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # build-mac.sh — Modem Cat macOS 构建脚本
 #
+# 产出物（构建完成后统一展示路径）:
+#   Portable : src-tauri/target/release/bundle/macos/Modem Cat.app
+#   安装包   : src-tauri/target/release/bundle/dmg/Modem Cat_*.dmg
+#
 # 用法:
-#   ./build-mac.sh           # 构建当前架构 (aarch64 / x86_64)
-#   ./build-mac.sh --bundle  # 构建 + 打包 .dmg 安装包
-#   ./build-mac.sh --both    # 同时构建 aarch64 + x86_64
+#   ./build-mac.sh              # 构建当前架构（aarch64 或 x86_64）
+#   ./build-mac.sh --universal  # 交叉编译并合并为 Universal Binary
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── 颜色输出 ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 
-info()  { echo -e "${CYAN}[INFO]${RESET} $*"; }
-ok()    { echo -e "${GREEN}[OK]${RESET}   $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${RESET} $*"; }
-error() { echo -e "${RED}[ERR]${RESET}  $*" >&2; exit 1; }
+info()  { echo -e "${CYAN}[INFO]${RESET}  $*"; }
+ok()    { echo -e "${GREEN}[OK]${RESET}    $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${RESET}  $*"; }
+error() { echo -e "${RED}[ERR]${RESET}   $*" >&2; exit 1; }
+sep()   { echo -e "${BOLD}───────────────────────────────────────────${RESET}"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# ── 参数解析 ──────────────────────────────────────────────────────────────────
-MODE="native"      # native | bundle | both
+UNIVERSAL=false
 for arg in "$@"; do
   case "$arg" in
-    --bundle) MODE="bundle" ;;
-    --both)   MODE="both"   ;;
+    --universal) UNIVERSAL=true ;;
     --help|-h)
-      echo "用法: $0 [--bundle] [--both]"
-      echo "  (无参数)   仅构建当前架构的二进制"
-      echo "  --bundle   构建 + 打包 .dmg 安装包"
-      echo "  --both     交叉编译 aarch64 + x86_64 两个架构"
-      exit 0
-      ;;
-    *) error "未知参数: $arg  (使用 --help 查看用法)" ;;
+      echo "用法: $0 [--universal]"
+      echo "  (无参数)     构建当前架构"
+      echo "  --universal  交叉编译 aarch64 + x86_64，合并为 Universal Binary"
+      exit 0 ;;
+    *) error "未知参数: $arg" ;;
   esac
 done
 
 # ── 前置检查 ──────────────────────────────────────────────────────────────────
+sep
 info "检查前置依赖..."
 
-command -v cargo >/dev/null 2>&1 || error "未找到 cargo，请安装 Rust: https://rustup.rs"
+command -v cargo  >/dev/null 2>&1 || error "未找到 cargo，请安装 Rust: https://rustup.rs"
 command -v rustup >/dev/null 2>&1 || error "未找到 rustup"
 
-RUST_VER=$(rustc --version)
-ok "Rust: $RUST_VER"
+ok "Rust: $(rustc --version)"
 
-# 检查 tauri-cli（仅 --bundle 模式需要）
-if [[ "$MODE" == "bundle" ]]; then
-  if ! cargo tauri --version >/dev/null 2>&1; then
-    warn "未安装 cargo-tauri，正在安装..."
-    cargo install tauri-cli --version '^2' --locked
-  fi
-  ok "tauri-cli: $(cargo tauri --version)"
+if ! cargo tauri --version >/dev/null 2>&1; then
+  warn "未安装 cargo-tauri，正在安装..."
+  cargo install tauri-cli --version '^2' --locked
 fi
+ok "tauri-cli: $(cargo tauri --version)"
 
-# 交叉编译目标检查
-if [[ "$MODE" == "both" ]]; then
-  for target in aarch64-apple-darwin x86_64-apple-darwin; do
-    if ! rustup target list --installed | grep -q "$target"; then
-      info "添加 Rust target: $target"
-      rustup target add "$target"
-    fi
+if $UNIVERSAL; then
+  for t in aarch64-apple-darwin x86_64-apple-darwin; do
+    rustup target list --installed | grep -q "$t" || {
+      info "添加 Rust target: $t"
+      rustup target add "$t"
+    }
   done
-  ok "交叉编译 targets 就绪"
 fi
 
-# ── 开始构建 ──────────────────────────────────────────────────────────────────
+# ── 构建 ──────────────────────────────────────────────────────────────────────
+sep
+echo ""
+echo -e "${BOLD}  Modem Cat macOS Build  —  $(date '+%Y-%m-%d %H:%M:%S')${RESET}"
+echo ""
+
 START=$(date +%s)
-echo ""
-echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
-echo -e "${BOLD}  Modem Cat — macOS 构建 [$(date '+%H:%M:%S')]${RESET}"
-echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
-echo ""
 
-build_target() {
-  local target="$1"
-  local label="${target:-当前架构}"
-  info "构建: $label"
-  if [[ "$MODE" == "bundle" ]]; then
-    (cd src-tauri && cargo tauri build ${target:+--target "$target"})
-  else
-    if [[ -n "${target:-}" ]]; then
-      (cd src-tauri && cargo build --release --target "$target")
-    else
-      (cd src-tauri && cargo build --release)
-    fi
+if $UNIVERSAL; then
+  # 分别构建两架构，再用 lipo 合并 .app 内的可执行文件
+  info "构建 aarch64-apple-darwin..."
+  (cd src-tauri && cargo tauri build --target aarch64-apple-darwin)
+
+  info "构建 x86_64-apple-darwin..."
+  (cd src-tauri && cargo tauri build --target x86_64-apple-darwin)
+
+  AARCH_BIN="src-tauri/target/aarch64-apple-darwin/release/modem-cat"
+  X86_BIN="src-tauri/target/x86_64-apple-darwin/release/modem-cat"
+
+  if [[ -f "$AARCH_BIN" && -f "$X86_BIN" ]]; then
+    info "合并 Universal Binary..."
+    lipo -create -output "src-tauri/target/release/modem-cat" "$AARCH_BIN" "$X86_BIN"
   fi
-  ok "构建完成: $label"
-}
+else
+  info "构建当前架构..."
+  (cd src-tauri && cargo tauri build)
+fi
 
-case "$MODE" in
-  native)
-    build_target ""
-    BINARY="target/release/modem-cat"
-    if [[ -f "$BINARY" ]]; then
-      SIZE=$(du -sh "$BINARY" | cut -f1)
-      ok "二进制: $BINARY ($SIZE)"
-    fi
-    ;;
-  bundle)
-    build_target ""
-    # 找到产出的 .dmg
-    DMG=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -1)
-    if [[ -n "$DMG" ]]; then
-      SIZE=$(du -sh "$DMG" | cut -f1)
-      ok "安装包: $DMG ($SIZE)"
-    fi
-    ;;
-  both)
-    build_target "aarch64-apple-darwin"
-    build_target "x86_64-apple-darwin"
-    # 合并为 Universal Binary（可选）
-    AARCH="src-tauri/target/aarch64-apple-darwin/release/modem-cat"
-    X86="src-tauri/target/x86_64-apple-darwin/release/modem-cat"
-    if [[ -f "$AARCH" && -f "$X86" ]]; then
-      info "合并为 Universal Binary..."
-      lipo -create -output "target/modem-cat-universal" "$AARCH" "$X86"
-      SIZE=$(du -sh "target/modem-cat-universal" | cut -f1)
-      ok "Universal Binary: target/modem-cat-universal ($SIZE)"
-    fi
-    ;;
-esac
-
-# ── 完成 ──────────────────────────────────────────────────────────────────────
 END=$(date +%s)
-ELAPSED=$((END - START))
+
+# ── 展示产出物 ────────────────────────────────────────────────────────────────
+sep
 echo ""
-echo -e "${GREEN}${BOLD}✓ 构建成功！耗时 ${ELAPSED}s${RESET}"
+echo -e "${BOLD}  产出物${RESET}"
+echo ""
+
+BUNDLE_DIR="src-tauri/target/release/bundle"
+
+# Portable — .app bundle
+APP=$(find "$BUNDLE_DIR/macos" -maxdepth 1 -name "*.app" 2>/dev/null | head -1)
+if [[ -n "$APP" ]]; then
+  SIZE=$(du -sh "$APP" | cut -f1)
+  ok "Portable  →  $APP  ($SIZE)"
+else
+  warn "未找到 .app（路径: $BUNDLE_DIR/macos）"
+fi
+
+# 安装包 — .dmg
+DMG=$(find "$BUNDLE_DIR/dmg" -maxdepth 1 -name "*.dmg" 2>/dev/null | head -1)
+if [[ -n "$DMG" ]]; then
+  SIZE=$(du -sh "$DMG" | cut -f1)
+  ok "安装包   →  $DMG  ($SIZE)"
+else
+  warn "未找到 .dmg（路径: $BUNDLE_DIR/dmg）"
+fi
+
+echo ""
+echo -e "${GREEN}${BOLD}✓ 构建成功，耗时 $((END - START))s${RESET}"
+sep

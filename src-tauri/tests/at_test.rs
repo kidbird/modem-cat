@@ -52,7 +52,7 @@ fn test_at_with_parser() {
             .open()
         {
             Ok(port) => port,
-            Err(e) => {
+            Err(_) => {
                 println!("OPEN FAILED");
                 continue;
             }

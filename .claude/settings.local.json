@@ -6,7 +6,8 @@
       "Bash(cargo build *)",
       "Bash(D:/code/modem-cat/src-tauri/target/release/modem-cat.exe)",
       "Bash(taskkill //F //IM modem-cat.exe)",
-      "Bash(cargo test *)"
+      "Bash(cargo test *)",
+      "Bash(rtk grep *)"
     ]
   }
 }

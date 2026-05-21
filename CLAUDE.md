@@ -4,31 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-modem-cat is a 5G modem debugging tool with three interfaces:
-- **CLI (TS)**: Bun/TypeScript command-line tool (`src/cli/`)
-- **Desktop**: Tauri app with Rust backend (`src-tauri/`) and web frontend (`src/desktop/`)
-- **Embedded CLI**: Static Rust binary for Linux (`modem-cli-embedded/`)
-
-The core modem logic lives in `modem-hal/`, a standalone Rust crate consumed by both the Tauri backend and the embedded CLI.
+modem-cat is a 5G modem debugging tool with two components:
+- **Desktop**: Tauri app with Rust backend (`src-tauri/`) and web frontend (`src/desktop/index.html`)
+- **modem-hal**: Standalone Rust HAL crate (`modem-hal/`) — consumed by the Tauri backend
 
 ## Commands
 
 ```bash
-# CLI (TypeScript)
-bun run src/cli/index.ts           # Run CLI directly
-bun build src/cli/index.ts         # Build CLI to dist/
-bun test                           # Run tests
-bun run typecheck                  # TypeScript type checking
-
 # Desktop app
-cd src-tauri && cargo build --release   # Build Tauri desktop app
-
-# Rust workspace (all crates)
-cargo build --workspace            # Build everything
+cargo build --workspace            # Build all crates
 cargo test --workspace             # Run all Rust tests
+cd src-tauri && cargo build --release   # Release build for Tauri
 
-# Embedded CLI
-cargo build -p modem-cli-embedded --release --target aarch64-unknown-linux-gnu
+# Development
+cargo check --workspace            # Fast type-check without linking
 ```
 
 ## Architecture
@@ -44,28 +33,28 @@ Standalone Rust HAL crate. Vendor-agnostic interface over serial AT commands.
 
 Feature flags:
 - `serial` (default) — enables `SerialTransport`
-- `napi-feature` — compiles napi-rs `ModemHandle` class for Bun/TS native addon
 
 ### Desktop App (`src-tauri/`)
 Tauri 2.x Rust backend. Delegates modem logic to `modem-hal`.
-- `src/at_adapter.rs` — calls modem-hal transport + at_parser to build status structs
-- `src/at_parser.rs` — AT response parsers (Quectel-specific, used by at_adapter)
-- `src/lib.rs` — all Tauri `#[tauri::command]` handlers
+- `src/lib.rs` — AppState, LoggingTransport, Tauri setup and all `#[tauri::command]` handlers
+- `src/ports.rs` — port detection helpers + connection commands (list_ports, connect_serial, connect_tcp, disconnect)
+- `src/commands.rs` — modem query/write commands
+- `src/monitor.rs` — USB hotplug monitor thread
 
-### Embedded CLI (`modem-cli-embedded/`)
-Minimal clap CLI outputting JSON. Targets aarch64-unknown-linux-gnu (musl) for embedded Linux.
-Subcommands: `status`, `signal`, `connect <cid>`, `disconnect <cid>`.
+**AppState** holds two `Arc<Mutex<Option<Box<dyn _>>>>`:
+- `transport` — the active `AtTransport` (serial or TCP), wrapped by `LoggingTransport`
+- `vendor` — the detected `ModemVendor` (set by `ModemFactory::create()` on connect)
 
-### CLI / Core (`src/cli/`, `src/core/`)
-TypeScript CLI using Bun. Entry `src/cli/index.ts` dispatches to `src/cli/commands/`.
-Core services in `src/core/connections/` and `src/core/modem/`.
+All Tauri commands acquire both mutexes in the same order (transport first, vendor second) to avoid deadlocks.
+
+### Frontend (`src/desktop/index.html`)
+Single-file HTML/CSS/JS frontend. Uses `@tauri-apps/api` for IPC.
 
 ## Tech Stack
 
-- **modem-hal**: Rust, `serialport 4`, `serde`, optional `napi 2`
-- **Desktop**: Tauri 2.x (Rust + web frontend), `@tauri-apps/api`
-- **Embedded CLI**: Rust, `clap 4`, statically linked via musl
-- **TS CLI**: Bun 1.0+ with TypeScript 5.x
+- **modem-hal**: Rust, `serialport 4`, `serde`
+- **Desktop backend**: Tauri 2.x, `tokio`, optional `winreg` (Windows registry for COM port names)
+- **Desktop frontend**: Vanilla JS/HTML in a single file
 
 ## Vendor Detection
 

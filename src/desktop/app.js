@@ -1365,7 +1365,19 @@
       });
     }
 
+    async function loadAppVersion() {
+      try {
+        const ver = await window.__TAURI__?.app?.getVersion?.();
+        if (ver) {
+          const el = document.getElementById('appVersion');
+          if (el) el.textContent = 'v' + ver;
+          document.title = 'Modem Cat v' + ver;
+        }
+      } catch (_) {}
+    }
+
     async function doInit() {
+      await loadAppVersion();
       const label = document.getElementById('statusLabel');
       label.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');

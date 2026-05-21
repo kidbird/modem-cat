@@ -4,72 +4,87 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-modem-cat is a 5G modem debugging tool with three interfaces:
-- **CLI (TS)**: Bun/TypeScript command-line tool (`src/cli/`)
-- **Desktop**: Tauri app with Rust backend (`src-tauri/`) and web frontend (`src/desktop/`)
-- **Embedded CLI**: Static Rust binary for Linux (`modem-cli-embedded/`)
-
-The core modem logic lives in `modem-hal/`, a standalone Rust crate consumed by both the Tauri backend and the embedded CLI.
+modem-cat is a 5G modem debugging desktop tool. Tauri 2.x app with Rust backend (`src-tauri/`) and single-file web frontend (`src/desktop/index.html`). The core modem logic lives in `modem-hal/`, a standalone Rust crate consumed by the Tauri backend.
 
 ## Commands
 
 ```bash
-# CLI (TypeScript)
-bun run src/cli/index.ts           # Run CLI directly
-bun build src/cli/index.ts         # Build CLI to dist/
-bun test                           # Run tests
-bun run typecheck                  # TypeScript type checking
+# Desktop app (Tauri)
+cd src-tauri && cargo build --release
 
-# Desktop app
-cd src-tauri && cargo build --release   # Build Tauri desktop app
+# Full workspace (both crates)
+cargo build --workspace
+cargo test --workspace
 
-# Rust workspace (all crates)
-cargo build --workspace            # Build everything
-cargo test --workspace             # Run all Rust tests
+# Run tests for a single crate
+cargo test -p modem-hal
+cargo test -p modem-cat
 
-# Embedded CLI
-cargo build -p modem-cli-embedded --release --target aarch64-unknown-linux-gnu
+# Run a specific test
+cargo test -p modem-hal parse_qeng_serving_cell
 ```
+
+## Windows Build Note
+
+**The Tauri app must be fully quit before rebuilding.** The running `.exe` holds a file lock that blocks `cargo build`. The app minimizes to system tray on close — right-click the tray icon and choose "退出" to truly exit.
 
 ## Architecture
 
+```
+src/desktop/index.html          ← Single-file frontend (HTML/CSS/JS, no framework)
+        │
+     Tauri IPC (invoke)
+        │
+src-tauri/src/lib.rs            ← All Tauri commands, AppState, tray, window management
+        │
+modem-hal/src/                  ← Shared HAL crate (transport, vendor detection, AT parsing)
+        │
+   serialport / TCP → 5G Modem
+```
+
 ### modem-hal (`modem-hal/`)
 Standalone Rust HAL crate. Vendor-agnostic interface over serial AT commands.
-- `src/modem_vendor.rs` — `ModemVendor` trait (all modem operations)
-- `src/modem_factory.rs` — `ModemFactory::create()` detects vendor from AT+CGMM
-- `src/types.rs` — shared data types (ModemStatus, SignalInfo, etc.)
-- `src/transport/` — `AtTransport` trait + `SerialTransport` + `TcpTransport`
-- `src/vendors/quectel/` — Qualcomm + UniSoc Quectel modems (RG520N, RG200U, …)
-- `src/vendors/tdtech/` — TdTech MT5700M-CN (AT^ prefix commands)
+- `src/modem_vendor.rs` — `ModemVendor` trait (28+ methods covering SIM, network, bands, data, diagnostics)
+- `src/modem_factory.rs` — `ModemFactory::create()` detects vendor from `AT+CGMM`
+- `src/types.rs` — shared data types (ModemStatus, SignalInfo, BandConfig, etc.)
+- `src/transport/mod.rs` — `AtTransport` trait (`send_at`, `close`) + `MockTransport`
+- `src/transport/serial.rs` — `SerialTransport` (serialport v4, 115200 baud)
+- `src/transport/tcp.rs` — `TcpTransport`
+- `src/vendors/quectel/` — Quectel modems: `mod.rs` (adapter), `parser.rs` (response parsing), `band_db.rs` (hardware band tables), `qualcomm.rs`/`unisoc.rs` (chip-specific data commands)
+- `src/vendors/tdtech/` — TdTech MT5700M-CN: `mod.rs` (adapter), `parser.rs`, `dial.rs` (AT^ prefix commands)
 
 Feature flags:
 - `serial` (default) — enables `SerialTransport`
 - `napi-feature` — compiles napi-rs `ModemHandle` class for Bun/TS native addon
 
-### Desktop App (`src-tauri/`)
-Tauri 2.x Rust backend. Delegates modem logic to `modem-hal`.
-- `src/at_adapter.rs` — calls modem-hal transport + at_parser to build status structs
-- `src/at_parser.rs` — AT response parsers (Quectel-specific, used by at_adapter)
-- `src/lib.rs` — all Tauri `#[tauri::command]` handlers
+### Tauri Backend (`src-tauri/`)
+All backend logic is in `src/lib.rs` (~1000 lines). Delegates modem operations directly to `modem-hal` via `ModemVendor` trait.
+- `AppState` holds `Arc<Mutex<Option<Box<dyn AtTransport>>>>` and `Arc<Mutex<Option<Box<dyn ModemVendor>>>>`
+- All query/write commands follow the same pattern: `tokio::task::spawn_blocking` → lock transport + vendor → call vendor method
+- `start_port_monitor` polls serial ports every 2s, emits `port-changed` Tauri events
 
-### Embedded CLI (`modem-cli-embedded/`)
-Minimal clap CLI outputting JSON. Targets aarch64-unknown-linux-gnu (musl) for embedded Linux.
-Subcommands: `status`, `signal`, `connect <cid>`, `disconnect <cid>`.
-
-### CLI / Core (`src/cli/`, `src/core/`)
-TypeScript CLI using Bun. Entry `src/cli/index.ts` dispatches to `src/cli/commands/`.
-Core services in `src/core/connections/` and `src/core/modem/`.
-
-## Tech Stack
-
-- **modem-hal**: Rust, `serialport 4`, `serde`, optional `napi 2`
-- **Desktop**: Tauri 2.x (Rust + web frontend), `@tauri-apps/api`
-- **Embedded CLI**: Rust, `clap 4`, statically linked via musl
-- **TS CLI**: Bun 1.0+ with TypeScript 5.x
+### Frontend (`src/desktop/`)
+Single `index.html` (~98KB), all HTML/CSS/JS inline, no build step. Uses `window.__TAURI__.invoke()` for IPC.
 
 ## Vendor Detection
 
-`ModemFactory::create()` queries `AT+CGMM` and matches model string:
+`ModemFactory::detect_vendor_from_model()` matches model string from `AT+CGMM`:
 - `MT5700` → TdTech (`AT^` commands)
-- `RG200U / RM500U / RG501U / RM501U` → Quectel UniSoc
-- `RG520N / RM520N / RG525F / RG530F / RM530N / RG540F / RM540N` → Quectel Qualcomm
+- `RG200U` / `RM500U` → Quectel UniSoc (`AT+QMAP` data commands)
+- `RM520N` / `RM500Q` → Quectel Qualcomm (`AT+QNETDEVCTL` data commands)
+- Unknown models default to UniSoc adapter
+
+## Key Conventions
+
+- AT parser functions are pure: take `&str` input, return parsed structs — no I/O, easy to unit test
+- Adding a new vendor: implement `ModemVendor` trait, add detection in `modem_factory.rs`, add module under `vendors/`
+- Frontend has no build tooling — edit `index.html` directly
+- All Rust tests are pure unit tests (no I/O, no hardware required)
+
+## Tauri v2 Specifics
+
+- Uses `tauri::Manager` trait for `webview_windows()`, `tray_by_id()`
+- System tray configured in `tauri.conf.json`; menu built programmatically with `tauri::menu::MenuBuilder`
+- Window close intercepted via `.on_window_event()` to hide to tray instead of exiting
+- Custom `modemcat://` URI scheme protocol serves the embedded `index.html`
+- `winreg` crate for Windows registry port friendly name lookup (`cfg(target_os = "windows")`)

@@ -50,6 +50,7 @@ Thumbs.db
 .bun/
 
 # Rust
+/target/
 debug/
 release/
 *.rlib

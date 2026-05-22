@@ -31,9 +31,3 @@ modem-hal = { path = "../modem-hal" }
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.56"
 
-[profile.release]
-panic = "abort"
-codegen-units = 1
-lto = true
-opt-level = "z"
-strip = true

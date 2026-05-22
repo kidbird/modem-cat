@@ -295,6 +295,53 @@ pub trait ModemVendor: Send {
         Err("SIM slot switching not supported".to_string())
     }
 
+    // ==================== Cell Lock ====================
+
+    /// Query active cell/frequency locks
+    fn query_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<Vec<CellLockEntry>, String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    /// Lock to a specific cell (arfcn + optional pci) or frequency (arfcn only)
+    fn set_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _arfcn: &str,
+        _pci: &str,
+    ) -> Result<(), String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    /// Clear all cell and frequency locks
+    fn clear_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<(), String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    // ==================== PLMN Lock ====================
+
+    /// Lock SIM to a specific PLMN (MCC+MNC)
+    fn set_plmn_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _plmn: &str,
+    ) -> Result<(), String> {
+        Err("PLMN lock not supported".to_string())
+    }
+
+    /// Remove PLMN lock
+    fn clear_plmn_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<(), String> {
+        Err("PLMN lock not supported".to_string())
+    }
+
     // ==================== Raw AT ====================
 
     /// Send a raw AT command and return the response

@@ -2270,9 +2270,9 @@
       addTerminalLine('[状态] 正在查询模组状态...', 'info');
       try {
         const s = await invoke('get_modem_status');
+        console.log('[modem-status]', JSON.stringify(s));
         addTerminalLine(`[状态] SIM=${s.simStatus} 注册=${s.regStatus} 连接=${s.connStatus} 网络=${s.networkType} 运营商=${s.operator}`, 'info');
         if (s.simStatus === 'READY') setTextGood('simStatus', '已插入'); else if (s.simStatus === 'NO SIM') setTextWarn('simStatus', 'NO SIM'); else setText('simStatus', s.simStatus || '--');
-        // Query actual SIM slot and update display
         querySimSlot(s.simStatus === 'READY');
         const noSim = s.simStatus !== 'READY';
         const regMap = { 'NOCONN': '已注册', 'CONNECT': '已注册', 'IDLE': '空闲', 'LIMSRV': '限制服务', 'SEARCH': '搜网', 'DENIED': '拒绝注册', 'UNKNOWN': '未知' };

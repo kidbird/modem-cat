@@ -549,7 +549,9 @@ impl ModemVendor for QuectelModem {
     fn query_qos(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<QosInfo, String> {
         let cmd = format!("AT+C5GQOSRDP={}", cid);
         let resp = send_and_delay(t, &cmd)?;
+        log::info!("C5GQOSRDP raw response (cid={}): {}", cid, resp.replace('\n', "\\n").replace('\r', ""));
         let (cqi, ul_bw, dl_bw) = parse_c5gqosrdp(&resp);
+        log::info!("QosInfo parsed: cqi={}, ul_bw={}, dl_bw={}", cqi, ul_bw, dl_bw);
         Ok(QosInfo {
             cqi,
             ul_bandwidth: ul_bw,
@@ -633,8 +635,14 @@ impl ModemVendor for QuectelModem {
         let iccid = self.query_iccid(t).unwrap_or_default();
 
         let qeng_resp = send_and_delay(t, r#"AT+QENG="servingcell""#)?;
+        log::info!("QENG raw response: {}", qeng_resp.replace('\n', "\\n").replace('\r', ""));
         let qualcomm_bw = matches!(self.chip, QuectelChip::Qualcomm);
         let serving_cell = parse_qeng_serving_cell(&qeng_resp, qualcomm_bw);
+        log::info!(
+            "ServingCell parsed: tech={}, state={}, pci={}, cell_id={}, arfcn={}, rsrp={}, sinr={}",
+            serving_cell.tech, serving_cell.mobility_state, serving_cell.pci,
+            serving_cell.cell_id, serving_cell.arfcn, serving_cell.rsrp, serving_cell.sinr
+        );
 
         let cops_resp = send_and_delay(t, "AT+COPS?")?;
         let (operator, _) = parse_cops_with_act(&cops_resp);

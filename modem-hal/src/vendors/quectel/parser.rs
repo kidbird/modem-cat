@@ -193,6 +193,18 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
         let data = line.strip_prefix("+QENG:").unwrap().trim();
         let parts: Vec<&str> = data.splitn(26, ',').collect();
         if parts.len() < 3 {
+            // Short response like: +QENG: "servingcell","SEARCH" or +QENG: "servingcell","CONNECT"
+            let state = parts.get(1).map(|s| s.trim().trim_matches('"')).unwrap_or("");
+            if !state.is_empty() {
+                log::warn!(
+                    "QENG short response: state={}, parts_len={}, line={}",
+                    state, parts.len(), line
+                );
+                return ServingCellInfo {
+                    mobility_state: state.to_string(),
+                    ..Default::default()
+                };
+            }
             continue;
         }
 
@@ -308,8 +320,20 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     scs: String::new(),
                 };
             }
-            _ => {}
+            _ => {
+                log::warn!(
+                    "QENG unmatched tech={}, parts_len={}, line={}",
+                    tech, parts.len(), line
+                );
+            }
         }
+    }
+    // No +QENG: line found — check if response contains ERROR
+    let trimmed = response.trim();
+    if trimmed.contains("ERROR") || trimmed.contains("error") {
+        log::warn!("QENG command returned error: {}", trimmed);
+    } else {
+        log::warn!("QENG no serving cell data found in response: {}", trimmed.replace('\n', "\\n").replace('\r', ""));
     }
     ServingCellInfo::default()
 }

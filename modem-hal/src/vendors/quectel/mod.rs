@@ -649,12 +649,12 @@ impl ModemVendor for QuectelModem {
 
         let conn_status = self.query_connection_status(t).unwrap_or_else(|_| "\u{672a}\u{8fde}\u{63a5}".to_string());
 
-        let reg_status = match serving_cell.mobility_state.as_str() {
-            "CONNECT" => "\u{5df2}\u{6ce8}\u{518c}".to_string(),
-            "LIMSRV" => "\u{9650}\u{5236}\u{670d}\u{52a1}".to_string(),
-            "SEARCH" => "\u{641c}\u{7d22}\u{4e2d}".to_string(),
-            "IDLE" => "\u{7a7a}\u{95f2}".to_string(),
-            other => other.to_string(),
+        // Use raw English mobility state so the frontend regMap can translate it.
+        // Fall back to AT+CEREG? when QENG didn't return a usable state.
+        let reg_status = if serving_cell.mobility_state.is_empty() {
+            self.query_registration_status(t).unwrap_or_else(|_| "NOCONN".to_string())
+        } else {
+            serving_cell.mobility_state.clone()
         };
 
         Ok(ModemStatus {

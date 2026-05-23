@@ -2275,10 +2275,11 @@
         // Query actual SIM slot and update display
         querySimSlot(s.simStatus === 'READY');
         const noSim = s.simStatus !== 'READY';
-        const regMap = { 'NOCONN': '已注册', 'CONNECT': '已注册', 'LIMSRV': '限制服务', 'SEARCH': '搜网' };
+        const regMap = { 'NOCONN': '已注册', 'CONNECT': '已注册', 'IDLE': '空闲', 'LIMSRV': '限制服务', 'SEARCH': '搜网', 'DENIED': '拒绝注册', 'UNKNOWN': '未知' };
         const regText = regMap[s.regStatus] || s.regStatus || '--';
         const regEl = document.getElementById('regStatus');
-        if (regEl) { regEl.textContent = regText; regEl.className = (s.regStatus === 'NOCONN' || s.regStatus === 'CONNECT') ? 'info-value good' : 'info-value'; }
+        const regGood = s.regStatus === 'CONNECT' || s.regStatus === 'NOCONN' || s.regStatus === 'IDLE';
+        if (regEl) { regEl.textContent = regText; regEl.className = regGood ? 'info-value good' : 'info-value'; }
         const connEl = document.getElementById('connStatus');
         if (connEl) { connEl.textContent = s.connStatus || '--'; connEl.className = s.connStatus === '已连接' ? 'info-value good' : 'info-value'; }
         setTextData('imei', noSim ? '--' : (s.imei || '--'));

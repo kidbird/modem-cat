@@ -154,13 +154,44 @@ pub fn decode_qualcomm_bandwidth(idx: u32) -> String {
     }
 }
 
+fn filter_tx_power(val: &str) -> String {
+    let v = val.trim();
+    match v.parse::<i32>() {
+        Ok(n) if n <= -32760 || n >= 32760 => String::new(),
+        Ok(n) => format!("{} dBm", n),
+        Err(_) => String::new(),
+    }
+}
+
+fn filter_rx_level(val: &str) -> String {
+    let v = val.trim();
+    match v.parse::<i32>() {
+        Ok(n) if n >= 255 || n < 0 => String::new(),
+        Ok(n) if n == 0 => String::new(),
+        Ok(n) => n.to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+fn format_sinr(val: &str) -> String {
+    let v = val.trim();
+    if v.is_empty() || v == "0" {
+        return String::new();
+    }
+    if let Ok(n) = v.parse::<i32>() {
+        format!("{} dB", n)
+    } else {
+        v.to_string()
+    }
+}
+
 pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> ServingCellInfo {
     for line in extract_data_lines(response) {
         if !line.starts_with("+QENG:") {
             continue;
         }
         let data = line.strip_prefix("+QENG:").unwrap().trim();
-        let parts: Vec<&str> = data.splitn(25, ',').collect();
+        let parts: Vec<&str> = data.splitn(26, ',').collect();
         if parts.len() < 3 {
             continue;
         }
@@ -170,7 +201,11 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
         let connected = state == "CONNECT";
 
         match tech {
-            "NR5G-SA" if parts.len() >= 18 => {
+            // NR5G-SA format (Quectel RM520N / RM500Q Qualcomm):
+            // [0]="servingcell" [1]=state [2]="NR5G-SA" [3]=duplex [4]=MCC [5]=MNC
+            // [6]=cellID [7]=PCI [8]=TAC [9]=NR-ARFCN [10]=band [11]=BW(MHz)
+            // [12]=RSRP [13]=RSRQ [14]=SINR [15]=TxPwr [16]=RxLev [17]=SCS
+            "NR5G-SA" if parts.len() >= 15 => {
                 return ServingCellInfo {
                     connected,
                     mobility_state: state.to_string(),
@@ -184,16 +219,21 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     bandwidth: format_bw(parts[11].trim()),
                     rsrp: format_rsrp(parts[12].trim()),
                     rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[14].trim().to_string(),
-                    tx_power: parts[15].trim().to_string(),
-                    rx_level: parts[16].trim().to_string(),
-                    scs: parts[17].trim().to_string(),
+                    sinr: format_sinr(parts[14].trim()),
+                    tx_power: parts.get(15).map_or(String::new(), |v| filter_tx_power(v)),
+                    rx_level: parts.get(16).map_or(String::new(), |v| filter_rx_level(v)),
+                    scs: parts.get(17).map_or(String::new(), |v| v.trim().to_string()),
                 };
             }
-            "LTE" if parts.len() >= 19 => {
+            // LTE format (Quectel Qualcomm / UniSoc):
+            // [0]="servingcell" [1]=state [2]="LTE" [3]=duplex [4]=MCC [5]=MNC
+            // [6]=cellID [7]=PCI [8]=EARFCN [9]=band [10]=DL-BW [11]=UL-BW
+            // [12]=TAC [13]=RSRP [14]=RSRQ [15]=RSSI [16]=SINR [17]=CQI [18]=TxPwr [19]=srxlev
+            "LTE" if parts.len() >= 17 => {
                 let bw_raw = parts.get(10).unwrap_or(&"").trim();
                 let bandwidth = if qualcomm_bandwidth {
-                    decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0))
+                    let bw_str = decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0));
+                    if bw_str.is_empty() { String::new() } else { format!("{} MHz", bw_str) }
                 } else {
                     format_bw(bw_raw)
                 };
@@ -208,14 +248,46 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     arfcn: parts[8].trim().to_string(),
                     band: parts[9].trim().to_string(),
                     bandwidth,
-                    rsrp: format_rsrp(parts[12].trim()),
-                    rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[16].trim().to_string(),
-                    tx_power: parts[18].trim().to_string(),
+                    rsrp: format_rsrp(parts[13].trim()),
+                    rsrq: format_rsrq(parts[14].trim()),
+                    sinr: format_sinr(parts[16].trim()),
+                    tx_power: parts.get(18).map_or(String::new(), |v| filter_tx_power(v)),
                     rx_level: String::new(),
                     scs: String::new(),
                 };
             }
+            // NR5G-NSA format (dual connectivity: LTE anchor + NR secondary):
+            // [0..11] = LTE anchor fields (same layout as LTE)
+            // [12]=LTE-TAC [13]=LTE-RSRP [14]=LTE-RSRQ [15]=LTE-RSSI [16]=LTE-SINR
+            // [17]=LTE-TxPwr [18]=LTE-RxLev [19]=NR-ARFCN [20]=NR-band [21]=NR-BW
+            // [22]=NR-RSRP [23]=NR-RSRQ [24]=NR-SINR
+            "NR5G-NSA" if parts.len() >= 20 => {
+                let bw_raw = parts.get(10).unwrap_or(&"").trim();
+                let _lte_bw = if qualcomm_bandwidth {
+                    decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0))
+                } else {
+                    bw_raw.to_string()
+                };
+                return ServingCellInfo {
+                    connected,
+                    mobility_state: state.to_string(),
+                    tech: tech.to_string(),
+                    operator_mcc: parts[4].trim().trim_matches('"').to_string(),
+                    operator_mnc: parts[5].trim().trim_matches('"').to_string(),
+                    cell_id: parts[6].trim().to_string(),
+                    pci: parts[7].trim().to_string(),
+                    arfcn: parts[19].trim().to_string(),
+                    band: parts[20].trim().to_string(),
+                    bandwidth: format_bw(parts[21].trim()),
+                    rsrp: format_rsrp(parts.get(22).unwrap_or(&"").trim()),
+                    rsrq: format_rsrq(parts.get(23).unwrap_or(&"").trim()),
+                    sinr: format_sinr(parts.get(24).unwrap_or(&"").trim()),
+                    tx_power: parts.get(17).map_or(String::new(), |v| filter_tx_power(v)),
+                    rx_level: String::new(),
+                    scs: String::new(),
+                };
+            }
+            // NR5G-NSA fallback: fewer fields, use LTE anchor data
             "NR5G-NSA" if parts.len() >= 15 => {
                 return ServingCellInfo {
                     connected,
@@ -225,12 +297,12 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     operator_mnc: parts[5].trim().trim_matches('"').to_string(),
                     cell_id: parts[6].trim().to_string(),
                     pci: parts[7].trim().to_string(),
-                    arfcn: parts[9].trim().to_string(),
-                    band: parts[10].trim().to_string(),
+                    arfcn: parts[8].trim().to_string(),
+                    band: parts[9].trim().to_string(),
                     bandwidth: format_bw(parts[11].trim()),
-                    rsrp: format_rsrp(parts[12].trim()),
-                    rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[14].trim().to_string(),
+                    rsrp: format_rsrp(parts[13].trim()),
+                    rsrq: format_rsrq(parts[14].trim()),
+                    sinr: String::new(),
                     tx_power: String::new(),
                     rx_level: String::new(),
                     scs: String::new(),
@@ -759,12 +831,12 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
             if parts.len() >= 2 {
                 let stat = parts[1].trim();
                 let status_str = match stat {
-                    "0" => "\u{672a}\u{6ce8}\u{518c}",
-                    "1" => "\u{5df2}\u{6ce8}\u{518c}(\u{672c}\u{5730})",
-                    "2" => "\u{641c}\u{7d22}\u{4e2d}",
-                    "3" => "\u{6ce8}\u{518c}\u{62d2}\u{7edd}",
-                    "4" => "\u{672a}\u{77e5}",
-                    "5" => "\u{5df2}\u{6ce8}\u{518c}(\u{6f2b}\u{6e38})",
+                    "0" => "NOCONN",
+                    "1" => "CONNECT",
+                    "2" => "SEARCH",
+                    "3" => "DENIED",
+                    "4" => "UNKNOWN",
+                    "5" => "CONNECT",
                     _ => stat,
                 };
                 let tac = parts.get(2).map(|v| v.trim().to_string());
@@ -773,7 +845,7 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
             }
         }
     }
-    ("\u{672a}\u{6ce8}\u{518c}".to_string(), None, None)
+    ("NOCONN".to_string(), None, None)
 }
 
 pub fn parse_gmr(response: &str) -> String {
@@ -839,13 +911,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_qeng_lte_qualcomm_bandwidth_index() {
+    fn parse_qeng_lte_qualcomm_bandwidth_and_signal() {
+        // Fields: [10]=DL-BW-idx=5(→20MHz) [11]=UL-BW [12]=TAC=5AE [13]=RSRP=-95 [14]=RSRQ=-10
+        // [15]=RSSI=-65 [16]=SINR=18 [17]=CQI=10 [18]=TxPwr=20
         let raw = r#"+QENG: "servingcell","CONNECT","LTE","FDD",460,11,1A2B3C4,100,2650,3,5,5,5AE,-95,-10,-65,18,10,20,0"#;
         let info = parse_qeng_serving_cell(raw, true);
-        assert_eq!(info.bandwidth, "20");
+        assert_eq!(info.bandwidth, "20 MHz");
         assert_eq!(info.arfcn, "2650");
-        assert!(!info.rsrp.is_empty());
-        assert!(!info.sinr.is_empty());
+        assert_eq!(info.rsrp, "-95 dBm");
+        assert_eq!(info.rsrq, "-10 dB");
+        assert_eq!(info.sinr, "18 dB");
+        assert_eq!(info.tx_power, "20 dBm");
+        assert_eq!(info.tech, "LTE");
+        assert!(info.connected);
     }
 
     #[test]
@@ -856,9 +934,62 @@ mod tests {
     }
 
     #[test]
+    fn parse_qeng_nr5g_sa_full() {
+        // Fields: [3]=SA [4]=MCC [5]=MNC [6]=cellID [7]=PCI [8]=TAC [9]=ARFCN
+        // [10]=band [11]=BW=100MHz [12]=RSRP=-97 [13]=RSRQ=-11 [14]=SINR=21
+        // [15]=TxPwr=-32767(n/a) [16]=RxLev=255(n/a) [17]=SCS=1
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-SA","SA",460,11,0B46E280,0,120,504990,41,100,-97,-11,21,-32767,255,1"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-SA");
+        assert!(info.connected);
+        assert_eq!(info.pci, "0");
+        assert_eq!(info.arfcn, "504990");
+        assert_eq!(info.band, "41");
+        assert_eq!(info.bandwidth, "100 MHz");
+        assert_eq!(info.rsrp, "-97 dBm");
+        assert_eq!(info.rsrq, "-11 dB");
+        assert_eq!(info.sinr, "21 dB");
+        assert_eq!(info.tx_power, "");   // -32767 filtered out
+        assert_eq!(info.rx_level, "");   // 255 filtered out
+        assert_eq!(info.scs, "1");
+    }
+
+    #[test]
+    fn parse_qeng_nr5g_sa_17_fields_no_scs() {
+        // Some firmware omits the SCS field (17 fields instead of 18)
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-SA","SA",460,11,0B46E280,0,120,632928,78,100,-97,-11,21,-32767,255"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-SA");
+        assert_eq!(info.arfcn, "632928");
+        assert_eq!(info.rsrp, "-97 dBm");
+        assert_eq!(info.scs, "");
+    }
+
+    #[test]
+    fn parse_qeng_nr5g_nsa_uses_nr_fields() {
+        // NSA format: LTE anchor [3..18] + NR secondary [19..24]
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-NSA","FDD",460,11,1A2B3C4D,100,1300,3,3,5,5AE,-102,-12,-45,24,22,0,504990,78,106,-82,-10,28"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-NSA");
+        assert_eq!(info.arfcn, "504990");   // NR-ARFCN, not LTE EARFCN
+        assert_eq!(info.band, "78");         // NR band, not LTE band
+        assert_eq!(info.rsrp, "-82 dBm");   // NR RSRP, not LTE RSRP
+        assert_eq!(info.rsrq, "-10 dB");    // NR RSRQ
+        assert_eq!(info.sinr, "28 dB");     // NR SINR
+    }
+
+    #[test]
     fn parse_qeng_returns_default_on_empty() {
         let info = parse_qeng_serving_cell("OK", true);
         assert!(!info.connected);
+        assert!(info.tech.is_empty());
+    }
+
+    #[test]
+    fn parse_cereg_returns_english_state() {
+        assert_eq!(parse_cereg("+CEREG: 2,1\r\nOK").0, "CONNECT");
+        assert_eq!(parse_cereg("+CEREG: 2,2\r\nOK").0, "SEARCH");
+        assert_eq!(parse_cereg("+CEREG: 2,5\r\nOK").0, "CONNECT");
     }
 
     #[test]

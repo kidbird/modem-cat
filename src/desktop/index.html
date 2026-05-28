@@ -2313,24 +2313,13 @@
       </div>
 
       <div class="panel" id="vlanPanel" style="max-width:calc(50% - 7px);">
-        <div class="panel-header">
-          <div class="panel-title" data-i18n="panel_vlan">VLAN 配置</div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshVlan()" data-i18n="btn_ip_refresh">刷新</button>
-        </div>
+        <div class="panel-title" data-i18n="panel_vlan">VLAN 配置</div>
         <div id="vlanNotSupported" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;" data-i18n="vlan_not_supported">仅 Qualcomm 模组支持 VLAN 配置</div>
-        <div class="form-row" style="align-items:center;gap:16px;">
-          <label class="toggle-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;" id="vlanToggleLabel">
-            <input type="checkbox" id="vlanEnabled" onchange="onVlanToggle(this.checked)" style="display:none;">
-            <span class="toggle-track" id="vlanToggleTrack" style="
-              display:inline-block;width:40px;height:22px;border-radius:11px;
-              background:var(--bg-tertiary);border:1px solid var(--border-color);
-              position:relative;transition:background 0.2s;cursor:pointer;"
-              onclick="toggleVlan()">
-              <span id="vlanToggleThumb" style="
-                position:absolute;top:3px;left:3px;width:14px;height:14px;
-                border-radius:50%;background:var(--text-muted);transition:left 0.2s;"></span>
-            </span>
-            <span id="vlanEnabledLabel" data-i18n="label_vlan_off" style="font-size:13px;color:var(--text-secondary);">已关闭</span>
+        <div class="toggle-row">
+          <div><div class="toggle-label" id="vlanEnabledLabel" data-i18n="label_vlan_off">已关闭</div></div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="vlanEnabled" onchange="onVlanToggle(this.checked)">
+            <span class="toggle-track"></span>
           </label>
         </div>
         <div id="vlanIdRow" style="display:none;margin-top:12px;">
@@ -2339,12 +2328,10 @@
               <label data-i18n="label_vlan_id">VLAN ID</label>
               <input type="number" id="vlanId" min="1" max="255" placeholder="1~255">
             </div>
-            <div class="form-group auto" style="display:flex;align-items:flex-end;gap:8px;">
+            <div class="form-group auto" style="display:flex;align-items:flex-end;">
               <button class="btn btn-primary btn-sm" onclick="applyVlan()" data-i18n="btn_vlan_apply">应用</button>
-              <button class="btn btn-secondary btn-sm" onclick="disableVlan()" data-i18n="btn_vlan_disable">禁用当前</button>
             </div>
           </div>
-          <div id="vlanCurrentIds" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
         </div>
       </div>
 
@@ -3760,22 +3747,17 @@
 
     function updateVlanPanelAccess() {
       const isQualcomm = state.chipVendor === 'qualcomm';
-      const toggleLabel = document.getElementById('vlanToggleLabel');
-      if (toggleLabel) toggleLabel.style.opacity = isQualcomm ? '1' : '0.4';
       const hint = document.getElementById('vlanNotSupported');
       if (hint) hint.style.display = isQualcomm ? 'none' : '';
+      const cb = document.getElementById('vlanEnabled');
+      if (cb) cb.disabled = !isQualcomm;
     }
 
     function setVlanToggleUI(enabled) {
-      const track = document.getElementById('vlanToggleTrack');
-      const thumb = document.getElementById('vlanToggleThumb');
-      const lbl   = document.getElementById('vlanEnabledLabel');
-      const row   = document.getElementById('vlanIdRow');
-      const cb    = document.getElementById('vlanEnabled');
+      const cb  = document.getElementById('vlanEnabled');
+      const lbl = document.getElementById('vlanEnabledLabel');
+      const row = document.getElementById('vlanIdRow');
       cb.checked = enabled;
-      track.style.background = enabled ? 'var(--accent)' : 'var(--bg-tertiary)';
-      thumb.style.left = enabled ? '23px' : '3px';
-      thumb.style.background = enabled ? '#fff' : 'var(--text-muted)';
       lbl.setAttribute('data-i18n', enabled ? 'label_vlan_on' : 'label_vlan_off');
       lbl.textContent = t(enabled ? 'label_vlan_on' : 'label_vlan_off');
       row.style.display = enabled ? 'block' : 'none';
@@ -3783,29 +3765,33 @@
 
     async function refreshVlan() {
       if (!state.connected) return;
-      if (state.chipVendor !== 'qualcomm') { updateVlanPanelAccess(); return; }
+      updateVlanPanelAccess();
+      if (state.chipVendor !== 'qualcomm') return;
       try {
         const ids = await invoke('get_vlan');
         const hasVlan = ids && ids.length > 0;
         setVlanToggleUI(hasVlan);
-        if (hasVlan) {
-          document.getElementById('vlanId').value = ids[0];
-          document.getElementById('vlanCurrentIds').textContent = t('label_vlan_id') + ': ' + ids.join(', ');
-        }
+        if (hasVlan) document.getElementById('vlanId').value = ids[0];
       } catch (_) { /* leave current state */ }
     }
 
-    function toggleVlan() {
-      if (state.chipVendor !== 'qualcomm') return;
-      const cb = document.getElementById('vlanEnabled');
-      const newVal = !cb.checked;
-      cb.checked = newVal;
-      onVlanToggle(newVal);
-    }
-
-    function onVlanToggle(enabled) {
-      setVlanToggleUI(enabled);
-      if (!enabled) disableVlan();
+    async function onVlanToggle(enabled) {
+      const lbl = document.getElementById('vlanEnabledLabel');
+      const row = document.getElementById('vlanIdRow');
+      lbl.setAttribute('data-i18n', enabled ? 'label_vlan_on' : 'label_vlan_off');
+      lbl.textContent = t(enabled ? 'label_vlan_on' : 'label_vlan_off');
+      row.style.display = enabled ? 'block' : 'none';
+      if (!enabled && state.connected) {
+        try {
+          await invoke('set_vlan', { vlanId: 1, enabled: false });
+          await flushAtLog();
+          showToast('VLAN 已禁用', 'ok');
+        } catch (e) {
+          showToast('VLAN 禁用失败: ' + e, 'err');
+          // revert toggle if failed
+          setVlanToggleUI(true);
+        }
+      }
     }
 
     async function applyVlan() {
@@ -3818,28 +3804,9 @@
         await flushAtLog();
         hideLoading();
         showToast('VLAN ' + id + ' 已启用', 'ok');
-        document.getElementById('vlanCurrentIds').textContent = t('label_vlan_id') + ': ' + id;
       } catch (e) {
         hideLoading();
         showToast('VLAN 启用失败: ' + e, 'err');
-      }
-    }
-
-    async function disableVlan() {
-      if (!state.connected) return;
-      const id = parseInt(document.getElementById('vlanId').value);
-      if (isNaN(id) || id < 1) return;
-      try {
-        showLoading('正在禁用 VLAN...');
-        await invoke('set_vlan', { vlanId: id, enabled: false });
-        await flushAtLog();
-        hideLoading();
-        showToast('VLAN ' + id + ' 已禁用', 'ok');
-        setVlanToggleUI(false);
-        document.getElementById('vlanCurrentIds').textContent = '';
-      } catch (e) {
-        hideLoading();
-        showToast('VLAN 禁用失败: ' + e, 'err');
       }
     }
 

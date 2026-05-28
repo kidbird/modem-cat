@@ -91,6 +91,7 @@ pub struct ApnEntry {
 pub struct L5GanEntry {
     pub cid: i32,
     pub enabled: bool,
+    pub vlan_id: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

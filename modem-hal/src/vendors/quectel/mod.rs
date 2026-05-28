@@ -908,9 +908,9 @@ impl ModemVendor for QuectelModem {
         Ok(parse_5glan(&resp))
     }
 
-    fn set_5glan(&mut self, t: &mut dyn AtTransport, cid: i32, enabled: bool) -> Result<(), String> {
+    fn set_5glan(&mut self, t: &mut dyn AtTransport, cid: i32, enabled: bool, vlan_id: i32) -> Result<(), String> {
         let state = if enabled { 1 } else { 0 };
-        let resp = send_and_delay(t, &format!(r#"AT+QCFG="5glan",{},{},1"#, cid, state))?;
+        let resp = send_and_delay(t, &format!(r#"AT+QCFG="5glan",{},{},{}"#, cid, state, vlan_id))?;
         if is_ok(&resp) {
             Ok(())
         } else {

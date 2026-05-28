@@ -1614,7 +1614,12 @@
         <div class="panel">
           <div class="panel-header">
             <div class="panel-title" data-i18n="panel_ip">IP 地址</div>
-            <button class="btn btn-secondary btn-sm" onclick="refreshIpInfo()" data-i18n="btn_ip_refresh">刷新</button>
+            <button class="btn btn-secondary" onclick="refreshIpInfo()" title="刷新" style="border-color: var(--accent); color: var(--accent); padding: 6px 10px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
           </div>
           <div class="info-grid-2">
             <div class="info-item">
@@ -1803,6 +1808,19 @@
 
         <!-- ─ Tab 5: 5GLAN ─ -->
         <div class="tab-panel" id="ctab-5glan">
+          <div class="form-row" style="align-items:flex-end;margin-bottom:12px;">
+            <div class="form-group narrow">
+              <label data-i18n="label_5glan_cid">CID</label>
+              <input type="number" id="glanNewCid" min="1" max="15" placeholder="1-15">
+            </div>
+            <div class="form-group narrow">
+              <label data-i18n="label_5glan_vlan">VLAN ID</label>
+              <input type="number" id="glanNewVlan" min="1" max="255" placeholder="1-255" value="1">
+            </div>
+            <div class="form-group auto" style="display:flex;align-items:flex-end;">
+              <button class="btn btn-primary btn-sm" onclick="addNew5Glan()" data-i18n="btn_add_5glan">添加 / 应用</button>
+            </div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;padding:8px 0;" id="glanToggles"></div>
         </div>
 
@@ -2523,6 +2541,7 @@
         label_dl_traffic: '下行流量',
         tab_apn: 'APN 配置', tab_network: '网络配置',
         tab_lock: '小区 / 频点锁定', tab_neighbor: '邻区信息', tab_5glan: '5GLAN',
+        label_5glan_cid: 'CID', label_5glan_vlan: 'VLAN ID', btn_add_5glan: '添加 / 应用',
         btn_add_apn: '新增 APN', panel_pref_net: '首选网络', btn_save: '保存',
         opt_auto: '自动', opt_nr5g_only: '仅 5G', opt_lte_only: '仅 LTE', opt_wcdma: '仅 WCDMA',
         panel_band: '频段设置', btn_reset: '重置', panel_plmn: 'PLMN 锁定',
@@ -2604,6 +2623,7 @@
         label_dl_traffic: 'Download',
         tab_apn: 'APN Config', tab_network: 'Network Config',
         tab_lock: 'Cell / Freq Lock', tab_neighbor: 'Neighbor Cells', tab_5glan: '5GLAN',
+        label_5glan_cid: 'CID', label_5glan_vlan: 'VLAN ID', btn_add_5glan: 'Add / Apply',
         btn_add_apn: 'Add APN', panel_pref_net: 'Preferred Network', btn_save: 'Save',
         opt_auto: 'Auto', opt_nr5g_only: '5G Only', opt_lte_only: 'LTE Only', opt_wcdma: 'WCDMA Only',
         panel_band: 'Band Settings', btn_reset: 'Reset', panel_plmn: 'PLMN Lock',
@@ -3327,12 +3347,13 @@
     function render5Glan() {
       const container = document.getElementById('glanToggles');
       if (!glanData.length) {
-        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 5GLAN 数据</div>';
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 5GLAN 数据，使用上方表单添加</div>';
         return;
       }
       container.innerHTML = glanData.map(g => `
-        <div class="toggle-row" style="align-items:center;border-bottom:1px solid var(--border-color);">
-          <div><div class="toggle-label">CID ${g.cid}</div></div>
+        <div class="toggle-row" style="align-items:center;border-bottom:1px solid var(--border-color);gap:12px;">
+          <div style="flex:0 0 auto;min-width:64px;"><div class="toggle-label">CID ${g.cid}</div></div>
+          <div style="flex:1;color:var(--text-muted);font-size:12px;">VLAN ${g.vlanId ?? 1}</div>
           <label class="toggle-switch"><input type="checkbox" ${g.enabled ? 'checked' : ''} onchange="set5Glan(${g.cid}, this.checked)"><span class="toggle-track"></span></label>
         </div>
       `).join('');
@@ -3351,16 +3372,47 @@
     }
 
     async function set5Glan(cid, enabled) {
-      if (!state.connected) return;
+      if (!state.connected) {
+        showToast('未连接模组', 'err');
+        // revert checkbox state
+        await refresh5Glan();
+        return;
+      }
+      const existing = glanData.find(g => g.cid === cid);
+      const vlanId = existing?.vlanId ?? 1;
       try {
-        await invoke('set_5glan', { cid, enabled });
+        await invoke('set_5glan', { cid, enabled, vlanId });
         await flushAtLog();
-        addTerminalLine(`[5GLAN] CID${cid} → ${enabled ? '开启' : '关闭'}`, 'ok');
+        addTerminalLine(`[5GLAN] CID${cid} VLAN${vlanId} → ${enabled ? '开启' : '关闭'}`, 'ok');
         await refresh5Glan();
       } catch (e) {
         showToast('5GLAN 设置失败: ' + e, 'err');
         addTerminalLine('[5GLAN] 设置失败: ' + e, 'err');
         await refresh5Glan();
+      }
+    }
+
+    async function addNew5Glan() {
+      if (!state.connected) { showToast('未连接模组', 'err'); return; }
+      const cidEl = document.getElementById('glanNewCid');
+      const vlanEl = document.getElementById('glanNewVlan');
+      const cid = parseInt(cidEl.value, 10);
+      const vlanId = parseInt(vlanEl.value, 10);
+      if (!Number.isFinite(cid) || cid < 1 || cid > 15) {
+        showToast('请输入有效 CID (1-15)', 'err'); return;
+      }
+      if (!Number.isFinite(vlanId) || vlanId < 1 || vlanId > 255) {
+        showToast('请输入有效 VLAN ID (1-255)', 'err'); return;
+      }
+      try {
+        await invoke('set_5glan', { cid, enabled: true, vlanId });
+        await flushAtLog();
+        addTerminalLine(`[5GLAN] 添加 CID${cid} VLAN${vlanId}`, 'ok');
+        cidEl.value = '';
+        await refresh5Glan();
+      } catch (e) {
+        showToast('5GLAN 添加失败: ' + e, 'err');
+        addTerminalLine('[5GLAN] 添加失败: ' + e, 'err');
       }
     }
 

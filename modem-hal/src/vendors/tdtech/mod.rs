@@ -270,7 +270,7 @@ impl ModemVendor for TdTechModem {
         Err("5GLAN not supported on TdTech".into())
     }
 
-    fn set_5glan(&mut self, _t: &mut dyn AtTransport, _cid: i32, _enabled: bool) -> Result<(), String> {
+    fn set_5glan(&mut self, _t: &mut dyn AtTransport, _cid: i32, _enabled: bool, _vlan_id: i32) -> Result<(), String> {
         Err("5GLAN not supported on TdTech".into())
     }
 

@@ -97,8 +97,8 @@ pub trait ModemVendor: Send {
     /// Query 5GLAN status (AT+QCFG="5glan")
     fn query_5glan(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String>;
 
-    /// Set 5GLAN state for a CID (AT+QCFG="5glan",<cid>,<state>)
-    fn set_5glan(&mut self, transport: &mut dyn AtTransport, cid: i32, enabled: bool) -> Result<(), String>;
+    /// Set 5GLAN state for a CID (AT+QCFG="5glan",<cid>,<state>,<vlan_id>)
+    fn set_5glan(&mut self, transport: &mut dyn AtTransport, cid: i32, enabled: bool, vlan_id: i32) -> Result<(), String>;
 
     /// Activate data connection
     fn connect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;

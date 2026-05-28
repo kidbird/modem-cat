@@ -245,3 +245,63 @@ invoke('disconnect_data')
           │
           └─ AT+QNETDEVCTL=<cid>,2,0 → 断开
 ```
+
+## 10. 高通 5GLAN（L2 / Ethernet PDU）配置流程
+
+参考 `docs/AT_COMMANDS.md §9` 与
+`Quectel_RG520N&RG525F&RG5x0F&RM5x0N_Series_5G_LAN_User_Guide_V1.0.0`。
+实现位置：`modem-hal/src/vendors/quectel/mod.rs`，前端入口 `src/desktop/index.html#glan-qualcomm`。
+
+```
+前端「步骤 1 — 配置 PDP profile」
+  │
+  └─→ invoke('configure_qualcomm_5glan', {cid, apn, snssai, profileId, vlanStart, vlanEnd})
+          │
+          └─→ lib.rs → vendor.configure_qualcomm_5glan()
+                  │   仅 Qualcomm，否则返回 Err
+                  │
+                  ├─ AT+QNWCFG="eth_cfg",<profile_id>,<eth_mode>
+                  │     eth_mode = 1 (vlan_start<65535) | 2 (无 VLAN)
+                  ├─ AT+CGDCONT=<cid>,"IPV4V6","<apn>",,,,,,,,,,,,,,1,"<snssai>",
+                  └─ AT+QWDSCFG="profile",<cid>,"Ethernet","<apn>",<vlan_start>,<vlan_end>
+
+前端「步骤 2 — 启用 ETH PDU 会话」⚠ 重启后才生效
+  │
+  └─→ invoke('enable_eth_pdu')
+          │
+          └─→ vendor.enable_eth_pdu()
+                  └─ AT+QMAP="ETH_PDU","enable"
+                  └─ ⚠ 用户需手动 AT+CFUN=1,1，重启前查询字段仍为 disable
+
+前端「步骤 3 — 建立 MPDN 规则并拨号」
+  │
+  └─→ invoke('connect_qualcomm_5glan', {ruleId, cid})
+          │
+          └─→ vendor.connect_qualcomm_5glan()
+                  ├─ AT+QMAP="mpdn_rule",<rule_id>,<cid>,0,0,0
+                  └─ AT+QMAP="connect",<rule_id>,1
+
+前端「刷新状态」（每次步骤完成后调用）
+  │
+  └─→ invoke('query_qualcomm_5glan_status')
+          │
+          └─→ vendor.query_qualcomm_5glan_status()
+                  ├─ AT+QMAP="ETH_PDU"        → parse_eth_pdu_enabled() → bool
+                  ├─ AT+QMAP="mpdn_rule"      → parse_mpdn_rule_cid(rule=1) → Option<i32>
+                  └─ AT+QMAP="MPDN_status"    → parse_mpdn_connect_status_by_rule(rule=1) → bool
+                          │
+                          └─→ Qualcomm5GlanStatus { eth_pdu_enabled, mpdn_cid, connected }
+
+VLAN 独立子配置（不属于上述三步主流程）
+  │
+  ├─→ invoke('query_vlan')        → AT+QMAP="VLAN"             → Vec<i32>（过滤 id=0）
+  └─→ invoke('set_vlan', {vlanId, enabled})
+          ├─ enable :  AT+QMAP="VLAN",<id>,"enable",1   （末尾 1=ETH 型）
+          └─ disable:  AT+QMAP="VLAN",<id>,"disable"
+```
+
+### 平台守卫
+
+所有上述 vendor 方法在非 Qualcomm 芯片上直接返回
+`Err("... only supported on Qualcomm chip")`，避免误发命令；UniSoc 走的是
+`AT+QCFG="5glan"`（`set_5glan`），不进入本流程。

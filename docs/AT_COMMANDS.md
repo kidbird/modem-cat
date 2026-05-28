@@ -38,8 +38,8 @@
 
 | 功能 | AT 指令 | 备注 |
 |------|---------|------|
-| 连接数据 | `AT+QNETDEVCTL=1,{cid},1` | |
-| 断开数据 | `AT+QNETDEVCTL=0,{cid},1` | |
+| 连接数据 | `AT+QNETDEVCTL={cid},3,1` | 格式 `<cid>,<op>,<state>`；`op=3` 激活，`state=1` 启用 URC |
+| 断开数据 | `AT+QNETDEVCTL={cid},2,0` | `op=2` 去激活，`state=0` |
 | 查询 IP | `AT+QNETDEVSTATUS={cid}` | 响应格式见下方说明 |
 | 流量统计 | `AT+QGDCNT?` | `parse_qgdcnt()` |
 | 重置流量 | `AT+QGDCNT=0` | |
@@ -117,15 +117,109 @@
 | 设置 APN | `AT+QICSGP={cid},{type},"<apn>","<user>","<pass>",{auth}` | |
 | 删除 APN | `AT+CGDCONT={cid}` | |
 | 激活/停用 PDP | `AT+CGACT={0/1},{cid}` | |
-| 5GLAN 查询 | `AT+QCFG="5glan"` | |
-| 5GLAN 设置 | `AT+QCFG="5glan",{cid},{0/1},1` | |
+| 5GLAN 查询（UniSoc） | `AT+QCFG="5glan"` | 仅 UniSoc 走 QCFG 路径 |
+| 5GLAN 设置（UniSoc） | `AT+QCFG="5glan",{cid},{0/1},1` | 高通平台走 L2 ETH_PDU 流程，见 §9 |
 | 小区锁定 | `AT+QNWLOCK="common/5g",1,{arfcn},{pci}` | |
 | 频点锁定 | `AT+QNWLOCKFREQ="common/5g",1,{arfcn}` | |
 | 清除锁定 | `AT+QNWLOCK="common/5g",0` | |
 | PLMN 锁定 | `AT+QSIMLOCK="PN","{password}",2,"{plmn}"` | |
 | PLMN 解锁 | `AT+QSIMLOCK="PN","{password}"` | |
 
-## 9. 解析辅助函数
+## 9. 高通 5GLAN（L2 / Ethernet PDU 方案，仅 Qualcomm 平台）
+
+> 来源：`Quectel_RG520N&RG525F&RG5x0F&RM5x0N_Series_5G_LAN_User_Guide_V1.0.0`（2025-10-27）
+> 适用：RG520N / RG525F / RG5x0F / RM5x0N，**仅 R05 固件**支持
+> 代码：`modem-hal/src/vendors/quectel/mod.rs::configure_qualcomm_5glan / enable_eth_pdu / connect_qualcomm_5glan / query_qualcomm_5glan_status`
+
+### 9.1 L2 与 L3 方案对比
+
+| 项 | L2（以太网 PDU） | L3（IP PDU） |
+|----|------------------|-------------|
+| PDU 类型 | Ethernet | IPv4 / IPv6 / IPv4v6 |
+| 拨号方 | 模组内部拨号（`AT+QMAP="connect"`） | 外部主机拨号（quectel-CM / MBIM） |
+| VLAN 支持 | 支持（0–4094，可省略） | **不支持** |
+| 主机接入方式 | **只支持** Module + PHY（以太网），不能 USB | 模组支持的任意方式 |
+| 主机配置 | 必须发以太网二层帧（不需要 IP 拨号） | 走 IP 拨号 |
+| Allowed-NSSAI 示例 | `03.010102` | `03.010103` |
+| 关键 AT | `AT+QNWCFG="eth_cfg"` + `AT+QWDSCFG="profile"` + `AT+QMAP="ETH_PDU"` + `AT+QMAP="mpdn_rule"` | 仅 `AT+CGDCONT`，其余由外部拨号工具完成 |
+
+> 注：`AT+CGDCONT` 的 `PDP_Type` **不允许直接配为 Ethernet**，L2 的 Ethernet 属性通过 `AT+QWDSCFG="profile"` 表达。
+
+### 9.2 L2 配置流程（三步 + 一次重启）
+
+```
+步骤 1：配置 PDP profile (configure_qualcomm_5glan)
+  └─ AT+QNWCFG="eth_cfg",<profile_id>,<eth_mode>
+        eth_mode = 1  → 带 VLAN ID 数据流
+        eth_mode = 2  → 不带 VLAN ID（vlan_start = 65535 时使用）
+  └─ AT+CGDCONT=<cid>,"IPV4V6","<apn>",,,,,,,,,,,,,,1,"<snssai>",
+        APN/SNSSAI 之间需要 13 个空字段（S-NSSAIs_ind 在第 17 位）
+  └─ AT+QWDSCFG="profile",<cid>,"Ethernet","<apn>",<vlan_start>,<vlan_end>
+        不带 VLAN 时两个 VLAN 参数都填 65535
+
+步骤 2：启用 ETH PDU 会话 (enable_eth_pdu)
+  └─ AT+QMAP="ETH_PDU","enable"
+  └─ ⚠ 必须重启模组（AT+CFUN=1,1）；查询字段在重启前仍返回 disable
+  └─ 启用后，IP-based PDU 拨号（AT+QMAP="connect" 走 IP 路径）将不可用
+
+步骤 3：建立 MPDN 规则并拨号 (connect_qualcomm_5glan)
+  └─ AT+QMAP="mpdn_rule",<rule_id>,<cid>,0,0,0
+  └─ AT+QMAP="connect",<rule_id>,1
+```
+
+PDF 示例（带 VLAN，CID=5、profile_id=1、snssai=03.010102）：
+
+```
+AT+QNWCFG="eth_cfg",1,1
+AT+CGDCONT=5,"IPV4V6","5glan2",,,,,,,,,,,,,,1,"03.010102",
+AT+QWDSCFG="profile",5,"Ethernet","5glan2",2,7
+AT+QMAP="ETH_PDU","enable"
+（重启模组）
+AT+QMAP="mpdn_rule",1,5,0,0,0
+AT+QMAP="connect",1,1
+```
+
+### 9.3 状态查询（query_qualcomm_5glan_status）
+
+| 查询项 | AT 指令 | 解析函数 | 含义 |
+|--------|---------|----------|------|
+| ETH PDU 是否启用 | `AT+QMAP="ETH_PDU"` | `qualcomm::parse_eth_pdu_enabled` | 匹配 `+QMAP: "ETH_PDU","enable"` 返回 `true` |
+| MPDN 规则绑定 CID | `AT+QMAP="mpdn_rule"` | `qualcomm::parse_mpdn_rule_cid(rule_id=1)` | 返回该 rule 绑定的 PDP CID |
+| 是否连通 | `AT+QMAP="MPDN_status"` | `qualcomm::parse_mpdn_connect_status_by_rule(rule_id=1)` | 该 rule 是否处于已连接 |
+
+返回结构 `Qualcomm5GlanStatus { eth_pdu_enabled, mpdn_cid, connected }`。
+
+### 9.4 VLAN 子配置（独立于 5GLAN 主流程）
+
+| 功能 | AT 指令 | 备注 |
+|------|---------|------|
+| 查询 VLAN 列表 | `AT+QMAP="VLAN"` | `+QMAP: "VLAN",<id>,<state>`；`id=0` 是未打标的基线项，跳过 |
+| 启用 VLAN（ETH 型） | `AT+QMAP="VLAN",<vlan_id>,"enable",1` | 第 4 个参数 `1`=ETH，`2`=USB |
+| 关闭 VLAN | `AT+QMAP="VLAN",<vlan_id>,"disable"` | |
+
+Windows 主机不支持配置 VLAN ID；Linux 主机用 `vconfig add eth0 <vid>`。
+
+### 9.5 主机侧前置条件（PHY/Ethernet）
+
+```
+AT+QCFG="pcie/mode",1       # 启用 PCIe（rtl8125 / RG520N 内置）
+AT+QETH="eth_driver","r8125" # 选择 RTL8125 驱动；外接 QPS615 时改为 pcie/mode=3
+（重启模组）
+```
+
+L2 方案要求主机以**二层以太帧**与模组通信（不要在主机做 IP 拨号），主机网卡静态配置同网段 IP（如 `172.21.1.1/24`、`172.21.1.105/24`），即可在两个 PC 之间通过 5G 核心网（UPF 当虚拟交换机）做单播 / 多播 / 广播。
+
+### 9.6 平台差异速查
+
+| 能力 | Qualcomm | UniSoc | 其他平台 |
+|------|----------|--------|---------|
+| Ethernet PDU | ✔ | ✘ | ✔ |
+| VLAN | ✔ | ✘ | ✔ |
+| 拨号方式 | Module + PHY 内部拨号 | — | USB 外拨 / PHY 内拨 |
+| AT 配置入口 | ETH_PDU + QWDSCFG | `AT+QCFG="5glan"` | — |
+| 理论速率 | DL 3Gbps / UL 1Gbps | — | DL 1Gbps / UL 500Mbps |
+
+## 10. 解析辅助函数
 
 | 函数 | 功能 |
 |------|------|

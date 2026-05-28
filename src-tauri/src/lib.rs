@@ -528,6 +528,21 @@ async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<Hardware
 }
 
 #[tauri::command]
+async fn get_temperature(state: tauri::State<'_, AppState>) -> Result<TemperatureInfo, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_temperature(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
@@ -1451,6 +1466,7 @@ pub fn run() {
             // High-level queries
             get_modem_status,
             get_hardware_info,
+            get_temperature,
             get_ip_info,
             get_apn_list,
             get_neighbor_cells,

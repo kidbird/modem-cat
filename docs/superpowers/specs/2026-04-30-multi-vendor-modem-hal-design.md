@@ -158,8 +158,8 @@ pub struct QuectelModem {
 **Per-chip divergences:**
 | Operation | Qualcomm | UniSoc |
 |-----------|----------|--------|
-| Data connect | `AT+QMAP="connect",<cid>` | `AT+QNETDEVCTL=1,<cid>,1` |
-| Data disconnect | `AT+QMAP="disconnect",<cid>` | `AT+QNETDEVCTL=0,<cid>,1` |
+| Data connect | `AT+QMAP="connect",<cid>` | `AT+QNETDEVCTL=<cid>,3,1`  (cid,op=3 activate, state=1 URC-on) |
+| Data disconnect | `AT+QMAP="disconnect",<cid>` | `AT+QNETDEVCTL=<cid>,2,0`  (cid,op=2 deactivate, state=0) |
 | Connection status | `AT+QMAP="WWAN"` | `AT+QNETDEVSTATUS=<cid>` |
 | IP info | `AT+QMAP="WWAN"` parse | `AT+QNETDEVSTATUS=<cid>` parse |
 | Bandwidth decode | lookup table (0→1.4, 1→3, ..., 5→100 MHz) | direct integer MHz |

@@ -1966,6 +1966,11 @@
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNETDEVSTATUS=1')">AT+QNETDEV</button>
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QICSGP?')">AT+QICSGP?</button>
           </div>
+          <div class="shortcut-bar">
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;mode_pref&quot;')" title="查询首选网络模式">mode_pref</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;nr5g_band&quot;')" title="查询 NR5G 频段偏好">nr5g_band</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGPADDR')" title="查询 PDP 地址">AT+CGPADDR</button>
+          </div>
           <div class="terminal-input">
             <span class="terminal-prompt">›</span>
             <input type="text" id="atCommand" data-i18n-ph="ph_at_cmd" placeholder="输入 AT 命令..." onkeydown="handleAtKey(event)">
@@ -1983,7 +1988,12 @@
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title" data-i18n="panel_hw_info">模组信息</div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshHardwareInfo()" data-i18n="btn_hw_refresh">刷新</button>
+          <button class="btn btn-secondary" onclick="refreshTemperature()" title="刷新温度" style="border-color: var(--accent); color: var(--accent); padding: 6px 10px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
         </div>
         <div class="info-grid-2">
           <div class="info-row">
@@ -3572,6 +3582,7 @@
         showToast('参数配置成功', 'ok');
         addTerminalLine(`[5GLAN-QC] 配置参数 CID=${cid} APN=${apn} SNSSAI=${snssai}${useVlan ? ` VLAN=${vlanStart}-${vlanEnd}` : ''}`, 'ok');
       } catch (e) {
+        await flushAtLog();
         showToast('配置失败: ' + e, 'err');
         addTerminalLine('[5GLAN-QC] 配置失败: ' + e, 'err');
       }
@@ -3586,6 +3597,7 @@
         addTerminalLine('[5GLAN-QC] ETH PDU 启用成功，等待模组重启', 'ok');
         await refresh5GlanQualcommStatus();
       } catch (e) {
+        await flushAtLog();
         showToast('ETH PDU 启用失败: ' + e, 'err');
         addTerminalLine('[5GLAN-QC] ETH PDU 启用失败: ' + e, 'err');
       }
@@ -3604,6 +3616,7 @@
         addTerminalLine(`[5GLAN-QC] Rule=${ruleId} CID=${cid} 连接成功`, 'ok');
         await refresh5GlanQualcommStatus();
       } catch (e) {
+        await flushAtLog();
         showToast('连接失败: ' + e, 'err');
         addTerminalLine('[5GLAN-QC] 连接失败: ' + e, 'err');
       }
@@ -3615,11 +3628,13 @@
       if (!state.connected) { el.textContent = '—'; return; }
       try {
         const s = await invoke('query_qualcomm_5glan_status');
+        await flushAtLog();
         const ethState = s.ethPduEnabled ? '<span style="color:var(--ok,#10b981)">已启用</span>' : '<span style="color:var(--text-muted)">未启用</span>';
         const connState = s.connected ? '<span style="color:var(--ok,#10b981)">已连接</span>' : '<span style="color:var(--text-muted)">未连接</span>';
         const cidStr = s.mpdnCid != null ? `CID ${s.mpdnCid}` : '—';
         el.innerHTML = `ETH PDU: ${ethState} &nbsp;|&nbsp; MPDN CID: ${cidStr} &nbsp;|&nbsp; 连接状态: ${connState}`;
       } catch (e) {
+        await flushAtLog();
         el.textContent = '查询失败: ' + e;
       }
     }
@@ -4513,13 +4528,13 @@
           params:[],
           example:'AT+QNWPREFCFG=?\n+QNWPREFCFG: "lte_band",...\nOK', note:'返回模组射频硬件实际支持的频段，用于确认是否支持目标运营商的频段。设置频段时不应超出此范围。' },
         { cmd:'AT+QNETDEVCTL=', category:'数据连接', desc:'连接/断开数据（展锐平台专用）',
-          syntax:'AT+QNETDEVCTL=<action>,<cid>,<flag>',
-          response:'OK',
+          syntax:'AT+QNETDEVCTL=<cid>[,<op>,<state>]',
+          response:'OK\n+QNETDEVSTATUS: <cid>,<state>,<IP_version>,<code>   // URC',
           params:[
-            {name:'action',desc:'操作',values:'1=连接, 0=断开'},
-            {name:'cid',desc:'PDP 上下文 ID',values:'1-16'},
-            {name:'flag',desc:'标志',values:'通常为 1'}],
-          example:'AT+QNETDEVCTL=1,1,1\nOK', note:'展锐平台数据拨号指令。高通平台使用 AT+QMAP="connect" 代替。连接前需确保 PDP 上下文已配置（QICSGP/CGDCONT）。' },
+            {name:'cid',desc:'PDP 上下文 ID（第一位）',values:'1~8'},
+            {name:'op',desc:'操作码',values:'合法值 0/1/2/3；本工具用 3=激活, 2=去激活'},
+            {name:'state',desc:'URC / 子状态',values:'1=启用 URC（激活时）, 0=禁用（去激活时）'}],
+          example:'AT+QNETDEVCTL=1,3,1\nOK\n+QNETDEVSTATUS: 1,1,"IPV4",0', note:'展锐平台数据拨号指令。参数顺序 <cid>,<op>,<state>（cid 在第一位），与高通 AT+QMAP="connect",<cid> 完全不同。手册示例 AT+QNETDEVCTL=1,1,1 中第一个 1 是 cid 不是 op。本工具选 op=3 激活 / op=2 去激活，等价于"完整激活并开启 URC 上报"。' },
         { cmd:'AT+QNETDEVSTATUS=', category:'数据连接', desc:'查询 IP 地址、子网掩码、网关、DNS（展锐平台专用）',
           syntax:'AT+QNETDEVSTATUS=<cid>',
           response:'<ipv4>,<mask>,<gw>,,<dns1>,<dns2>,<ipv6>,,,,<v6dns1>,<v6dns2>\nOK',
@@ -4912,13 +4927,13 @@
           response:'OK',
           params:[
             {name:'cid',desc:'PDP 上下文 ID',values:'1-16'}],
-          example:'AT+QMAP="connect",1\nOK', note:'高通平台数据拨号指令。展锐平台使用 AT+QNETDEVCTL=1,<cid>,1 代替。连接前需确保 PDP 上下文已配置。' },
+          example:'AT+QMAP="connect",1\nOK', note:'高通平台数据拨号指令。展锐平台使用 AT+QNETDEVCTL=<cid>,3,1 代替（cid 在第一位）。连接前需确保 PDP 上下文已配置。' },
         { cmd:'AT+QMAP="disconnect"', category:'数据连接', desc:'断开数据连接',
           syntax:'AT+QMAP="disconnect",<cid>',
           response:'OK',
           params:[
             {name:'cid',desc:'PDP 上下文 ID',values:'1-16'}],
-          example:'AT+QMAP="disconnect",1\nOK', note:'断开后 IP 地址释放。展锐平台使用 AT+QNETDEVCTL=0,<cid>,1。' },
+          example:'AT+QMAP="disconnect",1\nOK', note:'断开后 IP 地址释放。展锐平台使用 AT+QNETDEVCTL=<cid>,2,0（cid 在第一位，op=2 去激活）。' },
         { cmd:'AT+QMAP="WWAN"', category:'数据连接', desc:'查询 IP 地址、子网掩码、网关（高通平台专用）',
           syntax:'AT+QMAP="WWAN"',
           response:'+QMAP: "WWAN",<cid>,<state>,<ipv4>/<prefix>,<gw>,...\nOK',
@@ -5408,6 +5423,20 @@
         } else if (tab === 'qualcomm') {
           refreshQualcommConfig();
         }
+      }
+    }
+
+    // 仅刷新温度（AT+QTEMP）。其余硬件信息（型号/厂家/固件/基线）只在连接后通过
+    // refreshHardwareInfo() 拉取一次，不需要也不应该被手动重复刷新。
+    async function refreshTemperature() {
+      if (!state.connected) { addTerminalLine('[系统] 未连接', 'err'); return; }
+      try {
+        const t = await invoke('get_temperature');
+        setTextData('hwSocTemp', t.socTemp || '--');
+        setTextData('hwPaTemp', t.paTemp || '--');
+      } catch (e) {
+        addTerminalLine('[系统] 刷新温度失败: ' + e, 'err');
+        showToast('刷新温度失败: ' + e, 'err');
       }
     }
 
@@ -5916,6 +5945,9 @@
       }
       // 启动 USB 监控
       setupUsbMonitor();
+      // AT 命令日志后台轮询：保证任何路径（含 catch 分支、未显式调用 flushAtLog 的查询）
+      // 发出的 AT 命令都能在半秒内自动出现在 AT 调试终端。
+      setInterval(() => { flushAtLog(); }, 500);
     }
 
     // Tauri v2: withGlobalTauri ensures window.__TAURI__ is available before scripts run

@@ -1098,13 +1098,15 @@ use crate::transport::AtTransport;
 use crate::types::{IpInfo, TrafficInfo};
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
-    let resp = t.send_at(&format!("AT+QNETDEVCTL=1,{},1", cid))?;
+    // 参数顺序为 <cid>,<op>,<state>（手册 §9.16）；op=3 激活，state=1 启用 URC
+    let resp = t.send_at(&format!("AT+QNETDEVCTL={},3,1", cid))?;
     if resp.contains("ERROR") { return Err(format!("QNETDEVCTL connect failed: {}", resp)); }
     Ok(())
 }
 
 pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
-    t.send_at(&format!("AT+QNETDEVCTL=0,{},1", cid))?;
+    // op=2 去激活，state=0
+    t.send_at(&format!("AT+QNETDEVCTL={},2,0", cid))?;
     Ok(())
 }
 

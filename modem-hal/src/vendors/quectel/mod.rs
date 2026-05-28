@@ -949,18 +949,82 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_5glan(&mut self, t: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
+        if matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("Qualcomm: use query_qualcomm_5glan_status".to_string());
+        }
         let resp = send_and_delay(t, r#"AT+QCFG="5glan""#)?;
         Ok(parse_5glan(&resp))
     }
 
     fn set_5glan(&mut self, t: &mut dyn AtTransport, cid: i32, enabled: bool, vlan_id: i32) -> Result<(), String> {
+        if matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("Qualcomm: use configure_qualcomm_5glan".to_string());
+        }
         let state = if enabled { 1 } else { 0 };
         let resp = send_and_delay(t, &format!(r#"AT+QCFG="5glan",{},{},{}"#, cid, state, vlan_id))?;
-        if is_ok(&resp) {
-            Ok(())
-        } else {
-            Err(format!("Failed to set 5GLAN: {}", resp))
+        if is_ok(&resp) { Ok(()) } else { Err(format!("5GLAN set failed: {}", resp.trim())) }
+    }
+
+    fn configure_qualcomm_5glan(
+        &mut self, t: &mut dyn AtTransport,
+        cid: i32, apn: &str, snssai: &str,
+        profile_id: i32, vlan_start: i32, vlan_end: i32,
+    ) -> Result<(), String> {
+        if !matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("Qualcomm 5GLAN L2 only supported on Qualcomm chip".to_string());
         }
+        // eth_cfg mode: 1 = data with VLAN ID, 2 = without VLAN ID
+        let eth_mode = if vlan_start < 65535 { 1 } else { 2 };
+        let resp = send_and_delay(t, &format!("AT+QNWCFG=\"eth_cfg\",{},{}", profile_id, eth_mode))?;
+        if !is_ok(&resp) {
+            return Err(format!("eth_cfg failed: {}", resp.trim()));
+        }
+        // Configure PDP context with S-NSSAI (13 empty fields between APN and SNSSAIs_ind)
+        let cmd = format!("AT+CGDCONT={},\"IPV4V6\",\"{}\",,,,,,,,,,,,,,1,\"{}\",", cid, apn, snssai);
+        let resp = send_and_delay(t, &cmd)?;
+        if !is_ok(&resp) {
+            return Err(format!("CGDCONT failed: {}", resp.trim()));
+        }
+        // Configure WDS Ethernet profile
+        let cmd = format!("AT+QWDSCFG=\"profile\",{},\"Ethernet\",\"{}\",{},{}", cid, apn, vlan_start, vlan_end);
+        let resp = send_and_delay(t, &cmd)?;
+        if !is_ok(&resp) {
+            return Err(format!("QWDSCFG failed: {}", resp.trim()));
+        }
+        Ok(())
+    }
+
+    fn enable_eth_pdu(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
+        if !matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("ETH PDU only supported on Qualcomm".to_string());
+        }
+        let resp = send_and_delay(t, r#"AT+QMAP="ETH_PDU","enable""#)?;
+        if is_ok(&resp) { Ok(()) } else { Err(format!("ETH_PDU enable failed: {}", resp.trim())) }
+    }
+
+    fn connect_qualcomm_5glan(&mut self, t: &mut dyn AtTransport, rule_id: i32, cid: i32) -> Result<(), String> {
+        if !matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("Qualcomm 5GLAN L2 only supported on Qualcomm chip".to_string());
+        }
+        let resp = send_and_delay(t, &format!("AT+QMAP=\"mpdn_rule\",{},{},0,0,0", rule_id, cid))?;
+        if !is_ok(&resp) {
+            return Err(format!("mpdn_rule failed: {}", resp.trim()));
+        }
+        let resp = send_and_delay(t, &format!("AT+QMAP=\"connect\",{},1", rule_id))?;
+        if is_ok(&resp) { Ok(()) } else { Err(format!("connect failed: {}", resp.trim())) }
+    }
+
+    fn query_qualcomm_5glan_status(&mut self, t: &mut dyn AtTransport) -> Result<Qualcomm5GlanStatus, String> {
+        if !matches!(self.chip, QuectelChip::Qualcomm) {
+            return Err("Qualcomm 5GLAN status only supported on Qualcomm chip".to_string());
+        }
+        let eth_resp = t.send_at(r#"AT+QMAP="ETH_PDU""#).unwrap_or_default();
+        let eth_pdu_enabled = qualcomm::parse_eth_pdu_enabled(&eth_resp);
+        let mpdn_resp = t.send_at(r#"AT+QMAP="mpdn_rule""#).unwrap_or_default();
+        let mpdn_cid = qualcomm::parse_mpdn_rule_cid(&mpdn_resp, 1);
+        let status_resp = t.send_at(r#"AT+QMAP="MPDN_status""#).unwrap_or_default();
+        let connected = qualcomm::parse_mpdn_connect_status_by_rule(&status_resp, 1);
+        Ok(Qualcomm5GlanStatus { eth_pdu_enabled, mpdn_cid, connected })
     }
 
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {

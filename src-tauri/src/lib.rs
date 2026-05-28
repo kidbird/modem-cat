@@ -712,6 +712,78 @@ async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_
 }
 
 #[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn configure_qualcomm_5glan(
+    cid: i32, apn: String, snssai: String,
+    profile_id: i32, vlan_start: i32, vlan_end: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.configure_qualcomm_5glan(t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn enable_eth_pdu(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.enable_eth_pdu(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn connect_qualcomm_5glan(
+    rule_id: i32, cid: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.connect_qualcomm_5glan(t, rule_id, cid)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn query_qualcomm_5glan_status(state: tauri::State<'_, AppState>) -> Result<Qualcomm5GlanStatus, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_qualcomm_5glan_status(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
@@ -1395,6 +1467,11 @@ pub fn run() {
             set_apn_active,
             get_5glan,
             set_5glan,
+            configure_qualcomm_5glan,
+            enable_eth_pdu,
+            connect_qualcomm_5glan,
+            query_qualcomm_5glan_status,
+            get_app_version,
             get_vlan,
             set_vlan,
             connect_data,

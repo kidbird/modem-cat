@@ -96,6 +96,14 @@ pub struct L5GanEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Qualcomm5GlanStatus {
+    pub eth_pdu_enabled: bool,
+    pub mpdn_cid: Option<i32>,
+    pub connected: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CellLockEntry {
     /// "cell" (QNWLOCK, has PCI) or "freq" (QNWLOCKFREQ, no PCI)
     pub lock_type: String,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Modem Cat v0.1.3</title>
+  <title>Modem Cat</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -26,6 +26,8 @@
       --danger: #e11d48;           /* Danger red */
       --danger-hover: #f43f5e;
       --cyan: #06b6d4;             /* Cyber cyan */
+      --tab-bar-bg: rgba(0, 0, 0, 0.28);
+      --tab-active-bg: #1e2740;
     }
 
     [data-theme="light"] {
@@ -43,6 +45,8 @@
       --danger: #b91c1c;
       --danger-hover: #dc2626;
       --cyan: #0891b2;
+      --tab-bar-bg: rgba(0, 0, 0, 0.06);
+      --tab-active-bg: #ffffff;
     }
 
     body {
@@ -656,25 +660,44 @@
     /* ── Tabs ── */
     .tab-bar {
       display: flex;
-      border-bottom: 1px solid var(--border-color);
+      position: relative;
+      background: var(--tab-bar-bg);
+      border-radius: 8px;
+      padding: 3px;
       margin-bottom: 16px;
-      gap: 4px;
+      gap: 0;
+      border-bottom: none;
+    }
+    .tab-indicator {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      height: calc(100% - 6px);
+      background: var(--tab-active-bg);
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                  width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      pointer-events: none;
+      z-index: 0;
     }
     .tab-btn {
-      padding: 8px 16px;
+      position: relative;
+      z-index: 1;
+      padding: 6px 16px;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       font-family: inherit;
-      background: none;
+      background: transparent;
       border: none;
-      border-bottom: 2px solid transparent;
+      border-radius: 6px;
       cursor: pointer;
-      color: var(--text-secondary);
-      margin-bottom: -1px;
-      transition: all 0.15s ease;
+      color: var(--text-muted);
+      transition: color 0.15s ease;
+      white-space: nowrap;
     }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .tab-btn:hover:not(.active):not(.disabled) { color: var(--text-primary); }
+    .tab-btn.active { color: var(--text-primary); }
+    .tab-btn:hover:not(.active):not(.disabled) { color: var(--text-secondary); }
     .tab-btn.disabled { color: var(--text-muted); cursor: not-allowed; opacity: 0.4; pointer-events: none; }
 
     .tab-panel { display: none; }
@@ -896,25 +919,31 @@
     /* ── Neighbor sub-tabs ── */
     .sub-tab-bar {
       display: flex;
-      gap: 0;
-      border-bottom: 1px solid var(--border-color);
+      position: relative;
+      background: var(--tab-bar-bg);
+      border-radius: 7px;
+      padding: 3px;
       margin-bottom: 14px;
+      gap: 0;
+      border-bottom: none;
     }
     .sub-tab-btn {
-      padding: 7px 16px;
+      position: relative;
+      z-index: 1;
+      padding: 5px 14px;
       font-size: 12px;
-      font-weight: 600;
+      font-weight: 500;
       font-family: inherit;
-      background: none;
+      background: transparent;
       border: none;
-      border-bottom: 2px solid transparent;
+      border-radius: 5px;
       cursor: pointer;
-      color: var(--text-secondary);
-      margin-bottom: -1px;
-      transition: all 0.12s ease;
+      color: var(--text-muted);
+      transition: color 0.15s ease;
+      white-space: nowrap;
     }
-    .sub-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .sub-tab-btn:hover:not(.active) { color: var(--text-primary); }
+    .sub-tab-btn.active { color: var(--text-primary); }
+    .sub-tab-btn:hover:not(.active) { color: var(--text-secondary); }
 
     /* ── Placeholder ── */
     .placeholder-page {
@@ -1808,20 +1837,111 @@
 
         <!-- ─ Tab 5: 5GLAN ─ -->
         <div class="tab-panel" id="ctab-5glan">
-          <div class="form-row" style="align-items:flex-end;margin-bottom:12px;">
-            <div class="form-group narrow">
-              <label data-i18n="label_5glan_cid">CID</label>
-              <input type="number" id="glanNewCid" min="1" max="15" placeholder="1-15">
+          <div class="sub-tab-bar" id="glanSubBar">
+            <button class="sub-tab-btn active" id="glanTabUnisoc" onclick="switch5GlanTab('unisoc', this)">展锐 UniSoc</button>
+            <button class="sub-tab-btn" id="glanTabQualcomm" onclick="switch5GlanTab('qualcomm', this)">高通 Qualcomm</button>
+            <button class="sub-tab-btn" id="glanTabTdtech" onclick="switch5GlanTab('tdtech', this)">TD Tech</button>
+          </div>
+
+          <!-- UniSoc: AT+QCFG="5glan" -->
+          <div class="tab-panel active" id="glan-unisoc">
+            <div class="form-row" style="align-items:flex-end;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+              <div class="form-group narrow">
+                <label data-i18n="label_5glan_cid">CID</label>
+                <select id="glanUsCid" onchange="onGlanUsCidChange()" style="min-width:82px;">
+                  <option value="1">CID 1</option><option value="2">CID 2</option>
+                  <option value="3">CID 3</option><option value="4">CID 4</option>
+                  <option value="5">CID 5</option><option value="6">CID 6</option>
+                  <option value="7">CID 7</option><option value="8">CID 8</option>
+                  <option value="9">CID 9</option><option value="10">CID 10</option>
+                  <option value="11">CID 11</option><option value="12">CID 12</option>
+                  <option value="13">CID 13</option><option value="14">CID 14</option>
+                  <option value="15">CID 15</option>
+                </select>
+              </div>
+              <div class="form-group narrow">
+                <label data-i18n="label_5glan_vlan">VLAN ID</label>
+                <input type="number" id="glanUsVlan" min="1" max="255" value="1" style="width:70px;">
+              </div>
+              <div class="form-group" style="display:flex;align-items:flex-end;gap:10px;">
+                <label class="toggle-switch" style="margin-bottom:3px;">
+                  <input type="checkbox" id="glanUsEnabled">
+                  <span class="toggle-track"></span>
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="saveUnisoc5Glan()">保存</button>
+              </div>
             </div>
-            <div class="form-group narrow">
-              <label data-i18n="label_5glan_vlan">VLAN ID</label>
-              <input type="number" id="glanNewVlan" min="1" max="255" placeholder="1-255" value="1">
+            <div id="glanToggles"></div>
+          </div>
+
+          <!-- Qualcomm: L2 5GLAN (ETH_PDU + MPDN) -->
+          <div class="tab-panel" id="glan-qualcomm">
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px;">步骤 1 — 配置接口参数</div>
+              <div class="form-row" style="flex-wrap:wrap;align-items:flex-end;gap:8px;margin-bottom:8px;">
+                <div class="form-group narrow">
+                  <label>PHY Profile</label>
+                  <input type="number" id="glanQcProfile" value="1" min="1" max="4" style="width:60px;">
+                </div>
+                <div class="form-group narrow">
+                  <label>CID</label>
+                  <input type="number" id="glanQcCid" value="5" min="1" max="15" style="width:60px;">
+                </div>
+                <div class="form-group">
+                  <label>APN</label>
+                  <input type="text" id="glanQcApn" value="5glan2" placeholder="例: 5glan2">
+                </div>
+                <div class="form-group">
+                  <label>S-NSSAI <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(切片标识)</span></label>
+                  <input type="text" id="glanQcSnssai" value="03.010102" placeholder="例: 03.010102">
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                  <input type="checkbox" id="glanQcUseVlan" onchange="onGlanQcVlanToggle(this.checked)">
+                  使用 VLAN ID 范围
+                </label>
+                <span id="glanQcVlanInputs" style="display:none;align-items:center;gap:6px;">
+                  <input type="number" id="glanQcVlanStart" value="2" min="1" max="4094" style="width:64px;">
+                  <span style="color:var(--text-muted);">—</span>
+                  <input type="number" id="glanQcVlanEnd" value="7" min="1" max="4094" style="width:64px;">
+                </span>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="configureQualcomm5Glan()">配置参数</button>
             </div>
-            <div class="form-group auto" style="display:flex;align-items:flex-end;">
-              <button class="btn btn-primary btn-sm" onclick="addNew5Glan()" data-i18n="btn_add_5glan">添加 / 应用</button>
+
+            <div style="margin-bottom:14px;padding-top:12px;border-top:1px solid var(--border-color);">
+              <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;">步骤 2 — 启用 ETH PDU 会话</div>
+              <div style="font-size:12px;color:var(--warning,#f59e0b);margin-bottom:8px;">⚠ 启用后需重启模组，重启完成后再执行步骤 3</div>
+              <button class="btn btn-secondary btn-sm" onclick="enableEthPdu()">启用 ETH PDU</button>
+            </div>
+
+            <div style="margin-bottom:14px;padding-top:12px;border-top:1px solid var(--border-color);">
+              <div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.6px;">步骤 3 — MPDN 规则 &amp; 连接（重启后）</div>
+              <div class="form-row" style="align-items:flex-end;gap:8px;">
+                <div class="form-group narrow">
+                  <label>Rule ID</label>
+                  <input type="number" id="glanQcRuleId" value="1" min="0" max="7" style="width:64px;">
+                </div>
+                <div class="form-group auto" style="display:flex;align-items:flex-end;">
+                  <button class="btn btn-primary btn-sm" onclick="connectQualcomm5Glan()">设置规则并连接</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="padding-top:12px;border-top:1px solid var(--border-color);">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.6px;">当前状态</span>
+                <button class="btn btn-secondary btn-sm" onclick="refresh5GlanQualcommStatus()" style="padding:2px 8px;font-size:11px;">刷新</button>
+              </div>
+              <div id="glanQcStatus" style="font-size:12px;color:var(--text-muted);">—</div>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;padding:8px 0;" id="glanToggles"></div>
+
+          <!-- TdTech -->
+          <div class="tab-panel" id="glan-tdtech">
+            <div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:13px;">TD Tech 模组暂不支持 5GLAN 功能</div>
+          </div>
         </div>
 
       </div><!-- /panel -->
@@ -2235,6 +2355,16 @@
               <button class="toggle-btn" id="themeLight" onclick="setTheme('light')">☀ <span data-i18n="theme_light">浅色</span></button>
             </div>
           </div>
+          <div class="settings-row">
+            <div class="settings-label">
+              <svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+              </svg>
+              <span data-i18n="label_app_version">当前版本</span>
+            </div>
+            <span id="appVersion" style="font-size:13px;color:var(--text-muted);">--</span>
+          </div>
         </div>
       </div>
 
@@ -2577,7 +2707,7 @@
         ph_apn_name: 'cmnet', ph_arfcn: '如 500300', ph_at_cmd: '输入 AT 命令...',
         ph_dmz: '如 192.168.1.100', ph_optional: '（可选）', ph_pci: '如 123',
         label_language: '语言 / Language', label_theme: '外观主题',
-        theme_dark: '深色', theme_light: '浅色',
+        theme_dark: '深色', theme_light: '浅色', label_app_version: '当前版本',
       },
       en: {
         nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
@@ -2661,7 +2791,7 @@
         ph_at_cmd: 'Enter AT command...', ph_dmz: 'e.g. 192.168.1.100',
         ph_optional: '(optional)', ph_pci: 'e.g. 123',
         label_language: 'Language / 语言', label_theme: 'Theme',
-        theme_dark: 'Dark', theme_light: 'Light',
+        theme_dark: 'Dark', theme_light: 'Light', label_app_version: 'Version',
       },
     };
 
@@ -3176,8 +3306,14 @@
       if (tab === 'apn' && state.connected) {
         refreshApnList();
       }
-      if (tab === '5glan' && state.connected) {
-        refresh5Glan();
+      if (tab === '5glan') {
+        const cv = state.chipVendor;
+        const targetTab = cv === 'qualcomm' ? 'qualcomm' : cv === 'tdtech' ? 'tdtech' : 'unisoc';
+        const targetBtn = document.getElementById(
+          targetTab === 'qualcomm' ? 'glanTabQualcomm' : targetTab === 'tdtech' ? 'glanTabTdtech' : 'glanTabUnisoc'
+        );
+        if (targetBtn) switch5GlanTab(targetTab, targetBtn);
+        else if (state.connected) refresh5Glan();
       }
       // Query current cell lock when switching to celllock tab
       if (tab === 'celllock' && state.connected) {
@@ -3331,19 +3467,74 @@
     // ── 5GLAN ──
     let glanData = [];
 
+    function switch5GlanTab(tab, btn) {
+      const bar = document.getElementById('glanSubBar');
+      bar.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#ctab-5glan > .tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('glan-' + tab).classList.add('active');
+      requestAnimationFrame(() => {
+        const indicator = bar.querySelector('.tab-indicator');
+        if (indicator) moveTabIndicator(indicator, btn);
+      });
+      if (tab === 'unisoc' && state.connected) refresh5Glan();
+      if (tab === 'qualcomm' && state.connected) refresh5GlanQualcommStatus();
+    }
+
     function render5Glan() {
       const container = document.getElementById('glanToggles');
       if (!glanData.length) {
-        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 5GLAN 数据，使用上方表单添加</div>';
+        container.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0;">暂无 5GLAN 配置，选择 CID 并保存</div>';
         return;
       }
-      container.innerHTML = glanData.map(g => `
-        <div class="toggle-row" style="align-items:center;border-bottom:1px solid var(--border-color);gap:12px;">
-          <div style="flex:0 0 auto;min-width:64px;"><div class="toggle-label">CID ${g.cid}</div></div>
-          <div style="flex:1;color:var(--text-muted);font-size:12px;">VLAN ${g.vlanId ?? 1}</div>
-          <label class="toggle-switch"><input type="checkbox" ${g.enabled ? 'checked' : ''} onchange="set5Glan(${g.cid}, this.checked)"><span class="toggle-track"></span></label>
-        </div>
-      `).join('');
+      container.innerHTML =
+        '<div style="font-size:11px;font-weight:700;color:var(--text-secondary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.6px;">当前配置</div>' +
+        glanData.map(g => `
+          <div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-color);gap:12px;cursor:pointer;"
+               onclick="selectGlanEntry(${g.cid},${g.vlanId ?? 1},${g.enabled})">
+            <div style="font-size:13px;font-weight:600;min-width:52px;">CID ${g.cid}</div>
+            <div style="flex:1;color:var(--text-muted);font-size:12px;">VLAN ${g.vlanId ?? 1}</div>
+            <span style="font-size:12px;font-weight:600;${g.enabled ? 'color:var(--ok,#10b981)' : 'color:var(--text-muted)'};">${g.enabled ? '已激活' : '已关闭'}</span>
+          </div>
+        `).join('');
+    }
+
+    function selectGlanEntry(cid, vlanId, enabled) {
+      document.getElementById('glanUsCid').value = cid;
+      document.getElementById('glanUsVlan').value = vlanId;
+      document.getElementById('glanUsEnabled').checked = enabled;
+    }
+
+    function onGlanUsCidChange() {
+      const cid = parseInt(document.getElementById('glanUsCid').value, 10);
+      const existing = glanData.find(g => g.cid === cid);
+      if (existing) {
+        document.getElementById('glanUsVlan').value = existing.vlanId ?? 1;
+        document.getElementById('glanUsEnabled').checked = existing.enabled;
+      } else {
+        document.getElementById('glanUsVlan').value = 1;
+        document.getElementById('glanUsEnabled').checked = false;
+      }
+    }
+
+    async function saveUnisoc5Glan() {
+      if (!state.connected) { showToast('未连接模组', 'err'); return; }
+      const cid     = parseInt(document.getElementById('glanUsCid').value, 10);
+      const vlanId  = parseInt(document.getElementById('glanUsVlan').value, 10);
+      const enabled = document.getElementById('glanUsEnabled').checked;
+      if (!Number.isFinite(vlanId) || vlanId < 1 || vlanId > 255) {
+        showToast('请输入有效 VLAN ID (1-255)', 'err'); return;
+      }
+      try {
+        await invoke('set_5glan', { cid, enabled, vlanId });
+        await flushAtLog();
+        showToast(`CID${cid} 5GLAN ${enabled ? '已激活' : '已关闭'}`, 'ok');
+        addTerminalLine(`[5GLAN] CID${cid} VLAN${vlanId} → ${enabled ? '开启' : '关闭'}`, 'ok');
+        await refresh5Glan();
+      } catch (e) {
+        showToast('5GLAN 设置失败: ' + e, 'err');
+        addTerminalLine('[5GLAN] 设置失败: ' + e, 'err');
+      }
     }
 
     async function refresh5Glan() {
@@ -3358,48 +3549,78 @@
       }
     }
 
-    async function set5Glan(cid, enabled) {
-      if (!state.connected) {
-        showToast('未连接模组', 'err');
-        // revert checkbox state
-        await refresh5Glan();
-        return;
-      }
-      const existing = glanData.find(g => g.cid === cid);
-      const vlanId = existing?.vlanId ?? 1;
+    function onGlanQcVlanToggle(checked) {
+      const el = document.getElementById('glanQcVlanInputs');
+      el.style.display = checked ? 'inline-flex' : 'none';
+    }
+
+    async function configureQualcomm5Glan() {
+      if (!state.connected) { showToast('未连接模组', 'err'); return; }
+      const cid = parseInt(document.getElementById('glanQcCid').value, 10);
+      const apn = document.getElementById('glanQcApn').value.trim();
+      const snssai = document.getElementById('glanQcSnssai').value.trim();
+      const profileId = parseInt(document.getElementById('glanQcProfile').value, 10);
+      const useVlan = document.getElementById('glanQcUseVlan').checked;
+      const vlanStart = useVlan ? parseInt(document.getElementById('glanQcVlanStart').value, 10) : 65535;
+      const vlanEnd   = useVlan ? parseInt(document.getElementById('glanQcVlanEnd').value, 10)   : 65535;
+      if (!Number.isFinite(cid) || cid < 1 || cid > 15) { showToast('请输入有效 CID', 'err'); return; }
+      if (!apn) { showToast('请输入 APN', 'err'); return; }
+      if (!snssai) { showToast('请输入 S-NSSAI', 'err'); return; }
       try {
-        await invoke('set_5glan', { cid, enabled, vlanId });
+        await invoke('configure_qualcomm_5glan', { cid, apn, snssai, profileId, vlanStart, vlanEnd });
         await flushAtLog();
-        addTerminalLine(`[5GLAN] CID${cid} VLAN${vlanId} → ${enabled ? '开启' : '关闭'}`, 'ok');
-        await refresh5Glan();
+        showToast('参数配置成功', 'ok');
+        addTerminalLine(`[5GLAN-QC] 配置参数 CID=${cid} APN=${apn} SNSSAI=${snssai}${useVlan ? ` VLAN=${vlanStart}-${vlanEnd}` : ''}`, 'ok');
       } catch (e) {
-        showToast('5GLAN 设置失败: ' + e, 'err');
-        addTerminalLine('[5GLAN] 设置失败: ' + e, 'err');
-        await refresh5Glan();
+        showToast('配置失败: ' + e, 'err');
+        addTerminalLine('[5GLAN-QC] 配置失败: ' + e, 'err');
       }
     }
 
-    async function addNew5Glan() {
+    async function enableEthPdu() {
       if (!state.connected) { showToast('未连接模组', 'err'); return; }
-      const cidEl = document.getElementById('glanNewCid');
-      const vlanEl = document.getElementById('glanNewVlan');
-      const cid = parseInt(cidEl.value, 10);
-      const vlanId = parseInt(vlanEl.value, 10);
-      if (!Number.isFinite(cid) || cid < 1 || cid > 15) {
-        showToast('请输入有效 CID (1-15)', 'err'); return;
-      }
-      if (!Number.isFinite(vlanId) || vlanId < 1 || vlanId > 255) {
-        showToast('请输入有效 VLAN ID (1-255)', 'err'); return;
-      }
       try {
-        await invoke('set_5glan', { cid, enabled: true, vlanId });
+        await invoke('enable_eth_pdu');
         await flushAtLog();
-        addTerminalLine(`[5GLAN] 添加 CID${cid} VLAN${vlanId}`, 'ok');
-        cidEl.value = '';
-        await refresh5Glan();
+        showToast('ETH PDU 已启用，请重启模组后执行步骤 3', 'ok');
+        addTerminalLine('[5GLAN-QC] ETH PDU 启用成功，等待模组重启', 'ok');
+        await refresh5GlanQualcommStatus();
       } catch (e) {
-        showToast('5GLAN 添加失败: ' + e, 'err');
-        addTerminalLine('[5GLAN] 添加失败: ' + e, 'err');
+        showToast('ETH PDU 启用失败: ' + e, 'err');
+        addTerminalLine('[5GLAN-QC] ETH PDU 启用失败: ' + e, 'err');
+      }
+    }
+
+    async function connectQualcomm5Glan() {
+      if (!state.connected) { showToast('未连接模组', 'err'); return; }
+      const ruleId = parseInt(document.getElementById('glanQcRuleId').value, 10);
+      const cid    = parseInt(document.getElementById('glanQcCid').value, 10);
+      if (!Number.isFinite(ruleId) || ruleId < 0 || ruleId > 7) { showToast('请输入有效 Rule ID (0-7)', 'err'); return; }
+      if (!Number.isFinite(cid) || cid < 1 || cid > 15) { showToast('请输入有效 CID', 'err'); return; }
+      try {
+        await invoke('connect_qualcomm_5glan', { ruleId, cid });
+        await flushAtLog();
+        showToast('连接成功', 'ok');
+        addTerminalLine(`[5GLAN-QC] Rule=${ruleId} CID=${cid} 连接成功`, 'ok');
+        await refresh5GlanQualcommStatus();
+      } catch (e) {
+        showToast('连接失败: ' + e, 'err');
+        addTerminalLine('[5GLAN-QC] 连接失败: ' + e, 'err');
+      }
+    }
+
+    async function refresh5GlanQualcommStatus() {
+      const el = document.getElementById('glanQcStatus');
+      if (!el) return;
+      if (!state.connected) { el.textContent = '—'; return; }
+      try {
+        const s = await invoke('query_qualcomm_5glan_status');
+        const ethState = s.ethPduEnabled ? '<span style="color:var(--ok,#10b981)">已启用</span>' : '<span style="color:var(--text-muted)">未启用</span>';
+        const connState = s.connected ? '<span style="color:var(--ok,#10b981)">已连接</span>' : '<span style="color:var(--text-muted)">未连接</span>';
+        const cidStr = s.mpdnCid != null ? `CID ${s.mpdnCid}` : '—';
+        el.innerHTML = `ETH PDU: ${ethState} &nbsp;|&nbsp; MPDN CID: ${cidStr} &nbsp;|&nbsp; 连接状态: ${connState}`;
+      } catch (e) {
+        el.textContent = '查询失败: ' + e;
       }
     }
 
@@ -5645,10 +5866,42 @@
       });
     }
 
+    function moveTabIndicator(indicator, btn) {
+      const barPad = 3;
+      indicator.style.width = btn.offsetWidth + 'px';
+      indicator.style.transform = `translateX(${btn.offsetLeft - barPad}px)`;
+    }
+
+    function initTabSliders() {
+      document.querySelectorAll('.tab-bar, .sub-tab-bar').forEach(bar => {
+        const indicator = document.createElement('span');
+        indicator.className = 'tab-indicator';
+        bar.insertBefore(indicator, bar.firstChild);
+        const active = bar.querySelector('.tab-btn.active, .sub-tab-btn.active');
+        if (active) moveTabIndicator(indicator, active);
+        bar.addEventListener('click', e => {
+          const btn = e.target.closest('.tab-btn, .sub-tab-btn');
+          if (btn && !btn.classList.contains('disabled') && bar.contains(btn)) {
+            requestAnimationFrame(() => {
+              const nowActive = bar.querySelector('.tab-btn.active, .sub-tab-btn.active');
+              if (nowActive) moveTabIndicator(indicator, nowActive);
+            });
+          }
+        });
+      });
+    }
+
+    initTabSliders();
+
     async function doInit() {
       const label = document.getElementById('statusLabel');
       label.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');
+      try {
+        const ver = await invoke('get_app_version');
+        const el = document.getElementById('appVersion');
+        if (el) el.textContent = 'v' + ver;
+      } catch (_) {}
       try {
         await refreshPortList();
       } catch (e) {

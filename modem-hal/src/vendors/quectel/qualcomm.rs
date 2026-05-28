@@ -57,6 +57,49 @@ pub fn parse_mpdn_connect_status(response: &str) -> bool {
     false
 }
 
+/// Parse `AT+QMAP="ETH_PDU"` response — return true if ETH PDU is enabled.
+pub fn parse_eth_pdu_enabled(response: &str) -> bool {
+    for line in response.lines() {
+        if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            if parts.first().map(|s| s.eq_ignore_ascii_case("ETH_PDU")) == Some(true) {
+                return parts.get(1).map(|s| s.eq_ignore_ascii_case("enable")).unwrap_or(false);
+            }
+        }
+    }
+    false
+}
+
+/// Parse `AT+QMAP="mpdn_rule"` response — return CID for the given rule_id.
+pub fn parse_mpdn_rule_cid(response: &str, rule_id: i32) -> Option<i32> {
+    for line in response.lines() {
+        if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("MPDN_rule") {
+                if parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id {
+                    return parts[2].trim().parse::<i32>().ok();
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parse `AT+QMAP="MPDN_status"` response — return connect_status for the given rule_id.
+pub fn parse_mpdn_connect_status_by_rule(response: &str, rule_id: i32) -> bool {
+    for line in response.lines() {
+        if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status") {
+                if parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id {
+                    return parts[4].trim() == "1";
+                }
+            }
+        }
+    }
+    false
+}
+
 fn ip_info_default() -> IpInfo {
     IpInfo {
         ipv4_addr: String::new(),

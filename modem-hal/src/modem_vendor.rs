@@ -104,11 +104,39 @@ pub trait ModemVendor: Send {
         Err("VLAN not supported".to_string())
     }
 
-    /// Query 5GLAN status (AT+QCFG="5glan")
-    fn query_5glan(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String>;
+    /// Query 5GLAN status — UniSoc only (AT+QCFG="5glan")
+    fn query_5glan(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
+        Err("5GLAN not supported".to_string())
+    }
 
-    /// Set 5GLAN state for a CID (AT+QCFG="5glan",<cid>,<state>,<vlan_id>)
-    fn set_5glan(&mut self, transport: &mut dyn AtTransport, cid: i32, enabled: bool, vlan_id: i32) -> Result<(), String>;
+    /// Set 5GLAN state — UniSoc only (AT+QCFG="5glan",<cid>,<state>,<vlan_id>)
+    fn set_5glan(&mut self, _transport: &mut dyn AtTransport, _cid: i32, _enabled: bool, _vlan_id: i32) -> Result<(), String> {
+        Err("5GLAN not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — configure eth_cfg + CGDCONT + QWDSCFG (Step 1)
+    fn configure_qualcomm_5glan(
+        &mut self, _t: &mut dyn AtTransport,
+        _cid: i32, _apn: &str, _snssai: &str,
+        _profile_id: i32, _vlan_start: i32, _vlan_end: i32,
+    ) -> Result<(), String> {
+        Err("Qualcomm 5GLAN L2 not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — enable ETH PDU session, module reboot required after (Step 2)
+    fn enable_eth_pdu(&mut self, _t: &mut dyn AtTransport) -> Result<(), String> {
+        Err("ETH PDU not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — set MPDN rule + connect (Step 3, after reboot)
+    fn connect_qualcomm_5glan(&mut self, _t: &mut dyn AtTransport, _rule_id: i32, _cid: i32) -> Result<(), String> {
+        Err("Qualcomm 5GLAN L2 not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — query ETH PDU + MPDN status
+    fn query_qualcomm_5glan_status(&mut self, _t: &mut dyn AtTransport) -> Result<Qualcomm5GlanStatus, String> {
+        Err("Qualcomm 5GLAN status not supported".to_string())
+    }
 
     /// Activate data connection
     fn connect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;

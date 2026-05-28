@@ -257,11 +257,45 @@ pub trait ModemVendor: Send {
     }
 
     /// Set USB network mode
-/// Set USB network mode
     fn set_usbnet_mode(
         &mut self,
         _transport: &mut dyn AtTransport,
         _mode: i32,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Query NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
+    fn query_nat_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<i32, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Set NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
+    fn set_nat_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _mode: i32,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Query Qualcomm specific configuration
+    fn query_qualcomm_config(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<QualcommConfig, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Set Qualcomm specific configuration parameter
+    fn set_qualcomm_config(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _param: &str,
+        _value: &str,
     ) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
@@ -306,11 +340,15 @@ pub trait ModemVendor: Send {
     }
 
     /// Lock to a specific cell (arfcn + optional pci) or frequency (arfcn only)
+    /// Lock to a specific cell/frequency.
+    /// `scs` and `band` are required for Qualcomm; ignored for UniSoc.
     fn set_cell_lock(
         &mut self,
         _transport: &mut dyn AtTransport,
         _arfcn: &str,
         _pci: &str,
+        _scs: &str,
+        _band: &str,
     ) -> Result<(), String> {
         Err("Cell lock not supported".to_string())
     }
@@ -330,6 +368,7 @@ pub trait ModemVendor: Send {
         &mut self,
         _transport: &mut dyn AtTransport,
         _plmn: &str,
+        _password: &str,
     ) -> Result<(), String> {
         Err("PLMN lock not supported".to_string())
     }
@@ -338,6 +377,7 @@ pub trait ModemVendor: Send {
     fn clear_plmn_lock(
         &mut self,
         _transport: &mut dyn AtTransport,
+        _password: &str,
     ) -> Result<(), String> {
         Err("PLMN lock not supported".to_string())
     }
@@ -364,11 +404,16 @@ pub trait ModemVendor: Send {
         let sim_status = self.query_sim_status(transport)?;
         let imei = self.query_imei(transport)?;
         let iccid = self.query_iccid(transport).unwrap_or_default();
-        let operator = self.query_operator(transport).unwrap_or_default();
+        let cops_name = self.query_operator(transport).unwrap_or_default();
         let reg_status = self.query_registration_status(transport)?;
         let conn_status = self.query_connection_status(transport)?;
         let serving_cell = self.query_serving_cell(transport).unwrap_or_default();
         let signal = self.query_signal_strength(transport).unwrap_or_default();
+        let operator = if cops_name.is_empty() && !serving_cell.operator_mcc.is_empty() {
+            format!("{}{}", serving_cell.operator_mcc, serving_cell.operator_mnc)
+        } else {
+            cops_name
+        };
 
         Ok(ModemStatus {
             sim_status,
@@ -378,6 +423,7 @@ pub trait ModemVendor: Send {
             iccid,
             operator,
             network_type: serving_cell.tech,
+            band: serving_cell.band,
             pci: serving_cell.pci,
             cell_id: serving_cell.cell_id,
             arfcn: serving_cell.arfcn,
@@ -389,6 +435,7 @@ pub trait ModemVendor: Send {
             rx_level: serving_cell.rx_level,
             ant_values: signal.ant_values,
             scs: serving_cell.scs,
+            chip_vendor: self.vendor().as_str().to_string(),
         })
     }
 }

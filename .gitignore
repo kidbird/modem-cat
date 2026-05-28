@@ -55,3 +55,6 @@ debug/
 release/
 *.rlib
 *.prof*
+
+# AtomCode local-scope configs (machine-specific)
+.atomcode/local/

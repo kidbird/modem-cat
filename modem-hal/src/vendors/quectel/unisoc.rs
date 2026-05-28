@@ -2,15 +2,20 @@ use crate::transport::AtTransport;
 use crate::types::{IpInfo, TrafficInfo};
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
-    let resp = t.send_at(&format!("AT+QNETDEVCTL=1,{},1", cid))?;
-    if resp.contains("ERROR") {
-        return Err(format!("QNETDEVCTL connect failed: {}", resp));
+    use super::parser::is_ok;
+    let resp = t.send_at(&format!("AT+QNETDEVCTL={},3,1", cid))?;
+    if !is_ok(&resp) {
+        return Err(format!("QNETDEVCTL connect failed: {}", resp.trim()));
     }
     Ok(())
 }
 
 pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
-    t.send_at(&format!("AT+QNETDEVCTL=0,{},1", cid))?;
+    use super::parser::is_ok;
+    let resp = t.send_at(&format!("AT+QNETDEVCTL={},2,0", cid))?;
+    if !is_ok(&resp) {
+        return Err(format!("QNETDEVCTL disconnect failed: {}", resp.trim()));
+    }
     Ok(())
 }
 
@@ -32,22 +37,22 @@ pub fn query_ip_info(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String
                 .split(',')
                 .map(|s| s.trim().trim_matches('"'))
                 .collect();
-            // Format: <status>,<ipv4_addr>,<mask>,<gw>,<empty>,<dns1>,<dns2>,<ipv6_addr>,<empty>,<empty>,<v6dns1>,<v6dns2>
-            if parts.len() >= 7 {
-                info.ipv4_addr = parts.get(1).unwrap_or(&"").to_string();
-                info.ipv4_mask = parts.get(2).unwrap_or(&"").to_string();
-                info.ipv4_gw = parts.get(3).unwrap_or(&"").to_string();
-                let dns1 = parts.get(5).unwrap_or(&"");
-                let dns2 = parts.get(6).unwrap_or(&"");
+            // Format: <ipv4_addr>,<mask>,<gw>,<empty>,<dns1>,<dns2>,<ipv6_addr>,<empty>,<empty>,<empty>,<v6dns1>,<v6dns2>
+            if parts.len() >= 6 {
+                info.ipv4_addr = parts.first().unwrap_or(&"").to_string();
+                info.ipv4_mask = parts.get(1).unwrap_or(&"").to_string();
+                info.ipv4_gw = parts.get(2).unwrap_or(&"").to_string();
+                let dns1 = parts.get(4).unwrap_or(&"");
+                let dns2 = parts.get(5).unwrap_or(&"");
                 let mut dns_parts = Vec::new();
                 if !dns1.is_empty() { dns_parts.push(*dns1); }
                 if !dns2.is_empty() { dns_parts.push(*dns2); }
                 info.ipv4_dns = dns_parts.join(", ");
             }
-            if parts.len() >= 13 {
-                info.ipv6_addr = parts.get(7).unwrap_or(&"").to_string();
-                let v6dns1 = parts.get(11).unwrap_or(&"");
-                let v6dns2 = parts.get(12).unwrap_or(&"");
+            if parts.len() >= 12 {
+                info.ipv6_addr = parts.get(6).unwrap_or(&"").to_string();
+                let v6dns1 = parts.get(10).unwrap_or(&"");
+                let v6dns2 = parts.get(11).unwrap_or(&"");
                 let mut v6dns_parts = Vec::new();
                 if !v6dns1.is_empty() { v6dns_parts.push(*v6dns1); }
                 if !v6dns2.is_empty() { v6dns_parts.push(*v6dns2); }

@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "modem-cat"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "env_logger",
  "log",
@@ -2290,7 +2290,7 @@ dependencies = [
 
 [[package]]
 name = "modem-hal"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "log",
  "napi",

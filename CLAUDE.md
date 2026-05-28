@@ -70,8 +70,8 @@ Single `index.html` (~98KB), all HTML/CSS/JS inline, no build step. Uses `window
 
 `ModemFactory::detect_vendor_from_model()` matches model string from `AT+CGMM`:
 - `MT5700` → TdTech (`AT^` commands)
-- `RG200U` / `RM500U` → Quectel UniSoc (`AT+QMAP` data commands)
-- `RM520N` / `RM500Q` → Quectel Qualcomm (`AT+QNETDEVCTL` data commands)
+- `RG200U` / `RM500U` → Quectel UniSoc (`AT+QNETDEVCTL` data commands)
+- `RM520N` / `RM500Q` → Quectel Qualcomm (`AT+QMAP` data commands)
 - Unknown models default to UniSoc adapter
 
 ## Key Conventions

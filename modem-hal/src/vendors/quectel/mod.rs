@@ -13,6 +13,26 @@ fn send_and_delay(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> 
     Ok(result)
 }
 
+fn get_ant_values(t: &mut dyn AtTransport, chip: &QuectelChip) -> Vec<String> {
+    let none = vec![String::new(), String::new(), String::new(), String::new()];
+    match chip {
+        QuectelChip::Qualcomm => match t.send_at("AT+QRSSI") {
+            Ok(r) => {
+                let ant = parse_qrssi(&r);
+                if ant.iter().any(|v| !v.is_empty()) { ant } else { none }
+            }
+            Err(_) => none,
+        },
+        QuectelChip::UniSoc => match t.send_at("AT+QANTRSSI?") {
+            Ok(r) => {
+                let ant = parse_qantrssi(&r);
+                if ant.iter().any(|v| !v.is_empty()) { ant } else { none }
+            }
+            Err(_) => none,
+        },
+    }
+}
+
 fn send_and_check(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> {
     let resp = send_and_delay(t, cmd)?;
     if is_ok(&resp) {
@@ -129,12 +149,24 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_connection_status(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
-        let resp = send_and_delay(t, "AT+CGACT?")?;
-        let contexts = parse_cgact(&resp);
-        if contexts.iter().any(|(_, s)| *s == 1) {
-            Ok("\u{5df2}\u{8fde}\u{63a5}".to_string())
-        } else {
-            Ok("\u{672a}\u{8fde}\u{63a5}".to_string())
+        match self.chip {
+            QuectelChip::Qualcomm => {
+                let resp = send_and_delay(t, "AT+QMAP=\"MPDN_status\"")?;
+                if qualcomm::parse_mpdn_connect_status(&resp) {
+                    Ok("已连接".to_string())
+                } else {
+                    Ok("未连接".to_string())
+                }
+            }
+            QuectelChip::UniSoc => {
+                let resp = send_and_delay(t, "AT+CGACT?")?;
+                let contexts = parse_cgact(&resp);
+                if contexts.iter().any(|(_, s)| *s == 1) {
+                    Ok("已连接".to_string())
+                } else {
+                    Ok("未连接".to_string())
+                }
+            }
         }
     }
 
@@ -149,13 +181,7 @@ impl ModemVendor for QuectelModem {
         let qualcomm_bw = matches!(self.chip, QuectelChip::Qualcomm);
         let cell = parse_qeng_serving_cell(&qeng_resp, qualcomm_bw);
 
-        let mut ant_values = vec![String::new(), String::new(), String::new(), String::new()];
-        if let Ok(antrssi_resp) = t.send_at("AT+QANTRSSI?") {
-            let ant = parse_qantrssi(&antrssi_resp);
-            if ant.iter().any(|v| !v.is_empty()) {
-                ant_values = ant;
-            }
-        }
+        let ant_values = get_ant_values(t, &self.chip);
 
         Ok(SignalInfo {
             rsrp: cell.rsrp,
@@ -167,7 +193,10 @@ impl ModemVendor for QuectelModem {
 
     fn query_neighbor_cells(&mut self, t: &mut dyn AtTransport) -> Result<NeighborCells, String> {
         let resp = send_and_delay(t, r#"AT+QENG="neighbourcell""#)?;
-        Ok(parse_qeng_neighbour_cells(&resp))
+        log::info!("QENG neighbourcell raw response: {}", resp.replace('\n', "\\n").replace('\r', ""));
+        let result = parse_qeng_neighbour_cells(&resp);
+        log::info!("QENG neighbourcell parsed: LTE={} NR={}", result.lte.len(), result.nr.len());
+        Ok(result)
     }
 
     fn query_hardware_info(&mut self, t: &mut dyn AtTransport) -> Result<HardwareInfo, String> {
@@ -228,8 +257,11 @@ impl ModemVendor for QuectelModem {
         }
 
         let cgdcont_resp = send_and_delay(t, "AT+CGDCONT?")?;
-        let cgact2 = send_and_delay(t, "AT+CGACT?")?;
-        let active_set = parse_cgact_cids(&cgact2);
+        let active_set: std::collections::HashSet<i32> = parse_cgact(&cgact_resp)
+            .into_iter()
+            .filter(|(_, status)| *status == 1)
+            .map(|(cid, _)| cid)
+            .collect();
         Ok(parse_cgdcont_apn(&cgdcont_resp, &active_set)
             .into_iter()
             .filter(|e| e.cid >= 1 && e.cid <= 8)
@@ -244,12 +276,11 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_band_config(&mut self, t: &mut dyn AtTransport) -> Result<BandConfig, String> {
+        let rf_resp = send_and_delay(t, r#"AT+QNWPREFCFG="rf_band""#)?;
+        let (lte_spec, nr_spec) = parse_qnwprefcfg_rf_band(&rf_resp);
         let lte_resp = send_and_delay(t, r#"AT+QNWPREFCFG="lte_band""#)?;
         let nr_resp = send_and_delay(t, r#"AT+QNWPREFCFG="nr5g_band""#)?;
-        let (lte_spec, nr_spec) = crate::types::spec_bands_for_model(&self.model);
         Ok(BandConfig {
-            lte_supported: vec![],
-            nr_supported: vec![],
             lte_locked: parse_qnwprefcfg_bands(&lte_resp, "lte_band"),
             nr_locked: parse_qnwprefcfg_bands(&nr_resp, "nr5g_band"),
             lte_spec,
@@ -258,12 +289,12 @@ impl ModemVendor for QuectelModem {
     }
 
     fn set_lte_bands(&mut self, t: &mut dyn AtTransport, bands: &str) -> Result<(), String> {
-        t.send_at(&format!("AT+QNWPREFCFG=\"lte_band\",{}", bands))?;
+        send_and_check(t, &format!("AT+QNWPREFCFG=\"lte_band\",{}", bands))?;
         Ok(())
     }
 
     fn set_nr5g_bands(&mut self, t: &mut dyn AtTransport, bands: &str) -> Result<(), String> {
-        t.send_at(&format!("AT+QNWPREFCFG=\"nr5g_band\",{}", bands))?;
+        send_and_check(t, &format!("AT+QNWPREFCFG=\"nr5g_band\",{}", bands))?;
         Ok(())
     }
 
@@ -292,22 +323,19 @@ impl ModemVendor for QuectelModem {
         &mut self,
         t: &mut dyn AtTransport,
     ) -> Result<BandConfig, String> {
-        let supported_resp = match t.send_at("AT+QNWPREFCFG=?") {
+        let rf_resp = match t.send_at(r#"AT+QNWPREFCFG="rf_band""#) {
             Ok(r) => r,
             Err(e) => {
-                log::warn!("AT+QNWPREFCFG=? failed: {}", e);
+                log::warn!("AT+QNWPREFCFG=\"rf_band\" failed: {}", e);
                 String::new()
             }
         };
-        let (lte_supported, nr_supported) = parse_qnwprefcfg_supported(&supported_resp);
+        let (lte_spec, nr_spec) = parse_qnwprefcfg_rf_band(&rf_resp);
 
         let lte_resp = send_and_delay(t, r#"AT+QNWPREFCFG="lte_band""#)?;
         let nr_resp = send_and_delay(t, r#"AT+QNWPREFCFG="nr5g_band""#)?;
-        let (lte_spec, nr_spec) = crate::types::spec_bands_for_model(&self.model);
 
         Ok(BandConfig {
-            lte_supported,
-            nr_supported,
             lte_locked: parse_qnwprefcfg_bands(&lte_resp, "lte_band"),
             nr_locked: parse_qnwprefcfg_bands(&nr_resp, "nr5g_band"),
             lte_spec,
@@ -358,10 +386,7 @@ impl ModemVendor for QuectelModem {
     }
 
     fn set_cfun(&mut self, t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
-        let resp = send_and_check(t, &format!("AT+CFUN={}", mode))?;
-        if !is_ok(&resp) {
-            return Err(format!("Failed to set CFUN: {}", resp));
-        }
+        send_and_check(t, &format!("AT+CFUN={}", mode))?;
         Ok(())
     }
 
@@ -385,9 +410,12 @@ impl ModemVendor for QuectelModem {
             Ok(r) => parse_qcfg_int(&r, "uartat").unwrap_or(0) == 1,
             Err(_) => false,
         };
-        let eth_at = match send_and_delay(t, r#"AT+QCFG="eth_at""#) {
-            Ok(r) => parse_qcfg_int(&r, "eth_at").unwrap_or(0) == 1,
-            Err(_) => false,
+        let eth_at = match self.chip {
+            QuectelChip::Qualcomm => match send_and_delay(t, r#"AT+QCFG="eth_at""#) {
+                Ok(r) => parse_qcfg_int(&r, "eth_at").unwrap_or(0) == 1,
+                Err(_) => false,
+            },
+            QuectelChip::UniSoc => false,
         };
         let adb = match t.send_at(r#"AT+QCFG="usbcfg""#) {
             Ok(r) => parse_qcfg_usbcfg_adb(&r),
@@ -499,19 +527,30 @@ impl ModemVendor for QuectelModem {
                 entries.push(CellLockEntry { lock_type: "cell".to_string(), arfcn, pci });
             }
         }
-        if let Ok(resp) = t.send_at(r#"AT+QNWLOCKFREQ="common/5g""#) {
-            for (arfcn, _) in parse_qnwlock_response(&resp, "QNWLOCKFREQ") {
-                entries.push(CellLockEntry { lock_type: "freq".to_string(), arfcn, pci: String::new() });
+        // QNWLOCKFREQ is UniSoc-only
+        if matches!(self.chip, QuectelChip::UniSoc) {
+            if let Ok(resp) = t.send_at(r#"AT+QNWLOCKFREQ="common/5g""#) {
+                for (arfcn, _) in parse_qnwlock_response(&resp, "QNWLOCKFREQ") {
+                    entries.push(CellLockEntry { lock_type: "freq".to_string(), arfcn, pci: String::new() });
+                }
             }
         }
         Ok(entries)
     }
 
-    fn set_cell_lock(&mut self, t: &mut dyn AtTransport, arfcn: &str, pci: &str) -> Result<(), String> {
-        let cmd = if !pci.is_empty() {
-            format!(r#"AT+QNWLOCK="common/5g",1,{},{}"#, arfcn, pci)
-        } else {
-            format!(r#"AT+QNWLOCKFREQ="common/5g",1,{}"#, arfcn)
+    fn set_cell_lock(&mut self, t: &mut dyn AtTransport, arfcn: &str, pci: &str, scs: &str, band: &str) -> Result<(), String> {
+        let cmd = match self.chip {
+            QuectelChip::Qualcomm => {
+                // Qualcomm: AT+QNWLOCK="common/5g",<pci>,<arfcn>,<scs>,<band>
+                format!(r#"AT+QNWLOCK="common/5g",{},{},{},{}"#, pci, arfcn, scs, band)
+            }
+            _ => {
+                if !pci.is_empty() {
+                    format!(r#"AT+QNWLOCK="common/5g",1,{},{}"#, arfcn, pci)
+                } else {
+                    format!(r#"AT+QNWLOCKFREQ="common/5g",1,{}"#, arfcn)
+                }
+            }
         };
         let resp = t.send_at(&cmd)?;
         if !is_ok(&resp) {
@@ -521,16 +560,24 @@ impl ModemVendor for QuectelModem {
     }
 
     fn clear_cell_lock(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
-        let r1 = t.send_at(r#"AT+QNWLOCK="common/5g",0"#)?;
-        let r2 = t.send_at(r#"AT+QNWLOCKFREQ="common/5g",0"#)?;
-        if !is_ok(&r1) || !is_ok(&r2) {
-            return Err(format!("Failed to clear cell lock: {} / {}", r1.trim(), r2.trim()));
+        match self.chip {
+            QuectelChip::Qualcomm => {
+                let r = t.send_at(r#"AT+QNWLOCK="common/5g",0"#)?;
+                if !is_ok(&r) { return Err(format!("Failed to clear cell lock: {}", r.trim())); }
+            }
+            _ => {
+                let r1 = t.send_at(r#"AT+QNWLOCK="common/5g",0"#)?;
+                let r2 = t.send_at(r#"AT+QNWLOCKFREQ="common/5g",0"#)?;
+                if !is_ok(&r1) || !is_ok(&r2) {
+                    return Err(format!("Failed to clear cell lock: {} / {}", r1.trim(), r2.trim()));
+                }
+            }
         }
         Ok(())
     }
 
-    fn set_plmn_lock(&mut self, t: &mut dyn AtTransport, plmn: &str) -> Result<(), String> {
-        let cmd = format!(r#"AT+QSIMLOCK="PN","12345678",2,"{}""#, plmn);
+    fn set_plmn_lock(&mut self, t: &mut dyn AtTransport, plmn: &str, password: &str) -> Result<(), String> {
+        let cmd = format!(r#"AT+QSIMLOCK="PN","{}",2,"{}""#, password, plmn);
         let resp = t.send_at(&cmd)?;
         if !is_ok(&resp) {
             return Err(format!("PLMN lock failed: {}", resp.trim()));
@@ -538,8 +585,8 @@ impl ModemVendor for QuectelModem {
         Ok(())
     }
 
-    fn clear_plmn_lock(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
-        let resp = t.send_at(r#"AT+QSIMLOCK="PN","12345678""#)?;
+    fn clear_plmn_lock(&mut self, t: &mut dyn AtTransport, password: &str) -> Result<(), String> {
+        let resp = t.send_at(&format!(r#"AT+QSIMLOCK="PN","{}""#, password))?;
         if !is_ok(&resp) {
             return Err(format!("PLMN unlock failed: {}", resp.trim()));
         }
@@ -569,8 +616,7 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_ant_rssi(&mut self, t: &mut dyn AtTransport) -> Result<Vec<String>, String> {
-        let resp = send_and_delay(t, "AT+QANTRSSI?")?;
-        Ok(parse_qantrssi(&resp))
+        Ok(get_ant_values(t, &self.chip))
     }
 
     fn factory_reset(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
@@ -626,44 +672,176 @@ impl ModemVendor for QuectelModem {
         }
     }
 
+    fn query_nat_mode(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
+        let r = send_and_delay(t, r#"AT+QCFG="nat""#)?;
+        Ok(parse_qcfg_int(&r, "nat").unwrap_or(0))
+    }
+
+    fn set_nat_mode(&mut self, t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
+        let resp = send_and_delay(t, &format!(r#"AT+QCFG="nat",{}"#, mode))?;
+        if !is_ok(&resp) {
+            return Err(format!("Failed to set nat: {}", resp));
+        }
+        Ok(())
+    }
+
+    fn query_qualcomm_config(&mut self, t: &mut dyn AtTransport) -> Result<QualcommConfig, String> {
+        if matches!(self.chip, QuectelChip::UniSoc) {
+            return Err("query_qualcomm_config not supported on UniSoc platform".to_string());
+        }
+        let resp = send_and_delay(t, r#"AT+QCFG="usbnet""#)?;
+        let usbnet = parse_qcfg_usbnet(&resp).unwrap_or(0);
+
+        let resp = send_and_delay(t, r#"AT+QCFG="data_interface""#)?;
+        let data_interface = parse_qcfg_data_interface(&resp).unwrap_or_else(|| "0,0".to_string());
+
+        let resp = send_and_delay(t, r#"AT+QCFG="pcie/mode""#)?;
+        let pcie_mode = parse_qcfg_int(&resp, "pcie/mode").unwrap_or(0);
+
+        let resp = send_and_delay(t, r#"AT+QCFG="usbspeed""#)?;
+        let usbspeed = parse_qcfg_usbspeed(&resp).unwrap_or_else(|| "2.0".to_string());
+
+        let resp = send_and_delay(t, r#"AT+QETH="eth_driver""#)?;
+        let eth_driver = parse_qeth_eth_driver(&resp).unwrap_or_else(|| "none".to_string());
+
+        let mpdn_resp = t.send_at("AT+QMAP=\"MPDN_rule\"").unwrap_or_default();
+        let ippt_mode = qualcomm::parse_mpdn_ippt_mode(&mpdn_resp);
+
+        Ok(QualcommConfig {
+            usbnet,
+            data_interface,
+            pcie_mode,
+            usbspeed,
+            eth_driver,
+            ippt_mode,
+        })
+    }
+
+    fn set_qualcomm_config(&mut self, t: &mut dyn AtTransport, param: &str, value: &str) -> Result<(), String> {
+        if matches!(self.chip, QuectelChip::UniSoc) {
+            return Err("set_qualcomm_config not supported on UniSoc platform".to_string());
+        }
+        let cmd = match param {
+            "usbnet" => {
+                let mode: i32 = value.parse().map_err(|e| format!("Invalid usbnet value: {}", e))?;
+                format!(r#"AT+QCFG="usbnet",{}"#, mode)
+            }
+            "dataInterface" => {
+                format!(r#"AT+QCFG="data_interface",{}"#, value)
+            }
+            "pcieMode" => {
+                let mode: i32 = value.parse().map_err(|e| format!("Invalid pcieMode value: {}", e))?;
+                format!(r#"AT+QCFG="pcie/mode",{}"#, mode)
+            }
+            "usbspeed" => {
+                format!(r#"AT+QCFG="usbspeed","{}""#, value)
+            }
+            "ethDriver" => {
+                if let Some(stripped) = value.strip_prefix('-') {
+                    format!(r#"AT+QETH="eth_driver","{}",0"#, stripped)
+                } else {
+                    format!(r#"AT+QETH="eth_driver","{}",1"#, value)
+                }
+            }
+            "ippt" => {
+                let mode: i32 = value.parse().map_err(|_| format!("Invalid IPPT mode: {}", value))?;
+                match mode {
+                    0 => {
+                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0"#)?;
+                    }
+                    1 => {
+                        // Routing: always disable first, then configure
+                        let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
+                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
+                    }
+                    2 => {
+                        // Bridging (IPPT): always disable first, then configure
+                        let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
+                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
+                    }
+                    _ => return Err(format!("Invalid IPPT mode: {}", value)),
+                }
+                return Ok(());
+            }
+            _ => return Err(format!("Unsupported Qualcomm parameter: {}", param)),
+        };
+
+        send_and_check(t, &cmd)?;
+        Ok(())
+    }
+
     fn query_modem_status(
         &mut self,
         t: &mut dyn AtTransport,
     ) -> Result<ModemStatus, String> {
-        let sim_status = self.query_sim_status(t)?;
-        let imei = self.query_imei(t)?;
-        let iccid = self.query_iccid(t).unwrap_or_default();
+        // ── Phase 1: AT I/O — send all commands back-to-back, no parsing in between ──
+        let cpin_raw  = t.send_at("AT+CPIN?")?;
+        let imei_raw  = t.send_at("AT+CGSN")?;
 
-        let qeng_resp = send_and_delay(t, r#"AT+QENG="servingcell""#)?;
-        log::info!("QENG raw response: {}", qeng_resp.replace('\n', "\\n").replace('\r', ""));
+        let iccid_cmd = match self.chip { QuectelChip::Qualcomm => "AT+ICCID", QuectelChip::UniSoc => "AT+CCID" };
+        let iccid_p   = t.send_at(iccid_cmd)?;
+        // ICCID fallback requires the primary parse result to decide whether to send a second command.
+        let iccid_raw = if parse_iccid(&iccid_p).is_empty() { t.send_at("AT+QCCID")? } else { iccid_p };
+
+        let qeng_raw  = t.send_at(r#"AT+QENG="servingcell""#)?;
+        log::info!("QENG raw response: {}", qeng_raw.replace('\n', "\\n").replace('\r', ""));
+
+        let cops_raw  = t.send_at("AT+COPS?")?;
+
+        let ant_raw = match self.chip {
+            QuectelChip::Qualcomm => t.send_at("AT+QRSSI").ok(),
+            QuectelChip::UniSoc   => t.send_at("AT+QANTRSSI?").ok(),
+        };
+
+        let cgact_raw = t.send_at("AT+CGACT?")?;
+        let mpdn_raw = if matches!(self.chip, QuectelChip::Qualcomm) {
+            t.send_at("AT+QMAP=\"MPDN_status\"").ok()
+        } else {
+            None
+        };
+
+        // ── Phase 2: parse — AT bus is free, all CPU work happens here ──
+        let sim_status  = parse_cpin(&cpin_raw);
+        let imei        = parse_cgsn(&imei_raw);
+        let iccid       = parse_iccid(&iccid_raw);
+
         let qualcomm_bw = matches!(self.chip, QuectelChip::Qualcomm);
-        let serving_cell = parse_qeng_serving_cell(&qeng_resp, qualcomm_bw);
+        let serving_cell = parse_qeng_serving_cell(&qeng_raw, qualcomm_bw);
         log::info!(
             "ServingCell parsed: tech={}, state={}, pci={}, cell_id={}, arfcn={}, rsrp={}, sinr={}",
             serving_cell.tech, serving_cell.mobility_state, serving_cell.pci,
             serving_cell.cell_id, serving_cell.arfcn, serving_cell.rsrp, serving_cell.sinr
         );
 
-        let cops_resp = send_and_delay(t, "AT+COPS?")?;
-        let (operator, _) = parse_cops_with_act(&cops_resp);
-
-        let ant_values = match t.send_at("AT+QANTRSSI?") {
-            Ok(r) => {
-                let ant = parse_qantrssi(&r);
-                if ant.iter().any(|v| !v.is_empty()) { ant } else { vec![String::new(), String::new(), String::new(), String::new()] }
-            }
-            Err(_) => vec![String::new(), String::new(), String::new(), String::new()],
-        };
-
-        let conn_status = self.query_connection_status(t).unwrap_or_else(|_| "\u{672a}\u{8fde}\u{63a5}".to_string());
-
-        // Use raw English mobility state so the frontend regMap can translate it.
-        // Fall back to AT+CEREG? when QENG didn't return a usable state.
-        let reg_status = if serving_cell.mobility_state.is_empty() {
-            self.query_registration_status(t).unwrap_or_else(|_| "NOCONN".to_string())
+        let (cops_name, _) = parse_cops_with_act(&cops_raw);
+        let operator = if cops_name.is_empty() && !serving_cell.operator_mcc.is_empty() {
+            format!("{}{}", serving_cell.operator_mcc, serving_cell.operator_mnc)
         } else {
-            serving_cell.mobility_state.clone()
+            cops_name
         };
+
+        let ant_values = match ant_raw {
+            Some(r) => {
+                let ant = match self.chip {
+                    QuectelChip::Qualcomm => parse_qrssi(&r),
+                    QuectelChip::UniSoc   => parse_qantrssi(&r),
+                };
+                if ant.iter().any(|v| !v.is_empty()) { ant } else { vec![String::new(); 4] }
+            }
+            None => vec![String::new(); 4],
+        };
+
+        let conn_status = {
+            let mpdn_ok = mpdn_raw.as_ref().map(|r| qualcomm::parse_mpdn_connect_status(r));
+            if mpdn_ok == Some(true) {
+                "已连接".to_string()
+            } else {
+                let contexts = parse_cgact(&cgact_raw);
+                if contexts.iter().any(|(_, s)| *s == 1) { "已连接".to_string() } else { "未连接".to_string() }
+            }
+        };
+
+        let reg_status = serving_cell.mobility_state.clone();
 
         Ok(ModemStatus {
             sim_status,
@@ -673,6 +851,7 @@ impl ModemVendor for QuectelModem {
             iccid,
             operator,
             network_type: serving_cell.tech,
+            band: serving_cell.band,
             pci: serving_cell.pci,
             cell_id: serving_cell.cell_id,
             arfcn: serving_cell.arfcn,
@@ -684,6 +863,7 @@ impl ModemVendor for QuectelModem {
             rx_level: serving_cell.rx_level,
             ant_values,
             scs: serving_cell.scs,
+            chip_vendor: self.vendor().as_str().to_string(),
         })
     }
 
@@ -740,14 +920,14 @@ impl ModemVendor for QuectelModem {
 
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
-            QuectelChip::Qualcomm => qualcomm::connect_data(t, cid),
+            QuectelChip::Qualcomm => qualcomm::connect_data(t),
             QuectelChip::UniSoc => unisoc::connect_data(t, cid),
         }
     }
 
     fn disconnect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
-            QuectelChip::Qualcomm => qualcomm::disconnect_data(t, cid),
+            QuectelChip::Qualcomm => qualcomm::disconnect_data(t),
             QuectelChip::UniSoc => unisoc::disconnect_data(t, cid),
         }
     }

@@ -462,8 +462,8 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
 }
 
 pub fn parse_qtemp_rich(response: &str) -> (String, String) {
-    let mut soc = String::new();
-    let mut pa = String::new();
+    // Collect all (label, raw_value, formatted_value) entries first, then pick.
+    let mut entries: Vec<(String, i64, String)> = Vec::new();
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QTEMP:") {
             let parts: Vec<&str> = rest
@@ -480,14 +480,43 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
                 } else {
                     format!("{}°C", parts[1].trim())
                 };
-                if label.contains("soc") || label.contains("xo") || label.contains("modem") {
-                    if soc.is_empty() { soc = value; }
-                } else if label.contains("pa") {
-                    if pa.is_empty() { pa = value; }
-                }
+                entries.push((label, raw, value));
             }
         }
     }
+
+    // Sentinel readings to ignore (offline/unused sensors).
+    let is_valid = |raw: i64| raw > -100 && !(raw == 0);
+
+    // PA temperature: prefer "modem-lte-sub6-pa1"; fall back to first "modem-*-pa*" with a valid reading.
+    let pa = entries
+        .iter()
+        .find(|(l, _, _)| l == "modem-lte-sub6-pa1")
+        .or_else(|| {
+            entries
+                .iter()
+                .find(|(l, raw, _)| l.starts_with("modem-") && l.contains("-pa") && is_valid(*raw))
+        })
+        .map(|(_, _, v)| v.clone())
+        .unwrap_or_default();
+
+    // SOC temperature: prefer "aoss-0-usr"; fall back to aoss-*/cpuss-*/mdmss-*/socsensor*.
+    let soc = entries
+        .iter()
+        .find(|(l, _, _)| l == "aoss-0-usr")
+        .or_else(|| {
+            entries.iter().find(|(l, raw, _)| {
+                is_valid(*raw)
+                    && (l.starts_with("aoss")
+                        || l.starts_with("cpuss")
+                        || l.starts_with("mdmss")
+                        || l.contains("socsensor")
+                        || l.contains("xo-therm"))
+            })
+        })
+        .map(|(_, _, v)| v.clone())
+        .unwrap_or_default();
+
     (soc, pa)
 }
 
@@ -918,9 +947,14 @@ pub fn parse_5glan(response: &str) -> Vec<L5GanEntry> {
                         parts[0].trim().parse::<i32>(),
                         parts[1].trim().parse::<i32>(),
                     ) {
+                        let vlan_id = parts
+                            .get(2)
+                            .and_then(|s| s.trim().parse::<i32>().ok())
+                            .unwrap_or(1);
                         entries.push(L5GanEntry {
                             cid,
                             enabled: state == 1,
+                            vlan_id,
                         });
                     }
                 }
@@ -1034,5 +1068,22 @@ mod tests {
     #[test]
     fn parse_cpin_unknown_when_no_data() {
         assert_eq!(parse_cpin("OK"), "UNKNOWN");
+    }
+
+    #[test]
+    fn parse_qtemp_qualcomm_picks_pa1_and_aoss() {
+        let raw = r#"+QTEMP:"modem-lte-sub6-pa1","35"
++QTEMP:"modem-sdr0-pa0","0"
++QTEMP:"modem-sdr0-pa1","0"
++QTEMP:"modem-mmw0","-273"
++QTEMP:"aoss-0-usr","38"
++QTEMP:"cpuss-0-usr","36"
++QTEMP:"mdmss-0-usr","37"
++QTEMP:"modem-lte-sub6-pa2","35"
++QTEMP:"modem-ambient-usr","36"
+OK"#;
+        let info = parse_qtemp(raw);
+        assert_eq!(info.pa_temp, "35°C");
+        assert_eq!(info.soc_temp, "38°C");
     }
 }

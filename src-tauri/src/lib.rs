@@ -664,7 +664,7 @@ async fn get_5glan(state: tauri::State<'_, AppState>) -> Result<Vec<L5GanEntry>,
 }
 
 #[tauri::command]
-async fn set_5glan(cid: i32, enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
@@ -672,7 +672,7 @@ async fn set_5glan(cid: i32, enabled: bool, state: tauri::State<'_, AppState>) -
         let mut vguard = vendor.lock().unwrap();
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-        v.set_5glan(t, cid, enabled)
+        v.set_5glan(t, cid, enabled, vlan_id)
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?

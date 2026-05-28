@@ -1033,6 +1033,375 @@
     .atdb-param-table td:last-child { color: var(--text-muted); font-size: 12px; }
     .atdb-note { font-size: 12px; color: var(--text-muted); background: var(--bg-tertiary); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 6px 6px 0; margin-top: 12px; line-height: 1.6; }
   </style>
+
+  <style id="claude-skin">
+/* ──────────────────────────────────────────────────────────────
+   Modem Cat · Claude Code 风皮肤覆盖
+   作为补丁追加在原 <style> 之后，保留所有原 class，
+   只重写 tokens + 几何（圆角、阴影、字体）。
+   ─────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── 1. Tokens · 默认 = 浅色 ─────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg-primary:    #F7F3EC !important;
+  --bg-secondary:  #FFFFFF !important;
+  --bg-tertiary:   #FAF6EE !important;
+  --border-color:  #E5DDCB !important;
+  --border-hover:  #EA580C !important;
+  --text-primary:  #1E1B16 !important;
+  --text-secondary:#5F574A !important;
+  --text-muted:    #8C8474 !important;
+  --accent:        #EA580C !important;
+  --accent-hover:  #C2410C !important;
+  --accent-glow:   rgba(234, 88, 12, 0.18) !important;
+  --success:       #2F8A53 !important;
+  --success-glow:  rgba(47, 138, 83, 0.15) !important;
+  --warning:       #B5870F !important;
+  --error:         #B5483A !important;
+  --danger:        #B5483A !important;
+  --danger-hover:  #8F362B !important;
+  --cyan:          #4A6F9E !important;
+  --tab-bar-bg:    #EFEAE0 !important;
+  --tab-active-bg: #FFFFFF !important;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg-primary:    #1A1714 !important;
+  --bg-secondary:  #25211C !important;
+  --bg-tertiary:   #2C2823 !important;
+  --border-color:  #36312A !important;
+  --border-hover:  #F97316 !important;
+  --text-primary:  #F2ECDC !important;
+  --text-secondary:#B5AB97 !important;
+  --text-muted:    #847B6B !important;
+  --accent:        #F97316 !important;
+  --accent-hover:  #FB8732 !important;
+  --accent-glow:   rgba(249, 115, 22, 0.28) !important;
+  --success:       #6FBE85 !important;
+  --success-glow:  rgba(111, 190, 133, 0.25) !important;
+  --warning:       #E0B548 !important;
+  --error:         #E07A6B !important;
+  --danger:        #E07A6B !important;
+  --danger-hover:  #C2493A !important;
+  --cyan:          #8AA9D6 !important;
+  --tab-bar-bg:    #221E1A !important;
+  --tab-active-bg: #2C2823 !important;
+  color-scheme: dark;
+}
+
+/* ── 2. 字体 ─────────────────────────────────────────────── */
+body {
+  font-family: 'Inter', -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  font-feature-settings: 'cv11','ss01';
+  letter-spacing: -0.005em;
+  font-size: 13.5px;
+}
+
+/* ── 3. 侧边栏 ───────────────────────────────────────────── */
+.sidebar { background: var(--bg-primary); }
+[data-theme="light"] .sidebar,
+:root .sidebar { background: #EFEAE0; }
+[data-theme="dark"] .sidebar { background: #221E1A; }
+.logo { border-color: var(--border-color); }
+.logo-icon { filter: none !important; }
+
+.nav-item { border-radius: 8px; transition: background .12s, color .12s; }
+.nav-item.active {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 2px rgba(60,45,20,0.05);
+}
+[data-theme="dark"] .nav-item.active { box-shadow: 0 1px 2px rgba(0,0,0,0.30); }
+.nav-item.active .nav-icon {
+  color: var(--accent) !important;
+  filter: none !important;
+}
+
+.status-icon.connected,
+.status-icon.data-on { filter: none !important; }
+
+.data-connect-btn { border-radius: 6px; }
+.data-connect-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: none;
+}
+.data-connect-btn.connected { box-shadow: none; }
+
+/* ── 4. Panel ────────────────────────────────────────────── */
+.panel {
+  border-radius: 12px !important;
+  box-shadow: 0 1px 2px rgba(60,45,20,0.04) !important;
+}
+[data-theme="dark"] .panel { box-shadow: 0 1px 2px rgba(0,0,0,0.30) !important; }
+.panel:hover { border-color: var(--border-color) !important; }
+.panel-title {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  color: var(--text-muted) !important;
+}
+
+/* ── 5. 表单 ─────────────────────────────────────────────── */
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.form-group input,
+.form-group select,
+.conn-select {
+  height: 34px;
+  border-radius: 10px !important;
+  padding: 0 12px;
+  font-family: inherit !important;
+}
+.form-group input:focus,
+.form-group select:focus,
+.conn-select:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+  outline: none !important;
+}
+
+/* ── 6. Button ───────────────────────────────────────────── */
+.btn {
+  border-radius: 10px !important;
+  font-weight: 500;
+  box-shadow: none !important;
+}
+.btn-sm { border-radius: 8px !important; }
+.btn-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .btn-primary { color: #1A1714 !important; }
+.btn-primary:hover {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+  box-shadow: none !important;
+}
+.btn-secondary {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+.btn-secondary:hover {
+  background: var(--bg-primary) !important;
+  border-color: var(--text-muted) !important;
+}
+.btn-danger {
+  background: transparent !important;
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+.btn-danger:hover {
+  background: var(--danger) !important;
+  color: #fff !important;
+  border-color: var(--danger) !important;
+  box-shadow: none !important;
+}
+
+/* ── 7. Info grid / item / row ────────────────────────────── */
+.info-grid   { gap: 10px !important; }
+.info-grid-2 { gap: 10px !important; }
+.info-item {
+  border-radius: 10px !important;
+  padding: 11px 13px !important;
+  min-height: 64px !important;
+  transition: border-color .12s, box-shadow .12s !important;
+}
+.info-item:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+  transform: none !important;
+}
+.info-icon {
+  width: 13px !important;
+  height: 13px !important;
+  color: var(--accent) !important;
+  opacity: 0.85 !important;
+}
+.info-label {
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  color: var(--text-muted) !important;
+  text-transform: uppercase !important;
+}
+.info-value {
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, monospace !important;
+  font-feature-settings: 'tnum' !important;
+  font-size: 14.5px !important;
+  font-weight: 500 !important;
+  text-align: center !important;
+  letter-spacing: -0.01em !important;
+  color: var(--text-primary) !important;
+}
+.info-value.muted {
+  color: var(--text-muted) !important;
+  opacity: 1 !important;
+  font-family: 'Inter', -apple-system, 'PingFang SC', sans-serif !important;
+  font-size: 13px !important;
+}
+.info-value.good { color: var(--success) !important; }
+.info-value.warn { color: var(--warning) !important; }
+.info-value.data { color: var(--accent) !important; font-weight: 600 !important; }
+
+.info-row {
+  border-radius: 10px !important;
+  padding: 11px 14px !important;
+}
+.info-row:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+.info-row .info-label {
+  font-size: 12.5px !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  color: var(--text-secondary) !important;
+  font-weight: 500 !important;
+}
+.info-row .info-value {
+  font-size: 13px !important;
+  text-align: right !important;
+  font-weight: 600 !important;
+}
+
+/* sim-slot pill */
+.sim-slot-switch {
+  border-radius: 5px !important;
+  background: var(--bg-secondary) !important;
+}
+
+/* ── 8. Tabs ─────────────────────────────────────────────── */
+.tab-bar { border-radius: 10px !important; padding: 3px !important; }
+.tab-indicator {
+  background: var(--tab-active-bg) !important;
+  border-radius: 7px !important;
+  box-shadow: 0 1px 2px rgba(60,45,20,0.06) !important;
+}
+[data-theme="dark"] .tab-indicator { box-shadow: 0 1px 2px rgba(0,0,0,0.35) !important; }
+.tab-btn { border-radius: 7px !important; font-weight: 500; }
+.tab-btn.active { font-weight: 600; color: var(--text-primary) !important; }
+
+.sub-tab-bar { border-radius: 8px !important; }
+.sub-tab-btn { border-radius: 6px !important; }
+
+/* ── 9. Toggle group (开关按钮组) ──────────────────────────── */
+.toggle-group { border-radius: 8px !important; padding: 2px !important; background: var(--tab-bar-bg) !important; }
+.toggle-btn {
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: none !important;
+}
+.toggle-btn.active {
+  background: var(--bg-secondary) !important;
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px rgba(60,45,20,0.05) !important;
+}
+[data-theme="dark"] .toggle-btn.active { box-shadow: 0 1px 2px rgba(0,0,0,0.30) !important; }
+
+/* ── 10. Settings ────────────────────────────────────────── */
+.settings-row { border-radius: 10px !important; padding: 12px 14px !important; }
+.settings-icon { color: var(--accent) !important; opacity: 0.85 !important; }
+.settings-select { border-radius: 8px !important; }
+
+/* ── 11. Terminal (AT 调试) ──────────────────────────────── */
+.terminal {
+  border-radius: 10px !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, monospace !important;
+  font-size: 12px !important;
+  line-height: 1.65 !important;
+  background: var(--bg-tertiary) !important;
+  font-feature-settings: 'zero', 'ss02' !important;
+}
+.shortcut-bar .btn {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 11px !important;
+  padding: 4px 9px !important;
+  border-radius: 7px !important;
+}
+.shortcut-bar .btn:hover {
+  background: var(--accent-glow) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.terminal-input { border-radius: 10px !important; padding: 8px 10px !important; }
+.terminal-input:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+}
+.terminal-prompt {
+  font-family: 'JetBrains Mono', monospace !important;
+  color: var(--accent) !important;
+}
+.terminal-input input {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* ── 12. Band chips ──────────────────────────────────────── */
+.band-chip {
+  border-radius: 8px !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-weight: 500 !important;
+  background: var(--bg-tertiary) !important;
+}
+.band-chip.checked {
+  background: var(--accent-glow) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* ── 13. APN modal / scene cards / spinners — soften ─────── */
+.apn-modal-card,
+.apn-card,
+.scene-card {
+  border-radius: 12px !important;
+}
+.scene-spinner,
+.spinner { filter: none !important; }
+.spinner::after { filter: none !important; }
+
+/* ── 14. Data table ──────────────────────────────────────── */
+.data-table th {
+  font-size: 11px !important;
+  letter-spacing: 0.06em !important;
+  color: var(--text-muted) !important;
+  font-weight: 600 !important;
+}
+.data-table td {
+  font-family: 'JetBrains Mono', monospace !important;
+  font-feature-settings: 'tnum' !important;
+}
+
+/* ── 15. Scrollbar ───────────────────────────────────────── */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 16. 杀掉所有 cyber drop-shadow / glow ───────────────── */
+[class] { filter: none; }
+.logo-icon svg,
+.nav-item .nav-icon,
+.info-icon,
+.status-icon { filter: none !important; }
+
+  </style>
+
 </head>
 <body>
 

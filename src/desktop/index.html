@@ -2316,7 +2316,6 @@
         <div class="panel-title" data-i18n="panel_vlan">VLAN 配置</div>
         <div id="vlanNotSupported" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;" data-i18n="vlan_not_supported">仅 Qualcomm 模组支持 VLAN 配置</div>
         <div class="toggle-row">
-          <div><div class="toggle-label" id="vlanEnabledLabel" data-i18n="label_vlan_off">已关闭</div></div>
           <label class="toggle-switch">
             <input type="checkbox" id="vlanEnabled" onchange="onVlanToggle(this.checked)">
             <span class="toggle-track"></span>
@@ -2417,6 +2416,7 @@
       model: '',
       chipVendor: '',
       currentBand: '',
+      vlanEnabled: false,
     };
 
     // ── Data Connection ──
@@ -3755,11 +3755,8 @@
 
     function setVlanToggleUI(enabled) {
       const cb  = document.getElementById('vlanEnabled');
-      const lbl = document.getElementById('vlanEnabledLabel');
       const row = document.getElementById('vlanIdRow');
       cb.checked = enabled;
-      lbl.setAttribute('data-i18n', enabled ? 'label_vlan_on' : 'label_vlan_off');
-      lbl.textContent = t(enabled ? 'label_vlan_on' : 'label_vlan_off');
       row.style.display = enabled ? 'block' : 'none';
     }
 
@@ -3770,25 +3767,24 @@
       try {
         const ids = await invoke('get_vlan');
         const hasVlan = ids && ids.length > 0;
+        state.vlanEnabled = hasVlan;
         setVlanToggleUI(hasVlan);
         if (hasVlan) document.getElementById('vlanId').value = ids[0];
       } catch (_) { /* leave current state */ }
     }
 
     async function onVlanToggle(enabled) {
-      const lbl = document.getElementById('vlanEnabledLabel');
       const row = document.getElementById('vlanIdRow');
-      lbl.setAttribute('data-i18n', enabled ? 'label_vlan_on' : 'label_vlan_off');
-      lbl.textContent = t(enabled ? 'label_vlan_on' : 'label_vlan_off');
       row.style.display = enabled ? 'block' : 'none';
-      if (!enabled && state.connected) {
+      if (!enabled && state.connected && state.vlanEnabled) {
+        const vid = parseInt(document.getElementById('vlanId').value) || 1;
         try {
-          await invoke('set_vlan', { vlanId: 1, enabled: false });
+          await invoke('set_vlan', { vlanId: vid, enabled: false });
           await flushAtLog();
+          state.vlanEnabled = false;
           showToast('VLAN 已禁用', 'ok');
         } catch (e) {
           showToast('VLAN 禁用失败: ' + e, 'err');
-          // revert toggle if failed
           setVlanToggleUI(true);
         }
       }
@@ -3803,6 +3799,7 @@
         await invoke('set_vlan', { vlanId: id, enabled: true });
         await flushAtLog();
         hideLoading();
+        state.vlanEnabled = true;
         showToast('VLAN ' + id + ' 已启用', 'ok');
       } catch (e) {
         hideLoading();

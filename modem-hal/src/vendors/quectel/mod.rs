@@ -662,8 +662,10 @@ impl ModemVendor for QuectelModem {
             return Err("VLAN not supported on UniSoc platform".to_string());
         }
         let resp = send_and_delay(t, r#"AT+QMAP="VLAN""#)?;
-        // Response: +QMAP: "VLAN",<state>[,<vid>]
-        // If state=0 → disabled, return empty list.  state=1 → return [vid].
+        // Response lines:
+        //   +QMAP: "VLAN",0          ← physical default LAN, always present, skip
+        //   +QMAP: "VLAN",<vid>,<type>  ← enabled VLAN (type: 1=ETH, 2=ECM, 3=RNDIS)
+        let mut vids = Vec::new();
         for line in resp.lines() {
             let line = line.trim();
             if let Some(rest) = line.strip_prefix("+QMAP:") {
@@ -672,29 +674,29 @@ impl ModemVendor for QuectelModem {
                     .split(',')
                     .map(|s| s.trim().trim_matches('"'))
                     .collect();
-                // parts[0]="VLAN", parts[1]=state, parts[2]=vid (optional)
                 if parts.first().map(|s| s.eq_ignore_ascii_case("vlan")) == Some(true) {
-                    let state: i32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-                    if state == 1 {
-                        let vid: i32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
-                        return Ok(vec![vid]);
+                    let vid: i32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    // vid=0 is the physical default LAN entry, skip it
+                    // vid>0 with a type field means this VLAN is enabled
+                    if vid > 0 && parts.get(2).is_some() {
+                        vids.push(vid);
                     }
-                    return Ok(vec![]);
                 }
             }
         }
-        Ok(vec![])
+        Ok(vids)
     }
 
     fn set_vlan(&mut self, t: &mut dyn AtTransport, vlan_id: i32, enabled: bool) -> Result<(), String> {
         if matches!(self.chip, QuectelChip::UniSoc) {
             return Err("VLAN not supported on UniSoc platform".to_string());
         }
-        let state = if enabled { 1 } else { 0 };
+        // Enable:  AT+QMAP="VLAN",<vid>,"enable",1  (1=ETH)
+        // Disable: AT+QMAP="VLAN",<vid>,"disable"
         let cmd = if enabled {
-            format!(r#"AT+QMAP="VLAN",{},{}"#, state, vlan_id)
+            format!(r#"AT+QMAP="VLAN",{},"enable",1"#, vlan_id)
         } else {
-            format!(r#"AT+QMAP="VLAN",{}"#, state)
+            format!(r#"AT+QMAP="VLAN",{},"disable""#, vlan_id)
         };
         let resp = send_and_delay(t, &cmd)?;
         if is_ok(&resp) { Ok(()) } else { Err(format!("VLAN set failed: {}", resp)) }

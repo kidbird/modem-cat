@@ -94,6 +94,16 @@ pub trait ModemVendor: Send {
     /// Activate or deactivate APN context (AT+CGACT=<state>,<cid>)
     fn set_apn_active(&mut self, transport: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String>;
 
+    /// Query VLAN ID currently active on the LAN port (AT+QMAP="VLAN")
+    fn query_vlan(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<i32>, String> {
+        Err("VLAN not supported".to_string())
+    }
+
+    /// Enable or disable VLAN tagging on the LAN port (AT+QMAP="VLAN",<state>,<vid>)
+    fn set_vlan(&mut self, _transport: &mut dyn AtTransport, _vlan_id: i32, _enabled: bool) -> Result<(), String> {
+        Err("VLAN not supported".to_string())
+    }
+
     /// Query 5GLAN status (AT+QCFG="5glan")
     fn query_5glan(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String>;
 

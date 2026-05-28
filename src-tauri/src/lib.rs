@@ -712,6 +712,36 @@ async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_
 }
 
 #[tauri::command]
+async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.query_vlan(t)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn set_vlan(vlan_id: i32, enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport.lock().unwrap();
+        let mut vguard = vendor.lock().unwrap();
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        v.set_vlan(t, vlan_id, enabled)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
 async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
@@ -1365,6 +1395,8 @@ pub fn run() {
             set_apn_active,
             get_5glan,
             set_5glan,
+            get_vlan,
+            set_vlan,
             connect_data,
             disconnect_data,
             set_network_mode_cmd,

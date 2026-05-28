@@ -2337,7 +2337,7 @@
           <div class="form-row">
             <div class="form-group narrow" style="min-width:160px;">
               <label data-i18n="label_vlan_id">VLAN ID</label>
-              <input type="number" id="vlanId" min="1" max="4094" placeholder="2~4094">
+              <input type="number" id="vlanId" min="1" max="255" placeholder="1~255">
             </div>
             <div class="form-group auto" style="display:flex;align-items:flex-end;gap:8px;">
               <button class="btn btn-primary btn-sm" onclick="applyVlan()" data-i18n="btn_vlan_apply">应用</button>
@@ -3811,7 +3811,7 @@
     async function applyVlan() {
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       const id = parseInt(document.getElementById('vlanId').value);
-      if (isNaN(id) || id < 1 || id > 4094) { showToast('VLAN ID 范围：1 ~ 4094', 'err'); return; }
+      if (isNaN(id) || id < 1 || id > 255) { showToast('VLAN ID 范围：1 ~ 255', 'err'); return; }
       try {
         showLoading('正在启用 VLAN...');
         await invoke('set_vlan', { vlanId: id, enabled: true });

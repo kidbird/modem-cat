@@ -657,6 +657,49 @@ impl ModemVendor for QuectelModem {
         Err(format!("Failed to switch SIM slot: {}", resp))
     }
 
+    fn query_vlan(&mut self, t: &mut dyn AtTransport) -> Result<Vec<i32>, String> {
+        if matches!(self.chip, QuectelChip::UniSoc) {
+            return Err("VLAN not supported on UniSoc platform".to_string());
+        }
+        let resp = send_and_delay(t, r#"AT+QMAP="VLAN""#)?;
+        // Response: +QMAP: "VLAN",<state>[,<vid>]
+        // If state=0 → disabled, return empty list.  state=1 → return [vid].
+        for line in resp.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("+QMAP:") {
+                let parts: Vec<&str> = rest
+                    .trim()
+                    .split(',')
+                    .map(|s| s.trim().trim_matches('"'))
+                    .collect();
+                // parts[0]="VLAN", parts[1]=state, parts[2]=vid (optional)
+                if parts.first().map(|s| s.eq_ignore_ascii_case("vlan")) == Some(true) {
+                    let state: i32 = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    if state == 1 {
+                        let vid: i32 = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(1);
+                        return Ok(vec![vid]);
+                    }
+                    return Ok(vec![]);
+                }
+            }
+        }
+        Ok(vec![])
+    }
+
+    fn set_vlan(&mut self, t: &mut dyn AtTransport, vlan_id: i32, enabled: bool) -> Result<(), String> {
+        if matches!(self.chip, QuectelChip::UniSoc) {
+            return Err("VLAN not supported on UniSoc platform".to_string());
+        }
+        let state = if enabled { 1 } else { 0 };
+        let cmd = if enabled {
+            format!(r#"AT+QMAP="VLAN",{},{}"#, state, vlan_id)
+        } else {
+            format!(r#"AT+QMAP="VLAN",{}"#, state)
+        };
+        let resp = send_and_delay(t, &cmd)?;
+        if is_ok(&resp) { Ok(()) } else { Err(format!("VLAN set failed: {}", resp)) }
+    }
+
     fn query_usbnet_mode(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
         let resp = send_and_delay(t, r#"AT+QCFG="usbnet""#)?;
         parse_qcfg_usbnet(&resp).ok_or_else(|| format!("Failed to parse usbnet: {}", resp))

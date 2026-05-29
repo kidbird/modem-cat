@@ -3,7 +3,7 @@ use crate::types::{IpInfo, TrafficInfo};
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QNETDEVCTL={},3,1", cid))?;
+    let resp = t.send_at(&format!("AT+QNETDEVCTL=1,{},1", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QNETDEVCTL connect failed: {}", resp.trim()));
     }
@@ -12,7 +12,7 @@ pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
 
 pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QNETDEVCTL={},2,0", cid))?;
+    let resp = t.send_at(&format!("AT+QNETDEVCTL=0,{},1", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QNETDEVCTL disconnect failed: {}", resp.trim()));
     }

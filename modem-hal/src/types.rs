@@ -165,6 +165,7 @@ pub struct QualcommConfig {
     pub usbspeed: String,
     pub eth_driver: String,
     pub ippt_mode: i32,
+    pub auto_connect: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

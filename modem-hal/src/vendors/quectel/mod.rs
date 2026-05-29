@@ -16,9 +16,9 @@ fn send_and_delay(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> 
 fn get_ant_values(t: &mut dyn AtTransport, chip: &QuectelChip) -> Vec<String> {
     let none = vec![String::new(), String::new(), String::new(), String::new()];
     match chip {
-        QuectelChip::Qualcomm => match t.send_at("AT+QRSSI") {
+        QuectelChip::Qualcomm => match t.send_at("AT+QRSRP") {
             Ok(r) => {
-                let ant = parse_qrssi(&r);
+                let ant = parse_qrsrp(&r);
                 if ant.iter().any(|v| !v.is_empty()) { ant } else { none }
             }
             Err(_) => none,
@@ -218,7 +218,13 @@ impl ModemVendor for QuectelModem {
         };
 
         let (soc_temp, pa_temp) = match t.send_at("AT+QTEMP") {
-            Ok(resp) => parse_qtemp_rich(&resp),
+            Ok(resp) => match self.chip {
+                QuectelChip::UniSoc => {
+                    let info = parse_qtemp_unisoc(&resp);
+                    (info.soc_temp, info.pa_temp)
+                }
+                QuectelChip::Qualcomm => parse_qtemp_rich(&resp),
+            },
             Err(_) => (String::new(), String::new()),
         };
 
@@ -234,11 +240,10 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_temperature(&mut self, t: &mut dyn AtTransport) -> Result<TemperatureInfo, String> {
+        let resp = send_and_delay(t, "AT+QTEMP")?;
         match self.chip {
-            QuectelChip::UniSoc | QuectelChip::Qualcomm => {
-                let resp = send_and_delay(t, "AT+QTEMP")?;
-                Ok(parse_qtemp(&resp))
-            }
+            QuectelChip::UniSoc => Ok(parse_qtemp_unisoc(&resp)),
+            QuectelChip::Qualcomm => Ok(parse_qtemp(&resp)),
         }
     }
 
@@ -752,6 +757,9 @@ impl ModemVendor for QuectelModem {
         let mpdn_resp = t.send_at("AT+QMAP=\"MPDN_rule\"").unwrap_or_default();
         let ippt_mode = qualcomm::parse_mpdn_ippt_mode(&mpdn_resp);
 
+        let auto_resp = t.send_at("AT+QMAP=\"auto_connect\",0").unwrap_or_default();
+        let auto_connect = qualcomm::parse_auto_connect(&auto_resp);
+
         Ok(QualcommConfig {
             usbnet,
             data_interface,
@@ -759,6 +767,7 @@ impl ModemVendor for QuectelModem {
             usbspeed,
             eth_driver,
             ippt_mode,
+            auto_connect,
         })
     }
 
@@ -793,16 +802,19 @@ impl ModemVendor for QuectelModem {
                 match mode {
                     0 => {
                         send_and_check(t, r#"AT+QMAP="mPDN_rule",0"#)?;
+                        let _ = qualcomm::set_auto_connect(t, 0, 0);
                     }
                     1 => {
                         // Routing: always disable first, then configure
                         let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
                         send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
+                        qualcomm::set_auto_connect(t, 0, 1)?;
                     }
                     2 => {
                         // Bridging (IPPT): always disable first, then configure
                         let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
                         send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
+                        qualcomm::set_auto_connect(t, 0, 1)?;
                     }
                     _ => return Err(format!("Invalid IPPT mode: {}", value)),
                 }
@@ -834,7 +846,7 @@ impl ModemVendor for QuectelModem {
         let cops_raw  = t.send_at("AT+COPS?")?;
 
         let ant_raw = match self.chip {
-            QuectelChip::Qualcomm => t.send_at("AT+QRSSI").ok(),
+            QuectelChip::Qualcomm => t.send_at("AT+QRSRP").ok(),
             QuectelChip::UniSoc   => t.send_at("AT+QANTRSSI?").ok(),
         };
 
@@ -868,7 +880,7 @@ impl ModemVendor for QuectelModem {
         let ant_values = match ant_raw {
             Some(r) => {
                 let ant = match self.chip {
-                    QuectelChip::Qualcomm => parse_qrssi(&r),
+                    QuectelChip::Qualcomm => parse_qrsrp(&r),
                     QuectelChip::UniSoc   => parse_qantrssi(&r),
                 };
                 if ant.iter().any(|v| !v.is_empty()) { ant } else { vec![String::new(); 4] }
@@ -1029,14 +1041,14 @@ impl ModemVendor for QuectelModem {
 
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
-            QuectelChip::Qualcomm => qualcomm::connect_data(t),
+            QuectelChip::Qualcomm => qualcomm::connect_data(t, cid),
             QuectelChip::UniSoc => unisoc::connect_data(t, cid),
         }
     }
 
     fn disconnect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
-            QuectelChip::Qualcomm => qualcomm::disconnect_data(t),
+            QuectelChip::Qualcomm => qualcomm::disconnect_data(t, cid),
             QuectelChip::UniSoc => unisoc::disconnect_data(t, cid),
         }
     }

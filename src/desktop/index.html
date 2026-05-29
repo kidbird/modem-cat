@@ -1238,7 +1238,7 @@ body {
   text-transform: uppercase !important;
 }
 .info-value {
-  font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, monospace !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
   font-feature-settings: 'tnum' !important;
   font-size: 14.5px !important;
   font-weight: 500 !important;
@@ -1249,7 +1249,7 @@ body {
 .info-value.muted {
   color: var(--text-muted) !important;
   opacity: 1 !important;
-  font-family: 'Inter', -apple-system, 'PingFang SC', sans-serif !important;
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
   font-size: 13px !important;
 }
 .info-value.good { color: var(--success) !important; }
@@ -1497,7 +1497,7 @@ body {
         </svg>
         <div>
           <div style="font-size:18px;font-weight:700;color:var(--text-primary);">Modem Cat</div>
-          <div style="font-size:12px;color:var(--text-muted);">v0.1.3</div>
+          <div id="aboutVersion" style="font-size:12px;color:var(--text-muted);">--</div>
         </div>
       </div>
       <div style="margin-bottom:14px;font-size:13px;color:var(--text-secondary);line-height:1.7;" data-i18n="about_desc">
@@ -1529,20 +1529,20 @@ body {
 <div class="logo">
         <div class="logo-text">
           <span class="logo-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <!-- Ears -->
-              <path d="M5 10 L5 4 L9.5 8" fill="currentColor" opacity="0.9"/>
-              <path d="M19 10 L19 4 L14.5 8" fill="currentColor" opacity="0.9"/>
-              <!-- Head -->
-              <rect x="4" y="8" width="16" height="13" rx="5" fill="currentColor"/>
-              <!-- Eyes -->
-              <ellipse cx="9" cy="13.5" rx="1.6" ry="1.8" fill="var(--bg-primary)"/>
-              <ellipse cx="15" cy="13.5" rx="1.6" ry="1.8" fill="var(--bg-primary)"/>
-              <!-- Pupils -->
-              <ellipse cx="9" cy="13.5" rx="0.7" ry="1.2" fill="var(--bg-secondary)"/>
-              <ellipse cx="15" cy="13.5" rx="0.7" ry="1.2" fill="var(--bg-secondary)"/>
-              <!-- Nose -->
-              <ellipse cx="12" cy="17" rx="1" ry="0.7" fill="var(--bg-primary)" opacity="0.6"/>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+              <!-- 圆胖头 -->
+              <circle cx="12" cy="14" r="7.5"/>
+              <!-- 三角耳 -->
+              <path d="M6.5 9 L7.8 3.8 L11.2 7"/>
+              <path d="M17.5 9 L16.2 3.8 L12.8 7"/>
+              <!-- 眯眼笑 -->
+              <path d="M8.6 13.6 Q 9.6 12.1 10.6 13.6"/>
+              <path d="M13.4 13.6 Q 14.4 12.1 15.4 13.6"/>
+              <!-- 三角鼻 -->
+              <path d="M11.2 16 L12 16.9 L12.8 16 Z"/>
+              <!-- 小嘴 -->
+              <path d="M12 16.9 Q 11 17.8 10.3 17.2"/>
+              <path d="M12 16.9 Q 13 17.8 13.7 17.2"/>
             </svg>
           </span>
           <span id="logoText">Modem Cat</span>
@@ -2334,6 +2334,9 @@ body {
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGACT?')">AT+CGACT?</button>
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNETDEVSTATUS=1')">AT+QNETDEV</button>
             <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QICSGP?')">AT+QICSGP?</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;mode_pref&quot;')">AT+QNWPREFCFG=mode</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;nr5g_band&quot;')">AT+QNWPREFCFG=nr5g</button>
+            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGPADDR')">AT+CGPADDR</button>
           </div>
           <div class="terminal-input">
             <span class="terminal-prompt">›</span>
@@ -2663,6 +2666,7 @@ body {
                 <button class="toggle-btn" id="qcIppt_1" onclick="setQcIpptMode(1)">IPPT 路由</button>
                 <button class="toggle-btn" id="qcIppt_2" onclick="setQcIpptMode(2)">IPPT 桥接</button>
               </div>
+              <div id="qcAutoConnectBadge" class="status-badge" style="display:none;font-size:11px;margin-top:4px;padding:2px 8px;border-radius:4px;background:#1a3a1a;color:#4ade80;">自动拨号已启用</div>
             </div>
 
           </div>
@@ -2976,7 +2980,7 @@ body {
     (function () {
       const saved = localStorage.getItem('theme');
       if (saved === 'light') setTheme('light');
-      else updateThemeToggle();
+      else setTheme('dark');
     })();
 
     function toggleTheme() { setTheme(state.isDark ? 'light' : 'dark'); }
@@ -3656,16 +3660,13 @@ body {
     }
 
     // ── 蜂窝网络 Tab 切换 ──
-    let neighborLoaded = false;
-    let netlockLoaded = false;
     function switchCellularTab(tab, btn) {
       document.querySelectorAll('#page-cellular .tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('#page-cellular > .panel > .tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('ctab-' + tab).classList.add('active');
-      // Lazy-load neighbor data on first tab switch
-      if (tab === 'neighbor' && state.connected && !neighborLoaded) {
-        neighborLoaded = true;
+      // Load neighbor data every time tab is switched
+      if (tab === 'neighbor' && state.connected) {
         loadNeighborCells();
       }
       // Load bands + network mode when switching to netlock tab
@@ -4036,6 +4037,7 @@ body {
 
     async function loadNetlockData() {
       if (!state.connected) return;
+      showLoading('正在读取网络配置...');
       // Load preferred network mode
       try {
         const sel = document.getElementById('preferredNetwork');
@@ -4056,6 +4058,7 @@ body {
       }
       // Load bands independently
       await refreshBands();
+      hideLoading();
     }
 
     function updateImsToggle(val) {
@@ -4249,6 +4252,7 @@ body {
 
     async function queryCellLock() {
       if (!state.connected) return;
+      showLoading('正在读取锁定配置...');
       const quota = document.getElementById('lockQuota');
       const list = document.getElementById('lockList');
       try {
@@ -4270,6 +4274,7 @@ body {
       } catch (e) {
         addTerminalLine('[锁定查询] 失败: ' + e, 'err');
       }
+      hideLoading();
     }
 
     async function saveCellLock() {
@@ -5844,6 +5849,12 @@ body {
         [0, 1, 2].forEach(i => {
           document.getElementById('qcIppt_' + i).classList.toggle('active', config.ipptMode === i);
         });
+        const acBadge = document.getElementById('qcAutoConnectBadge');
+        if (config.ipptMode !== 0 && config.autoConnect === 1) {
+          acBadge.style.display = 'block';
+        } else {
+          acBadge.style.display = 'none';
+        }
       } catch (e) {
         console.warn('refreshQualcommConfig failed:', e);
       }
@@ -5943,6 +5954,8 @@ body {
         await invoke('set_qualcomm_config', { param: 'ippt', value: String(mode) });
         await flushAtLog();
         if (state.qualcommConfig) state.qualcommConfig.ipptMode = mode;
+        const acBadge = document.getElementById('qcAutoConnectBadge');
+        acBadge.style.display = (mode !== 0) ? 'block' : 'none';
         hideLoading();
         showToast((labels[mode] || 'IPPT 已设置') + '，重启后生效', 'ok');
       } catch (e) {
@@ -6166,6 +6179,7 @@ body {
     // ── APN list refresh ──
     async function refreshApnList() {
       if (!state.connected) { renderApnList(); return; }
+      showLoading('正在读取 APN 配置...');
       try {
         const list = await invoke('get_apn_list');
         console.log('[APN] raw list:', list);
@@ -6183,6 +6197,7 @@ body {
         apnData = [];
       }
       renderApnList();
+      hideLoading();
     }
 
     // ── 初始化 ──
@@ -6270,6 +6285,8 @@ body {
         const ver = await invoke('get_app_version');
         const el = document.getElementById('appVersion');
         if (el) el.textContent = 'v' + ver;
+        const aboutEl = document.getElementById('aboutVersion');
+        if (aboutEl) aboutEl.textContent = 'v' + ver;
       } catch (_) {}
       try {
         await refreshPortList();

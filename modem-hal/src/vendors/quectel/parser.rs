@@ -133,7 +133,7 @@ fn format_bw(val: &str) -> String {
     }
 }
 
-fn format_bandwidth_bps(val: &str) -> String {
+fn format_bandwidth_kbps(val: &str) -> String {
     if let Ok(v) = val.parse::<u64>() {
         let mbps = v as f64 / 1_000.0;
         if mbps >= 1_000.0 {
@@ -344,7 +344,7 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
             // [12]=LTE-TAC [13]=LTE-RSRP [14]=LTE-RSRQ [15]=LTE-RSSI [16]=LTE-SINR
             // [17]=LTE-TxPwr [18]=LTE-RxLev [19]=NR-ARFCN [20]=NR-band [21]=NR-BW
             // [22]=NR-RSRP [23]=NR-RSRQ [24]=NR-SINR [25]=SCS
-            "NR5G-NSA" if parts.len() >= 20 => {
+            "NR5G-NSA" if parts.len() >= 22 => {
                 let bw_raw = parts.get(10).unwrap_or(&"").trim();
                 let _lte_bw = if qualcomm_bandwidth {
                     decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0))
@@ -389,7 +389,7 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     pci: parts[7].trim().to_string(),
                     arfcn: parts[8].trim().to_string(),
                     band: parts[9].trim().to_string(),
-                    bandwidth: format_bw(parts[11].trim()),
+                    bandwidth: format_bw(parts[10].trim()),
                     rsrp: format_rsrp(parts[13].trim()),
                     rsrq: format_rsrq(parts[14].trim()),
                     sinr: String::new(),
@@ -537,6 +537,22 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
         lte: lte_cells,
         nr: nr_cells,
     }
+}
+
+/// UniSoc: `+QTEMP: <soc_temp>,<pa_temp>` — plain positional integers, no labels.
+pub fn parse_qtemp_unisoc(response: &str) -> TemperatureInfo {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QTEMP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
+            if parts.len() >= 2 {
+                return TemperatureInfo {
+                    soc_temp: format!("{}°C", parts[0]),
+                    pa_temp: format!("{}°C", parts[1]),
+                };
+            }
+        }
+    }
+    TemperatureInfo { soc_temp: String::new(), pa_temp: String::new() }
 }
 
 pub fn parse_qtemp_rich(response: &str) -> (String, String) {
@@ -792,8 +808,8 @@ pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
             let parts: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
             if parts.len() >= 8 {
                 let cqi = parts[1].to_string();
-                let dl_bw = format_bandwidth_bps(parts[6]);
-                let ul_bw = format_bandwidth_bps(parts[7]);
+                let dl_bw = format_bandwidth_kbps(parts[6]);
+                let ul_bw = format_bandwidth_kbps(parts[7]);
                 return (cqi, ul_bw, dl_bw);
             }
             if parts.len() >= 2 {
@@ -804,13 +820,13 @@ pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
     (String::new(), String::new(), String::new())
 }
 
-/// Parse `AT+QRSSI` response (Qualcomm platform).
-/// Response: `+QRSSI: <ant0>,<ant1>,<ant2>,<ant3>,<rat>` — 5th field (RAT) is ignored.
-pub fn parse_qrssi(response: &str) -> Vec<String> {
+/// Parse `AT+QRSRP` response (Qualcomm platform).
+/// Response: `+QRSRP: <ant0>,<ant1>,<ant2>,<ant3>,<rat>` — 5th field (RAT) is ignored.
+pub fn parse_qrsrp(response: &str) -> Vec<String> {
     let mut ant = vec![String::new(), String::new(), String::new(), String::new()];
 
     for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+QRSSI:") {
+        if let Some(rest) = line.strip_prefix("+QRSRP:") {
             let vals: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
             for (i, v) in vals.iter().take(4).enumerate() {
                 ant[i] = format_rsrp(v);
@@ -867,6 +883,7 @@ pub fn parse_cops_with_act(response: &str) -> (String, String) {
                     "7" => "LTE",
                     "9" => "5G NR",
                     "11" => "5G NR",
+                    "12" => "5G NR-SA",
                     "2" => "WCDMA",
                     other => other,
                 };
@@ -1183,6 +1200,14 @@ mod tests {
         let (lte, nr) = parse_qnwprefcfg_rf_band("OK");
         assert!(lte.is_empty());
         assert!(nr.is_empty());
+    }
+
+    #[test]
+    fn parse_qtemp_unisoc_positional() {
+        let raw = "+QTEMP: 42,38\r\nOK";
+        let info = parse_qtemp_unisoc(raw);
+        assert_eq!(info.soc_temp, "42°C");
+        assert_eq!(info.pa_temp, "38°C");
     }
 
     #[test]

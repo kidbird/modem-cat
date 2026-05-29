@@ -12,7 +12,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Modem Cat v0.2.0",
+        "title": "Modem Cat",
         "width": 1257,
         "height": 978,
         "resizable": true,

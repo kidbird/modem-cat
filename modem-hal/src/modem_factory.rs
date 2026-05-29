@@ -49,13 +49,14 @@ impl ModemFactory {
         let qualcomm = [
             "RG500Q", "RM500Q", "RG520N", "RM520N", "RG525F",
             "RG530F", "RM530F", "RM530N", "RM551E", "RM501Q",
+            "RG540F", "RM540N",
         ];
         for m in &qualcomm {
             if upper.contains(m) {
                 return ChipsetVendor::Qualcomm;
             }
         }
-        let unisoc = ["RG200U", "RM500U", "RG500U"];
+        let unisoc = ["RG200U", "RM500U", "RG500U", "RG501U", "RM501U"];
         for m in &unisoc {
             if upper.contains(m) {
                 return ChipsetVendor::UniSoc;

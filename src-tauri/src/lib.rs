@@ -406,20 +406,18 @@ async fn connect_serial(
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("serial_{}", port_name_clone);
         
+        let v = match vendor {
+            Ok(v) => v,
+            Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
+        };
+
         *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
             Box::new(transport),
             at_log_state,
         ));
         
-        match vendor {
-            Ok(v) => {
-                log::info!("Detected vendor: {:?}", v.vendor());
-                *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
-            }
-            Err(e) => {
-                return Err(format!("连接成功但无法识别模组型号: {}", e));
-            }
-        }
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
 
         *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
         log::info!(
@@ -450,21 +448,19 @@ async fn connect_tcp(
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("tcp_{}:{}", host_clone, port);
         
+        let v = match vendor {
+            Ok(v) => v,
+            Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
+        };
+
         *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
             Box::new(transport),
             at_log_state,
         ));
         
-        match vendor {
-            Ok(v) => {
-                log::info!("Detected vendor: {:?}", v.vendor());
-                *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
-            }
-            Err(e) => {
-                return Err(format!("连接成功但无法识别模组型号: {}", e));
-            }
-        }
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -669,12 +665,12 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut cid_guard = data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-        let cid = *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        let cid = if cid > 0 { cid } else { 1 };
+        let cid = if *cid_guard > 0 { *cid_guard } else { 1 };
         v.connect_data(t, cid)?;
-        *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))? = cid;
+        *cid_guard = cid;
         Ok(())
     })
     .await
@@ -788,8 +784,8 @@ async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String>
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().unwrap();
-        let mut vguard = vendor.lock().unwrap();
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         v.query_vlan(t)
@@ -803,8 +799,8 @@ async fn set_vlan(vlan_id: i32, enabled: bool, state: tauri::State<'_, AppState>
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().unwrap();
-        let mut vguard = vendor.lock().unwrap();
+        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         v.set_vlan(t, vlan_id, enabled)

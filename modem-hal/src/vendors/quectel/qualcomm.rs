@@ -2,18 +2,18 @@ use crate::transport::AtTransport;
 use crate::types::{IpInfo, TrafficInfo};
 use super::parser::parse_cgact;
 
-pub fn connect_data(t: &mut dyn AtTransport) -> Result<(), String> {
+pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at("AT+QMAP=\"connect\",0,1")?;
+    let resp = t.send_at(&format!("AT+QMAP=\"connect\",{}", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QMAP connect failed: {}", resp.trim()));
     }
     Ok(())
 }
 
-pub fn disconnect_data(t: &mut dyn AtTransport) -> Result<(), String> {
+pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at("AT+QMAP=\"connect\",0,0")?;
+    let resp = t.send_at(&format!("AT+QMAP=\"disconnect\",{}", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QMAP disconnect failed: {}", resp.trim()));
     }
@@ -248,6 +248,32 @@ pub fn query_ip_info(t: &mut dyn AtTransport, data_cid: i32) -> Result<IpInfo, S
     let resp = t.send_at(&format!("AT+CGPADDR={}", target_cid))?;
     parse_cgpaddr(&resp, &mut info);
     Ok(info)
+}
+
+/// Set auto-connect for a QMAP data call rule.
+/// `AT+QMAP="auto_connect",<rule_num>,<auto_connect>`
+/// auto_connect: 0=disabled, 1=enabled
+pub fn set_auto_connect(t: &mut dyn AtTransport, rule_num: i32, auto_connect: i32) -> Result<(), String> {
+    use super::parser::is_ok;
+    let resp = t.send_at(&format!("AT+QMAP=\"auto_connect\",{},{}", rule_num, auto_connect))?;
+    if !is_ok(&resp) {
+        return Err(format!("QMAP auto_connect set failed: {}", resp.trim()));
+    }
+    Ok(())
+}
+
+/// Parse `AT+QMAP="auto_connect"` query response — return auto_connect state for rule 0.
+/// Response: +QMAP: "auto_connect",<rule_num>,<auto_connect>
+pub fn parse_auto_connect(response: &str) -> i32 {
+    for line in response.lines() {
+        if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("auto_connect") && parts[1].trim() == "0" {
+                return parts[2].trim().parse().unwrap_or(0);
+            }
+        }
+    }
+    0
 }
 
 pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {

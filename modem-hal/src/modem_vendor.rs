@@ -94,11 +94,49 @@ pub trait ModemVendor: Send {
     /// Activate or deactivate APN context (AT+CGACT=<state>,<cid>)
     fn set_apn_active(&mut self, transport: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String>;
 
-    /// Query 5GLAN status (AT+QCFG="5glan")
-    fn query_5glan(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String>;
+    /// Query VLAN ID currently active on the LAN port (AT+QMAP="VLAN")
+    fn query_vlan(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<i32>, String> {
+        Err("VLAN not supported".to_string())
+    }
 
-    /// Set 5GLAN state for a CID (AT+QCFG="5glan",<cid>,<state>)
-    fn set_5glan(&mut self, transport: &mut dyn AtTransport, cid: i32, enabled: bool) -> Result<(), String>;
+    /// Enable or disable VLAN tagging on the LAN port (AT+QMAP="VLAN",<state>,<vid>)
+    fn set_vlan(&mut self, _transport: &mut dyn AtTransport, _vlan_id: i32, _enabled: bool) -> Result<(), String> {
+        Err("VLAN not supported".to_string())
+    }
+
+    /// Query 5GLAN status — UniSoc only (AT+QCFG="5glan")
+    fn query_5glan(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
+        Err("5GLAN not supported".to_string())
+    }
+
+    /// Set 5GLAN state — UniSoc only (AT+QCFG="5glan",<cid>,<state>,<vlan_id>)
+    fn set_5glan(&mut self, _transport: &mut dyn AtTransport, _cid: i32, _enabled: bool, _vlan_id: i32) -> Result<(), String> {
+        Err("5GLAN not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — configure eth_cfg + CGDCONT + QWDSCFG (Step 1)
+    fn configure_qualcomm_5glan(
+        &mut self, _t: &mut dyn AtTransport,
+        _cid: i32, _apn: &str, _snssai: &str,
+        _profile_id: i32, _vlan_start: i32, _vlan_end: i32,
+    ) -> Result<(), String> {
+        Err("Qualcomm 5GLAN L2 not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — enable ETH PDU session, module reboot required after (Step 2)
+    fn enable_eth_pdu(&mut self, _t: &mut dyn AtTransport) -> Result<(), String> {
+        Err("ETH PDU not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — set MPDN rule + connect (Step 3, after reboot)
+    fn connect_qualcomm_5glan(&mut self, _t: &mut dyn AtTransport, _rule_id: i32, _cid: i32) -> Result<(), String> {
+        Err("Qualcomm 5GLAN L2 not supported".to_string())
+    }
+
+    /// Qualcomm L2 5GLAN — query ETH PDU + MPDN status
+    fn query_qualcomm_5glan_status(&mut self, _t: &mut dyn AtTransport) -> Result<Qualcomm5GlanStatus, String> {
+        Err("Qualcomm 5GLAN status not supported".to_string())
+    }
 
     /// Activate data connection
     fn connect_data(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
@@ -257,11 +295,45 @@ pub trait ModemVendor: Send {
     }
 
     /// Set USB network mode
-/// Set USB network mode
     fn set_usbnet_mode(
         &mut self,
         _transport: &mut dyn AtTransport,
         _mode: i32,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Query NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
+    fn query_nat_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<i32, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Set NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
+    fn set_nat_mode(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _mode: i32,
+    ) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Query Qualcomm specific configuration
+    fn query_qualcomm_config(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<QualcommConfig, String> {
+        Err("Not implemented".to_string())
+    }
+
+    /// Set Qualcomm specific configuration parameter
+    fn set_qualcomm_config(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _param: &str,
+        _value: &str,
     ) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
@@ -295,6 +367,59 @@ pub trait ModemVendor: Send {
         Err("SIM slot switching not supported".to_string())
     }
 
+    // ==================== Cell Lock ====================
+
+    /// Query active cell/frequency locks
+    fn query_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<Vec<CellLockEntry>, String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    /// Lock to a specific cell (arfcn + optional pci) or frequency (arfcn only)
+    /// Lock to a specific cell/frequency.
+    /// `scs` and `band` are required for Qualcomm; ignored for UniSoc.
+    fn set_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _arfcn: &str,
+        _pci: &str,
+        _scs: &str,
+        _band: &str,
+    ) -> Result<(), String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    /// Clear all cell and frequency locks
+    fn clear_cell_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+    ) -> Result<(), String> {
+        Err("Cell lock not supported".to_string())
+    }
+
+    // ==================== PLMN Lock ====================
+
+    /// Lock SIM to a specific PLMN (MCC+MNC)
+    fn set_plmn_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _plmn: &str,
+        _password: &str,
+    ) -> Result<(), String> {
+        Err("PLMN lock not supported".to_string())
+    }
+
+    /// Remove PLMN lock
+    fn clear_plmn_lock(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _password: &str,
+    ) -> Result<(), String> {
+        Err("PLMN lock not supported".to_string())
+    }
+
     // ==================== Raw AT ====================
 
     /// Send a raw AT command and return the response
@@ -317,11 +442,16 @@ pub trait ModemVendor: Send {
         let sim_status = self.query_sim_status(transport)?;
         let imei = self.query_imei(transport)?;
         let iccid = self.query_iccid(transport).unwrap_or_default();
-        let operator = self.query_operator(transport).unwrap_or_default();
+        let cops_name = self.query_operator(transport).unwrap_or_default();
         let reg_status = self.query_registration_status(transport)?;
         let conn_status = self.query_connection_status(transport)?;
         let serving_cell = self.query_serving_cell(transport).unwrap_or_default();
         let signal = self.query_signal_strength(transport).unwrap_or_default();
+        let operator = if cops_name.is_empty() && !serving_cell.operator_mcc.is_empty() {
+            format!("{}{}", serving_cell.operator_mcc, serving_cell.operator_mnc)
+        } else {
+            cops_name
+        };
 
         Ok(ModemStatus {
             sim_status,
@@ -331,6 +461,7 @@ pub trait ModemVendor: Send {
             iccid,
             operator,
             network_type: serving_cell.tech,
+            band: serving_cell.band,
             pci: serving_cell.pci,
             cell_id: serving_cell.cell_id,
             arfcn: serving_cell.arfcn,
@@ -342,6 +473,7 @@ pub trait ModemVendor: Send {
             rx_level: serving_cell.rx_level,
             ant_values: signal.ant_values,
             scs: serving_cell.scs,
+            chip_vendor: self.vendor().as_str().to_string(),
         })
     }
 }

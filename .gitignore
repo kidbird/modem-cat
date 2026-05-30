@@ -50,7 +50,22 @@ Thumbs.db
 .bun/
 
 # Rust
+/target/
 debug/
 release/
 *.rlib
 *.prof*
+
+# AtomCode
+.atomcode/
+
+# Windows reserved names
+nul
+
+# Local docs / research files (not source code)
+docs/*.pdf
+docs/_*.txt
+docs/api-reference.html
+docs/architecture.html
+docs/code-review.html
+docs/AT_HANDBOOK_*.md

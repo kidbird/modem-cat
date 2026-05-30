@@ -16,6 +16,15 @@ impl TdTechModem {
     }
 }
 
+fn send_and_check(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> {
+    let resp = t.send_at(cmd)?;
+    if resp.lines().any(|l| l.trim() == "OK") && !resp.contains("ERROR") {
+        Ok(resp)
+    } else {
+        Err(format!("Command failed: {}", resp))
+    }
+}
+
 fn cmd_delay() {
     std::thread::sleep(std::time::Duration::from_millis(5));
 }
@@ -105,8 +114,7 @@ impl ModemVendor for TdTechModem {
         Ok(parse_hcsq(&resp))
     }
 
-    fn query_neighbor_cells(&mut self, t: &mut dyn AtTransport) -> Result<NeighborCells, String> {
-        let _resp = t.send_at("AT^MONNC")?;
+    fn query_neighbor_cells(&mut self, _t: &mut dyn AtTransport) -> Result<NeighborCells, String> {
         Ok(NeighborCells {
             lte: vec![],
             nr: vec![],
@@ -132,23 +140,67 @@ impl ModemVendor for TdTechModem {
             if let Some(rest) = line.trim().strip_prefix("+CEREG:") {
                 let parts: Vec<&str> = rest.trim().split(',').collect();
                 let stat = parts.get(1).unwrap_or(&parts.get(0).unwrap_or(&"0")).trim();
-                return Ok(stat.to_string());
+                let mapped = match stat {
+                    "0" => "NOCONN",
+                    "1" => "CONNECT",
+                    "2" => "SEARCH",
+                    "3" => "DENIED",
+                    "4" => "UNKNOWN",
+                    "5" => "CONNECT",
+                    other => other,
+                };
+                return Ok(mapped.to_string());
             }
         }
-        Ok("0".to_string())
+        Ok("NOCONN".to_string())
     }
 
     fn query_connection_status(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
         let resp = t.send_at("AT^DCONNSTAT?")?;
         Ok(if parse_dconnstat(&resp) {
-            "1".to_string()
+            "\u{5df2}\u{8fde}\u{63a5}".to_string()
         } else {
-            "0".to_string()
+            "\u{672a}\u{8fde}\u{63a5}".to_string()
         })
     }
 
     fn query_apn_list(&mut self, t: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String> {
         let resp = t.send_at("AT+CGDCONT?")?;
+        
+        let mut active_cids = std::collections::HashSet::new();
+        if let Ok(dconn_resp) = t.send_at("AT^DCONNSTAT?") {
+            for line in dconn_resp.lines() {
+                if let Some(rest) = line.trim().strip_prefix("^DCONNSTAT:") {
+                    let parts: Vec<&str> = rest.split(',').collect();
+                    if parts.len() >= 3 {
+                        if let Ok(cid) = parts[0].trim().parse::<i32>() {
+                            let ipv4_stat = parts[2].trim();
+                            let ipv6_stat = parts.get(3).map(|s| s.trim()).unwrap_or("0");
+                            if ipv4_stat == "1" || ipv6_stat == "1" {
+                                active_cids.insert(cid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Query CGAUTH for authentication info
+        let cgauth_resp = t.send_at("AT+CGAUTH?").unwrap_or_default();
+        let mut auth_map = std::collections::HashMap::new();
+        for line in cgauth_resp.lines() {
+            if let Some(rest) = line.trim().strip_prefix("+CGAUTH:") {
+                let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+                if parts.len() >= 3 {
+                    if let Ok(cid) = parts[0].parse::<i32>() {
+                        let auth_proto = parts[1].parse::<i32>().unwrap_or(0);
+                        let user = parts[2].to_string();
+                        auth_map.insert(cid, (auth_proto, user));
+                    }
+                }
+            }
+        }
+
         let mut entries = vec![];
         for line in resp.lines() {
             if let Some(rest) = line.trim().strip_prefix("+CGDCONT:") {
@@ -157,14 +209,20 @@ impl ModemVendor for TdTechModem {
                     .map(|s| s.trim().trim_matches('"'))
                     .collect();
                 if parts.len() >= 3 {
-                    entries.push(ApnEntry {
-                        cid: parts[0].parse().unwrap_or(0),
-                        apn_name: parts.get(2).unwrap_or(&"").to_string(),
-                        ip_type: parts.get(1).unwrap_or(&"IP").to_string(),
-                        auth_type: 0,
-                        username: String::new(),
-                        active: false,
-                    });
+                    if let Ok(cid) = parts[0].parse::<i32>() {
+                        let (auth_type, username) = auth_map.get(&cid)
+                            .cloned()
+                            .unwrap_or((0, String::new()));
+                        let active = active_cids.contains(&cid);
+                        entries.push(ApnEntry {
+                            cid,
+                            apn_name: parts.get(2).unwrap_or(&"").to_string(),
+                            ip_type: parts.get(1).unwrap_or(&"IP").to_string(),
+                            auth_type,
+                            username,
+                            active,
+                        });
+                    }
                 }
             }
         }
@@ -177,21 +235,24 @@ impl ModemVendor for TdTechModem {
         cid: i32,
         ctx: i32,
         apn: &str,
-        _user: &str,
-        _pass: &str,
-        _auth: i32,
+        user: &str,
+        pass: &str,
+        auth: i32,
     ) -> Result<(), String> {
         let pdp = match ctx {
             2 => "IPV6",
             3 => "IPV4V6",
             _ => "IP",
         };
-        t.send_at(&format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp, apn))?;
+        send_and_check(t, &format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp, apn))?;
+        if !user.is_empty() || !pass.is_empty() || auth > 0 {
+            let _ = t.send_at(&format!("AT+CGAUTH={},{},\"{}\",\"{}\"", cid, auth, user, pass));
+        }
         Ok(())
     }
 
     fn delete_apn(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
-        t.send_at(&format!("AT+CGDCONT={}", cid))?;
+        send_and_check(t, &format!("AT+CGDCONT={}", cid))?;
         Ok(())
     }
 
@@ -203,14 +264,6 @@ impl ModemVendor for TdTechModem {
         } else {
             Err(format!("Failed to {} APN: {}", if active { "activate" } else { "deactivate" }, resp))
         }
-    }
-
-    fn query_5glan(&mut self, _t: &mut dyn AtTransport) -> Result<Vec<L5GanEntry>, String> {
-        Err("5GLAN not supported on TdTech".into())
-    }
-
-    fn set_5glan(&mut self, _t: &mut dyn AtTransport, _cid: i32, _enabled: bool) -> Result<(), String> {
-        Err("5GLAN not supported on TdTech".into())
     }
 
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
@@ -230,8 +283,6 @@ impl ModemVendor for TdTechModem {
         let (_acqorder, lteband_hex) = parse_syscfgex(&resp);
         let lte_bands = decode_syscfgex_lteband(&lteband_hex);
         Ok(BandConfig {
-            lte_supported: lte_bands.clone(),
-            nr_supported: vec![],
             lte_locked: lte_bands,
             nr_locked: vec![],
             lte_spec: vec![],
@@ -242,10 +293,10 @@ impl ModemVendor for TdTechModem {
     fn set_lte_bands(&mut self, t: &mut dyn AtTransport, bands: &str) -> Result<(), String> {
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (acqorder, _) = parse_syscfgex(&resp);
-        t.send_at(&format!(
-            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
-            acqorder, bands
-        ))?;
+        let resp2 = t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, bands))?;
+        if resp2.contains("ERROR") {
+            return Err(format!("Failed to set LTE bands: {}", resp2.trim()));
+        }
         Ok(())
     }
 
@@ -264,10 +315,10 @@ impl ModemVendor for TdTechModem {
         };
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (_, lteband) = parse_syscfgex(&resp);
-        t.send_at(&format!(
-            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
-            acqorder, lteband
-        ))?;
+        let resp2 = t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, lteband))?;
+        if resp2.contains("ERROR") {
+            return Err(format!("Failed to set network mode: {}", resp2.trim()));
+        }
         Ok(())
     }
 
@@ -328,7 +379,10 @@ impl ModemVendor for TdTechModem {
     }
 
     fn set_cfun(&mut self, t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
-        t.send_at(&format!("AT+CFUN={}", mode))?;
+        let resp = t.send_at(&format!("AT+CFUN={}", mode))?;
+        if resp.contains("ERROR") {
+            return Err(format!("AT+CFUN={} failed: {}", mode, resp.trim()));
+        }
         Ok(())
     }
 
@@ -345,6 +399,14 @@ impl ModemVendor for TdTechModem {
         _feat: &str,
         _on: bool,
     ) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn query_nat_mode(&mut self, _t: &mut dyn AtTransport) -> Result<i32, String> {
+        Ok(0)
+    }
+
+    fn set_nat_mode(&mut self, _t: &mut dyn AtTransport, _mode: i32) -> Result<(), String> {
         Ok(())
     }
 

@@ -123,7 +123,9 @@ pub fn parse_dconnstat(response: &str) -> bool {
         if let Some(rest) = t.strip_prefix("^DCONNSTAT:") {
             // ^DCONNSTAT: <cid>,"<APN>",<ipv4_stat>,<ipv6_stat>,<type>
             let parts: Vec<&str> = rest.trim().split(',').collect();
-            if parts.get(2).map(|s| s.trim()) == Some("1") {
+            let ipv4_stat = parts.get(2).map(|s| s.trim()).unwrap_or("");
+            let ipv6_stat = parts.get(3).map(|s| s.trim()).unwrap_or("");
+            if ipv4_stat == "1" || ipv6_stat == "1" {
                 return true;
             }
         }

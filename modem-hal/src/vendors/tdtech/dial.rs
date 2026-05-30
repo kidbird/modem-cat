@@ -22,10 +22,17 @@ pub fn connect(
     if resp.contains("ERROR") {
         return Err(format!("NDISDUP connect failed: {}", resp));
     }
-    // Manual requires 5s before DHCP is available
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    let stat = t.send_at("AT^DCONNSTAT?")?;
-    if !parse_dconnstat(&stat) {
+    let mut connected = false;
+    for _ in 0..10 {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        if let Ok(stat) = t.send_at("AT^DCONNSTAT?") {
+            if parse_dconnstat(&stat) {
+                connected = true;
+                break;
+            }
+        }
+    }
+    if !connected {
         return Err("Connection not established after NDISDUP".to_string());
     }
     Ok(())

@@ -1,8 +1,13 @@
 use crate::types::{ApnEntry, L5GanEntry, NeighborCell, NeighborCells, ServingCellInfo, TemperatureInfo};
 
 pub fn is_ok(response: &str) -> bool {
-    let trimmed = response.trim();
-    trimmed.ends_with("OK") || trimmed.contains("OK\n") || trimmed.contains("OK\r\n")
+    for line in response.lines() {
+        let trimmed = line.trim();
+        if trimmed == "ERROR" || trimmed.starts_with("+CME ERROR") || trimmed.starts_with("+CMS ERROR") {
+            return false;
+        }
+    }
+    response.lines().any(|l| l.trim() == "OK")
 }
 
 pub fn extract_data_lines(response: &str) -> Vec<String> {
@@ -128,7 +133,7 @@ fn format_bw(val: &str) -> String {
     }
 }
 
-fn format_bandwidth_bps(val: &str) -> String {
+fn format_bandwidth_kbps(val: &str) -> String {
     if let Ok(v) = val.parse::<u64>() {
         let mbps = v as f64 / 1_000.0;
         if mbps >= 1_000.0 {
@@ -149,8 +154,57 @@ pub fn decode_qualcomm_bandwidth(idx: u32) -> String {
         3 => "10".to_string(),
         4 => "15".to_string(),
         5 => "20".to_string(),
-        6 => "100".to_string(),
         n => n.to_string(),
+    }
+}
+
+pub fn decode_qualcomm_nr_bandwidth(idx: u32) -> String {
+    match idx {
+        0 => "5".to_string(),
+        1 => "10".to_string(),
+        2 => "15".to_string(),
+        3 => "20".to_string(),
+        4 => "25".to_string(),
+        5 => "30".to_string(),
+        6 => "40".to_string(),
+        7 => "50".to_string(),
+        8 => "60".to_string(),
+        9 => "70".to_string(),
+        10 => "80".to_string(),
+        11 => "90".to_string(),
+        12 => "100".to_string(),
+        n => n.to_string(),
+    }
+}
+
+fn filter_tx_power(val: &str) -> String {
+    let v = val.trim();
+    match v.parse::<i32>() {
+        Ok(n) if n <= -32760 || n >= 32760 => String::new(),
+        Ok(n) => format!("{} dBm", n),
+        Err(_) => String::new(),
+    }
+}
+
+fn filter_rx_level(val: &str) -> String {
+    let v = val.trim();
+    match v.parse::<i32>() {
+        Ok(n) if n >= 255 || n < 0 => String::new(),
+        Ok(n) if n == 0 => String::new(),
+        Ok(n) => format!("{} dB", n),
+        Err(_) => String::new(),
+    }
+}
+
+fn format_sinr(val: &str) -> String {
+    let v = val.trim();
+    if v.is_empty() || v == "0" {
+        return String::new();
+    }
+    if let Ok(n) = v.parse::<i32>() {
+        format!("{} dB", n)
+    } else {
+        v.to_string()
     }
 }
 
@@ -160,8 +214,20 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
             continue;
         }
         let data = line.strip_prefix("+QENG:").unwrap().trim();
-        let parts: Vec<&str> = data.splitn(25, ',').collect();
+        let parts: Vec<&str> = data.splitn(26, ',').collect();
         if parts.len() < 3 {
+            // Short response like: +QENG: "servingcell","SEARCH" or +QENG: "servingcell","CONNECT"
+            let state = parts.get(1).map(|s| s.trim().trim_matches('"')).unwrap_or("");
+            if !state.is_empty() {
+                log::warn!(
+                    "QENG short response: state={}, parts_len={}, line={}",
+                    state, parts.len(), line
+                );
+                return ServingCellInfo {
+                    mobility_state: state.to_string(),
+                    ..Default::default()
+                };
+            }
             continue;
         }
 
@@ -170,7 +236,59 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
         let connected = state == "CONNECT";
 
         match tech {
-            "NR5G-SA" if parts.len() >= 18 => {
+            // NR5G-SA format (Quectel RM520N / RM500Q Qualcomm):
+            // [0]="servingcell" [1]=state [2]="NR5G-SA" [3]=duplex [4]=MCC [5]=MNC
+            // NR5G-SA field layout varies by firmware:
+            // 18 fields: [12]=RSRP [13]=RSRQ [14]=SINR [15]=TxPwr [16]=RxLev [17]=SCS
+            // 17 fields: [12]=RSRP [13]=RSRQ [14]=SINR [15]=SCS    [16]=RxLev
+            //            (no TxPwr; SCS values 0-4)
+            // 17 fields: [12]=RSRP [13]=RSRQ [14]=SINR [15]=TxPwr  [16]=RxLev
+            //            (no SCS; TxPwr uses sentinel -32767)
+            "NR5G-SA" if parts.len() >= 15 => {
+                let bw_raw = parts[11].trim();
+                let bandwidth = if qualcomm_bandwidth {
+                    let bw_str = decode_qualcomm_nr_bandwidth(bw_raw.parse::<u32>().unwrap_or(0));
+                    if bw_str.is_empty() { String::new() } else { format!("{} MHz", bw_str) }
+                } else {
+                    format_bw(bw_raw)
+                };
+                // Determine TxPwr/RxLev/SCS based on field count and value heuristics
+                let (tx_power, rx_level, scs) = if parts.len() >= 18 {
+                    // Full 18-field format
+                    (
+                        parts.get(15).map_or(String::new(), |v| filter_tx_power(v)),
+                        parts.get(16).map_or(String::new(), |v| filter_rx_level(v)),
+                        parts.get(17).map_or(String::new(), |v| v.trim().to_string()),
+                    )
+                } else if parts.len() == 17 {
+                    // Two 17-field variants: distinguish by whether [15] is a valid SCS index (0-4)
+                    let v15 = parts.get(15).map_or("", |v| v.trim());
+                    match v15.parse::<u32>() {
+                        Ok(n) if n <= 4 => {
+                            // SCS at [15], RxLev at [16], no TxPwr
+                            (
+                                String::new(),
+                                parts.get(16).map_or(String::new(), |v| filter_rx_level(v)),
+                                v15.to_string(),
+                            )
+                        }
+                        _ => {
+                            // TxPwr at [15], RxLev at [16], no SCS
+                            (
+                                filter_tx_power(v15),
+                                parts.get(16).map_or(String::new(), |v| filter_rx_level(v)),
+                                String::new(),
+                            )
+                        }
+                    }
+                } else {
+                    // 15-16 fields: only TxPwr/RxLev if present
+                    (
+                        parts.get(15).map_or(String::new(), |v| filter_tx_power(v)),
+                        parts.get(16).map_or(String::new(), |v| filter_rx_level(v)),
+                        String::new(),
+                    )
+                };
                 return ServingCellInfo {
                     connected,
                     mobility_state: state.to_string(),
@@ -181,19 +299,24 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     pci: parts[7].trim().to_string(),
                     arfcn: parts[9].trim().to_string(),
                     band: parts[10].trim().to_string(),
-                    bandwidth: format_bw(parts[11].trim()),
+                    bandwidth,
                     rsrp: format_rsrp(parts[12].trim()),
                     rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[14].trim().to_string(),
-                    tx_power: parts[15].trim().to_string(),
-                    rx_level: parts[16].trim().to_string(),
-                    scs: parts[17].trim().to_string(),
+                    sinr: format_sinr(parts[14].trim()),
+                    tx_power,
+                    rx_level,
+                    scs,
                 };
             }
-            "LTE" if parts.len() >= 19 => {
+            // LTE format (Quectel Qualcomm / UniSoc):
+            // [0]="servingcell" [1]=state [2]="LTE" [3]=duplex [4]=MCC [5]=MNC
+            // [6]=cellID [7]=PCI [8]=EARFCN [9]=band [10]=DL-BW [11]=UL-BW
+            // [12]=TAC [13]=RSRP [14]=RSRQ [15]=RSSI [16]=SINR [17]=CQI [18]=TxPwr [19]=srxlev
+            "LTE" if parts.len() >= 17 => {
                 let bw_raw = parts.get(10).unwrap_or(&"").trim();
                 let bandwidth = if qualcomm_bandwidth {
-                    decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0))
+                    let bw_str = decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0));
+                    if bw_str.is_empty() { String::new() } else { format!("{} MHz", bw_str) }
                 } else {
                     format_bw(bw_raw)
                 };
@@ -208,14 +331,53 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     arfcn: parts[8].trim().to_string(),
                     band: parts[9].trim().to_string(),
                     bandwidth,
-                    rsrp: format_rsrp(parts[12].trim()),
-                    rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[16].trim().to_string(),
-                    tx_power: parts[18].trim().to_string(),
+                    rsrp: format_rsrp(parts[13].trim()),
+                    rsrq: format_rsrq(parts[14].trim()),
+                    sinr: format_sinr(parts[16].trim()),
+                    tx_power: parts.get(18).map_or(String::new(), |v| filter_tx_power(v)),
                     rx_level: String::new(),
                     scs: String::new(),
                 };
             }
+            // NR5G-NSA format (dual connectivity: LTE anchor + NR secondary):
+            // [0..11] = LTE anchor fields (same layout as LTE)
+            // [12]=LTE-TAC [13]=LTE-RSRP [14]=LTE-RSRQ [15]=LTE-RSSI [16]=LTE-SINR
+            // [17]=LTE-TxPwr [18]=LTE-RxLev [19]=NR-ARFCN [20]=NR-band [21]=NR-BW
+            // [22]=NR-RSRP [23]=NR-RSRQ [24]=NR-SINR [25]=SCS
+            "NR5G-NSA" if parts.len() >= 22 => {
+                let bw_raw = parts.get(10).unwrap_or(&"").trim();
+                let _lte_bw = if qualcomm_bandwidth {
+                    decode_qualcomm_bandwidth(bw_raw.parse::<u32>().unwrap_or(0))
+                } else {
+                    bw_raw.to_string()
+                };
+                let nr_bw_raw = parts[21].trim();
+                let nr_bandwidth = if qualcomm_bandwidth {
+                    let bw_str = decode_qualcomm_nr_bandwidth(nr_bw_raw.parse::<u32>().unwrap_or(0));
+                    if bw_str.is_empty() { String::new() } else { format!("{} MHz", bw_str) }
+                } else {
+                    format_bw(nr_bw_raw)
+                };
+                return ServingCellInfo {
+                    connected,
+                    mobility_state: state.to_string(),
+                    tech: tech.to_string(),
+                    operator_mcc: parts[4].trim().trim_matches('"').to_string(),
+                    operator_mnc: parts[5].trim().trim_matches('"').to_string(),
+                    cell_id: parts[6].trim().to_string(),
+                    pci: parts[7].trim().to_string(),
+                    arfcn: parts[19].trim().to_string(),
+                    band: parts[20].trim().to_string(),
+                    bandwidth: nr_bandwidth,
+                    rsrp: format_rsrp(parts.get(22).unwrap_or(&"").trim()),
+                    rsrq: format_rsrq(parts.get(23).unwrap_or(&"").trim()),
+                    sinr: format_sinr(parts.get(24).unwrap_or(&"").trim()),
+                    tx_power: parts.get(17).map_or(String::new(), |v| filter_tx_power(v)),
+                    rx_level: String::new(),
+                    scs: parts.get(25).map_or(String::new(), |v| v.trim().to_string()),
+                };
+            }
+            // NR5G-NSA fallback: fewer fields, use LTE anchor data
             "NR5G-NSA" if parts.len() >= 15 => {
                 return ServingCellInfo {
                     connected,
@@ -225,19 +387,31 @@ pub fn parse_qeng_serving_cell(response: &str, qualcomm_bandwidth: bool) -> Serv
                     operator_mnc: parts[5].trim().trim_matches('"').to_string(),
                     cell_id: parts[6].trim().to_string(),
                     pci: parts[7].trim().to_string(),
-                    arfcn: parts[9].trim().to_string(),
-                    band: parts[10].trim().to_string(),
-                    bandwidth: format_bw(parts[11].trim()),
-                    rsrp: format_rsrp(parts[12].trim()),
-                    rsrq: format_rsrq(parts[13].trim()),
-                    sinr: parts[14].trim().to_string(),
+                    arfcn: parts[8].trim().to_string(),
+                    band: parts[9].trim().to_string(),
+                    bandwidth: format_bw(parts[10].trim()),
+                    rsrp: format_rsrp(parts[13].trim()),
+                    rsrq: format_rsrq(parts[14].trim()),
+                    sinr: String::new(),
                     tx_power: String::new(),
                     rx_level: String::new(),
                     scs: String::new(),
                 };
             }
-            _ => {}
+            _ => {
+                log::warn!(
+                    "QENG unmatched tech={}, parts_len={}, line={}",
+                    tech, parts.len(), line
+                );
+            }
         }
+    }
+    // No +QENG: line found — check if response contains ERROR
+    let trimmed = response.trim();
+    if trimmed.contains("ERROR") || trimmed.contains("error") {
+        log::warn!("QENG command returned error: {}", trimmed);
+    } else {
+        log::warn!("QENG no serving cell data found in response: {}", trimmed.replace('\n', "\\n").replace('\r', ""));
     }
     ServingCellInfo::default()
 }
@@ -365,9 +539,25 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
     }
 }
 
+/// UniSoc: `+QTEMP: <soc_temp>,<pa_temp>` — plain positional integers, no labels.
+pub fn parse_qtemp_unisoc(response: &str) -> TemperatureInfo {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QTEMP:") {
+            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
+            if parts.len() >= 2 {
+                return TemperatureInfo {
+                    soc_temp: format!("{}°C", parts[0]),
+                    pa_temp: format!("{}°C", parts[1]),
+                };
+            }
+        }
+    }
+    TemperatureInfo { soc_temp: String::new(), pa_temp: String::new() }
+}
+
 pub fn parse_qtemp_rich(response: &str) -> (String, String) {
-    let mut soc = String::new();
-    let mut pa = String::new();
+    // Collect all (label, raw_value, formatted_value) entries first, then pick.
+    let mut entries: Vec<(String, i64, String)> = Vec::new();
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QTEMP:") {
             let parts: Vec<&str> = rest
@@ -384,14 +574,43 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
                 } else {
                     format!("{}°C", parts[1].trim())
                 };
-                if label.contains("soc") || label.contains("xo") || label.contains("modem") {
-                    if soc.is_empty() { soc = value; }
-                } else if label.contains("pa") {
-                    if pa.is_empty() { pa = value; }
-                }
+                entries.push((label, raw, value));
             }
         }
     }
+
+    // Sentinel readings to ignore (offline/unused sensors).
+    let is_valid = |raw: i64| raw > -100 && !(raw == 0);
+
+    // PA temperature: prefer "modem-lte-sub6-pa1"; fall back to first "modem-*-pa*" with a valid reading.
+    let pa = entries
+        .iter()
+        .find(|(l, _, _)| l == "modem-lte-sub6-pa1")
+        .or_else(|| {
+            entries
+                .iter()
+                .find(|(l, raw, _)| l.starts_with("modem-") && l.contains("-pa") && is_valid(*raw))
+        })
+        .map(|(_, _, v)| v.clone())
+        .unwrap_or_default();
+
+    // SOC temperature: prefer "aoss-0-usr"; fall back to aoss-*/cpuss-*/mdmss-*/socsensor*.
+    let soc = entries
+        .iter()
+        .find(|(l, _, _)| l == "aoss-0-usr")
+        .or_else(|| {
+            entries.iter().find(|(l, raw, _)| {
+                is_valid(*raw)
+                    && (l.starts_with("aoss")
+                        || l.starts_with("cpuss")
+                        || l.starts_with("mdmss")
+                        || l.contains("socsensor")
+                        || l.contains("xo-therm"))
+            })
+        })
+        .map(|(_, _, v)| v.clone())
+        .unwrap_or_default();
+
     (soc, pa)
 }
 
@@ -401,21 +620,6 @@ pub fn parse_qtemp(response: &str) -> TemperatureInfo {
         soc_temp: soc,
         pa_temp: pa,
     }
-}
-
-pub fn parse_cgact_cids(response: &str) -> std::collections::HashSet<i32> {
-    let mut active = std::collections::HashSet::new();
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+CGACT:") {
-            let parts: Vec<&str> = rest.trim().split(',').collect();
-            if parts.get(1).map(|s| s.trim()) == Some("1") {
-                if let Ok(cid) = parts.get(0).unwrap_or(&"").trim().parse::<i32>() {
-                    active.insert(cid);
-                }
-            }
-        }
-    }
-    active
 }
 
 pub fn parse_cgdcont_apn(
@@ -543,55 +747,27 @@ pub fn parse_qnwprefcfg_bands(response: &str, band_type: &str) -> Vec<String> {
     Vec::new()
 }
 
-pub fn parse_qnwprefcfg_supported(response: &str) -> (Vec<String>, Vec<String>) {
+/// Parse `AT+QNWPREFCFG="rf_band"` response to extract LTE and NR5G supported bands.
+///
+/// Response format:
+/// ```text
+/// +QNWPREFCFG: "gw_band","1:5:8"
+/// +QNWPREFCFG: "lte_band","1:3:5:7:8:20:28:32:38:40:41:42:43"
+/// +QNWPREFCFG: "nr5g_band","1:3:5:7:8:20:28:38:40:41:75:76:77:78"
+/// +QNWPREFCFG: "nsa_nr5g_band","1:3:5:7:8:20:28:38:40:41:75:76:77:78"
+/// ```
+/// Returns `(lte_bands, nr_bands)` formatted as `["B1","B3",...]` and `["n1","n3",...]`.
+pub fn parse_qnwprefcfg_rf_band(response: &str) -> (Vec<String>, Vec<String>) {
     let mut lte = Vec::new();
     let mut nr = Vec::new();
 
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QNWPREFCFG:") {
             let rest = rest.trim();
-            if let Some(pos) = rest.find("\"lte_band\"") {
-                let after = &rest[pos + "\"lte_band\"".len()..];
-                let value = if let Some(start) = after.find('(') {
-                    if let Some(end) = after.find(')') {
-                        Some(&after[start + 1..end])
-                    } else {
-                        None
-                    }
-                } else if let Some(start) = after.find(',') {
-                    Some(after[start + 1..].trim())
-                } else {
-                    None
-                };
-                if let Some(v) = value {
-                    lte = v
-                        .split(':')
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty())
-                        .map(|s| format!("B{}", s))
-                        .collect();
-                }
-            } else if let Some(pos) = rest.find("\"nr5g_band\"") {
-                let after = &rest[pos + "\"nr5g_band\"".len()..];
-                let value = if let Some(start) = after.find('(') {
-                    if let Some(end) = after.find(')') {
-                        Some(&after[start + 1..end])
-                    } else {
-                        None
-                    }
-                } else if let Some(start) = after.find(',') {
-                    Some(after[start + 1..].trim())
-                } else {
-                    None
-                };
-                if let Some(v) = value {
-                    nr = v
-                        .split(':')
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty())
-                        .map(|s| format!("n{}", s))
-                        .collect();
-                }
+            if let Some(value) = extract_quoted_band_value(rest, "lte_band") {
+                lte = parse_band_numbers(&value, "B");
+            } else if let Some(value) = extract_quoted_band_value(rest, "nr5g_band") {
+                nr = parse_band_numbers(&value, "n");
             }
         }
     }
@@ -599,39 +775,32 @@ pub fn parse_qnwprefcfg_supported(response: &str) -> (Vec<String>, Vec<String>) 
     (lte, nr)
 }
 
-pub fn parse_qnetdevstatus(response: &str) -> (String, String, String, String, String) {
-    let mut ipv4 = String::new();
-    let mut mask = String::new();
-    let mut gw = String::new();
-    let mut dns = String::new();
-    let ipv6 = String::new();
-
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+QNETDEVSTATUS:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
-            if !parts.is_empty() {
-                ipv4 = parts[0].to_string();
-            }
-            if parts.len() > 1 {
-                mask = parts[1].to_string();
-            }
-            if parts.len() > 2 {
-                gw = parts[2].to_string();
-            }
-            if parts.len() > 4 {
-                dns = parts[4].to_string();
-            }
-            if parts.len() > 5 {
-                let dns2 = parts[5].to_string();
-                if !dns.is_empty() && !dns2.is_empty() {
-                    dns = format!("{}, {}", dns, dns2);
-                }
-            }
-        }
+fn extract_quoted_band_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
+    let prefix = format!("\"{}\"", key);
+    let pos = line.find(&prefix)?;
+    let after = &line[pos + prefix.len()..];
+    let after = after.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
+    // Value is quoted: "1:3:5:7:8"
+    if after.starts_with('"') {
+        let end = after[1..].find('"')?;
+        Some(&after[1..=end])
+    } else {
+        None
     }
-
-    (ipv4, mask, gw, dns, ipv6)
 }
+
+fn parse_band_numbers(value: &str, prefix: &str) -> Vec<String> {
+    if value.is_empty() || value == "0" {
+        return Vec::new();
+    }
+    value
+        .split(':')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| format!("{}{}", prefix, s))
+        .collect()
+}
+
 
 pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
     for line in extract_data_lines(response) {
@@ -639,8 +808,8 @@ pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
             let parts: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
             if parts.len() >= 8 {
                 let cqi = parts[1].to_string();
-                let dl_bw = format_bandwidth_bps(parts[6]);
-                let ul_bw = format_bandwidth_bps(parts[7]);
+                let dl_bw = format_bandwidth_kbps(parts[6]);
+                let ul_bw = format_bandwidth_kbps(parts[7]);
                 return (cqi, ul_bw, dl_bw);
             }
             if parts.len() >= 2 {
@@ -649,6 +818,24 @@ pub fn parse_c5gqosrdp(response: &str) -> (String, String, String) {
         }
     }
     (String::new(), String::new(), String::new())
+}
+
+/// Parse `AT+QRSRP` response (Qualcomm platform).
+/// Response: `+QRSRP: <ant0>,<ant1>,<ant2>,<ant3>,<rat>` — 5th field (RAT) is ignored.
+pub fn parse_qrsrp(response: &str) -> Vec<String> {
+    let mut ant = vec![String::new(), String::new(), String::new(), String::new()];
+
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QRSRP:") {
+            let vals: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
+            for (i, v) in vals.iter().take(4).enumerate() {
+                ant[i] = format_rsrp(v);
+            }
+            break;
+        }
+    }
+
+    ant
 }
 
 pub fn parse_qantrssi(response: &str) -> Vec<String> {
@@ -696,6 +883,7 @@ pub fn parse_cops_with_act(response: &str) -> (String, String) {
                     "7" => "LTE",
                     "9" => "5G NR",
                     "11" => "5G NR",
+                    "12" => "5G NR-SA",
                     "2" => "WCDMA",
                     other => other,
                 };
@@ -759,12 +947,12 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
             if parts.len() >= 2 {
                 let stat = parts[1].trim();
                 let status_str = match stat {
-                    "0" => "\u{672a}\u{6ce8}\u{518c}",
-                    "1" => "\u{5df2}\u{6ce8}\u{518c}(\u{672c}\u{5730})",
-                    "2" => "\u{641c}\u{7d22}\u{4e2d}",
-                    "3" => "\u{6ce8}\u{518c}\u{62d2}\u{7edd}",
-                    "4" => "\u{672a}\u{77e5}",
-                    "5" => "\u{5df2}\u{6ce8}\u{518c}(\u{6f2b}\u{6e38})",
+                    "0" => "NOCONN",
+                    "1" => "CONNECT",
+                    "2" => "SEARCH",
+                    "3" => "DENIED",
+                    "4" => "UNKNOWN",
+                    "5" => "CONNECT",
                     _ => stat,
                 };
                 let tac = parts.get(2).map(|v| v.trim().to_string());
@@ -773,7 +961,7 @@ pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
             }
         }
     }
-    ("\u{672a}\u{6ce8}\u{518c}".to_string(), None, None)
+    ("NOCONN".to_string(), None, None)
 }
 
 pub fn parse_gmr(response: &str) -> String {
@@ -822,9 +1010,14 @@ pub fn parse_5glan(response: &str) -> Vec<L5GanEntry> {
                         parts[0].trim().parse::<i32>(),
                         parts[1].trim().parse::<i32>(),
                     ) {
+                        let vlan_id = parts
+                            .get(2)
+                            .and_then(|s| s.trim().parse::<i32>().ok())
+                            .unwrap_or(1);
                         entries.push(L5GanEntry {
                             cid,
                             enabled: state == 1,
+                            vlan_id,
                         });
                     }
                 }
@@ -834,18 +1027,54 @@ pub fn parse_5glan(response: &str) -> Vec<L5GanEntry> {
     entries
 }
 
+pub fn parse_qcfg_data_interface(response: &str) -> Option<String> {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QCFG: \"data_interface\",") {
+            return Some(rest.trim().trim_matches('"').to_string());
+        }
+    }
+    None
+}
+
+pub fn parse_qcfg_usbspeed(response: &str) -> Option<String> {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QCFG: \"usbspeed\",") {
+            return Some(rest.trim().trim_matches('"').to_string());
+        }
+    }
+    None
+}
+
+pub fn parse_qeth_eth_driver(response: &str) -> Option<String> {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QETH: \"eth_driver\",") {
+            let parts: Vec<&str> = rest.split(',').collect();
+            if parts.len() >= 2 && parts[1].trim() == "1" {
+                return Some(parts[0].trim().trim_matches('"').to_string());
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn parse_qeng_lte_qualcomm_bandwidth_index() {
+    fn parse_qeng_lte_qualcomm_bandwidth_and_signal() {
+        // Fields: [10]=DL-BW-idx=5(→20MHz) [11]=UL-BW [12]=TAC=5AE [13]=RSRP=-95 [14]=RSRQ=-10
+        // [15]=RSSI=-65 [16]=SINR=18 [17]=CQI=10 [18]=TxPwr=20
         let raw = r#"+QENG: "servingcell","CONNECT","LTE","FDD",460,11,1A2B3C4,100,2650,3,5,5,5AE,-95,-10,-65,18,10,20,0"#;
         let info = parse_qeng_serving_cell(raw, true);
-        assert_eq!(info.bandwidth, "20");
+        assert_eq!(info.bandwidth, "20 MHz");
         assert_eq!(info.arfcn, "2650");
-        assert!(!info.rsrp.is_empty());
-        assert!(!info.sinr.is_empty());
+        assert_eq!(info.rsrp, "-95 dBm");
+        assert_eq!(info.rsrq, "-10 dB");
+        assert_eq!(info.sinr, "18 dB");
+        assert_eq!(info.tx_power, "20 dBm");
+        assert_eq!(info.tech, "LTE");
+        assert!(info.connected);
     }
 
     #[test]
@@ -856,9 +1085,78 @@ mod tests {
     }
 
     #[test]
+    fn parse_qeng_nr5g_sa_full() {
+        // Fields: [3]=SA [4]=MCC [5]=MNC [6]=cellID [7]=PCI [8]=TAC [9]=ARFCN
+        // [10]=band [11]=BW=100MHz [12]=RSRP=-97 [13]=RSRQ=-11 [14]=SINR=21
+        // [15]=TxPwr=-32767(n/a) [16]=RxLev=255(n/a) [17]=SCS=1
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-SA","SA",460,11,0B46E280,0,120,504990,41,100,-97,-11,21,-32767,255,1"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-SA");
+        assert!(info.connected);
+        assert_eq!(info.pci, "0");
+        assert_eq!(info.arfcn, "504990");
+        assert_eq!(info.band, "41");
+        assert_eq!(info.bandwidth, "100 MHz");
+        assert_eq!(info.rsrp, "-97 dBm");
+        assert_eq!(info.rsrq, "-11 dB");
+        assert_eq!(info.sinr, "21 dB");
+        assert_eq!(info.tx_power, "");   // -32767 filtered out
+        assert_eq!(info.rx_level, "");   // 255 filtered out
+        assert_eq!(info.scs, "1");
+    }
+
+    #[test]
+    fn parse_qeng_nr5g_sa_17_fields_no_scs() {
+        // Some firmware omits the SCS field (17 fields instead of 18)
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-SA","SA",460,11,0B46E280,0,120,632928,78,100,-97,-11,21,-32767,255"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-SA");
+        assert_eq!(info.arfcn, "632928");
+        assert_eq!(info.rsrp, "-97 dBm");
+        assert_eq!(info.scs, "");
+    }
+
+    #[test]
+    fn parse_qeng_nr5g_sa_17_fields_with_scs() {
+        // 17-field SA format: no TxPwr, SCS at [15], RxLev at [16]
+        let raw = r#"+QENG: "servingcell","NOCONN","NR5G-SA","TDD",460,00,C0F963004,507,1424D8,504990,41,12,-91,-10,11,1,28"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-SA");
+        assert_eq!(info.arfcn, "504990");
+        assert_eq!(info.band, "41");
+        assert_eq!(info.rsrp, "-91 dBm");
+        assert_eq!(info.rsrq, "-10 dB");
+        assert_eq!(info.sinr, "11 dB");
+        assert_eq!(info.tx_power, ""); // no TxPwr in this format
+        assert_eq!(info.rx_level, "28 dB");
+        assert_eq!(info.scs, "1");
+    }
+
+    #[test]
+    fn parse_qeng_nr5g_nsa_uses_nr_fields() {
+        // NSA format: LTE anchor [3..18] + NR secondary [19..24]
+        let raw = r#"+QENG: "servingcell","CONNECT","NR5G-NSA","FDD",460,11,1A2B3C4D,100,1300,3,3,5,5AE,-102,-12,-45,24,22,0,504990,78,106,-82,-10,28"#;
+        let info = parse_qeng_serving_cell(raw, true);
+        assert_eq!(info.tech, "NR5G-NSA");
+        assert_eq!(info.arfcn, "504990");   // NR-ARFCN, not LTE EARFCN
+        assert_eq!(info.band, "78");         // NR band, not LTE band
+        assert_eq!(info.rsrp, "-82 dBm");   // NR RSRP, not LTE RSRP
+        assert_eq!(info.rsrq, "-10 dB");    // NR RSRQ
+        assert_eq!(info.sinr, "28 dB");     // NR SINR
+    }
+
+    #[test]
     fn parse_qeng_returns_default_on_empty() {
         let info = parse_qeng_serving_cell("OK", true);
         assert!(!info.connected);
+        assert!(info.tech.is_empty());
+    }
+
+    #[test]
+    fn parse_cereg_returns_english_state() {
+        assert_eq!(parse_cereg("+CEREG: 2,1\r\nOK").0, "CONNECT");
+        assert_eq!(parse_cereg("+CEREG: 2,2\r\nOK").0, "SEARCH");
+        assert_eq!(parse_cereg("+CEREG: 2,5\r\nOK").0, "CONNECT");
     }
 
     #[test]
@@ -879,5 +1177,53 @@ mod tests {
     #[test]
     fn parse_cpin_unknown_when_no_data() {
         assert_eq!(parse_cpin("OK"), "UNKNOWN");
+    }
+
+    #[test]
+    fn parse_qnwprefcfg_rf_band_full() {
+        let raw = "+QNWPREFCFG: \"gw_band\",\"1:5:8\"\r\n\
+                   +QNWPREFCFG: \"lte_band\",\"1:3:5:7:8:20:28:32:38:40:41:42:43\"\r\n\
+                   +QNWPREFCFG: \"nr5g_band\",\"1:3:5:7:8:20:28:38:40:41:75:76:77:78\"\r\n\
+                   +QNWPREFCFG: \"nsa_nr5g_band\",\"1:3:5:7:8:20:28:38:40:41:75:76:77:78\"\r\n\
+                   OK";
+        let (lte, nr) = parse_qnwprefcfg_rf_band(raw);
+        assert!(lte.contains(&"B1".to_string()));
+        assert!(lte.contains(&"B43".to_string()));
+        assert_eq!(lte.len(), 13);
+        assert!(nr.contains(&"n1".to_string()));
+        assert!(nr.contains(&"n78".to_string()));
+        assert_eq!(nr.len(), 14);
+    }
+
+    #[test]
+    fn parse_qnwprefcfg_rf_band_empty_response() {
+        let (lte, nr) = parse_qnwprefcfg_rf_band("OK");
+        assert!(lte.is_empty());
+        assert!(nr.is_empty());
+    }
+
+    #[test]
+    fn parse_qtemp_unisoc_positional() {
+        let raw = "+QTEMP: 42,38\r\nOK";
+        let info = parse_qtemp_unisoc(raw);
+        assert_eq!(info.soc_temp, "42°C");
+        assert_eq!(info.pa_temp, "38°C");
+    }
+
+    #[test]
+    fn parse_qtemp_qualcomm_picks_pa1_and_aoss() {
+        let raw = r#"+QTEMP:"modem-lte-sub6-pa1","35"
++QTEMP:"modem-sdr0-pa0","0"
++QTEMP:"modem-sdr0-pa1","0"
++QTEMP:"modem-mmw0","-273"
++QTEMP:"aoss-0-usr","38"
++QTEMP:"cpuss-0-usr","36"
++QTEMP:"mdmss-0-usr","37"
++QTEMP:"modem-lte-sub6-pa2","35"
++QTEMP:"modem-ambient-usr","36"
+OK"#;
+        let info = parse_qtemp(raw);
+        assert_eq!(info.pa_temp, "35°C");
+        assert_eq!(info.soc_temp, "38°C");
     }
 }

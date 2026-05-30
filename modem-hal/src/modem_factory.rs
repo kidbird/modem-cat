@@ -32,8 +32,8 @@ impl ModemFactory {
                 Ok(Box::new(TdTechModem::new(model)))
             }
             ChipsetVendor::Unknown => {
-                log::warn!("Unknown vendor for '{}', defaulting to UniSoc", model);
-                Ok(Box::new(QuectelModem::unisoc(model)))
+                log::error!("Unknown vendor for '{}'", model);
+                Err(format!("Unknown modem vendor for model '{}'", model))
             }
         }
     }
@@ -46,16 +46,20 @@ impl ModemFactory {
                 return ChipsetVendor::TdTech;
             }
         }
-        let unisoc = ["RG200U", "RM500U"];
-        for m in &unisoc {
-            if upper.contains(m) {
-                return ChipsetVendor::UniSoc;
-            }
-        }
-        let qualcomm = ["RM520N", "RM500Q"];
+        let qualcomm = [
+            "RG500Q", "RM500Q", "RG520N", "RM520N", "RG525F",
+            "RG530F", "RM530F", "RM530N", "RM551E", "RM501Q",
+            "RG540F", "RM540N",
+        ];
         for m in &qualcomm {
             if upper.contains(m) {
                 return ChipsetVendor::Qualcomm;
+            }
+        }
+        let unisoc = ["RG200U", "RM500U", "RG500U", "RG501U", "RM501U"];
+        for m in &unisoc {
+            if upper.contains(m) {
+                return ChipsetVendor::UniSoc;
             }
         }
         ChipsetVendor::Unknown
@@ -86,18 +90,21 @@ mod tests {
 
     #[test]
     fn detects_qualcomm_from_model() {
-        assert_eq!(
-            ModemFactory::detect_vendor_from_model("RM520N-GL"),
-            ChipsetVendor::Qualcomm
-        );
-        assert_eq!(
-            ModemFactory::detect_vendor_from_model("RM500Q-GL"),
-            ChipsetVendor::Qualcomm
-        );
-        assert_eq!(
-            ModemFactory::detect_vendor_from_model("RM500Q-CN"),
-            ChipsetVendor::Qualcomm
-        );
+        for model in &[
+            "RM500Q-GL", "RM500Q-CN", "RG500Q-EA",
+            "RM520N-GL", "RG520N-CN",
+            "RM551E-GL",
+            "RM530F-CN", "RM530N-EU",
+            "RG530F-EU", "RG525F-CN",
+            "RM501Q-AE",
+        ] {
+            assert_eq!(
+                ModemFactory::detect_vendor_from_model(model),
+                ChipsetVendor::Qualcomm,
+                "Expected Qualcomm for {}",
+                model
+            );
+        }
     }
 
     #[test]

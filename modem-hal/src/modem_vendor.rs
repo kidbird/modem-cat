@@ -77,6 +77,7 @@ pub trait ModemVendor: Send {
     fn query_apn_list(&mut self, transport: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String>;
 
     /// Set APN configuration
+    #[allow(clippy::too_many_arguments)]
     fn set_apn(
         &mut self,
         transport: &mut dyn AtTransport,
@@ -115,6 +116,7 @@ pub trait ModemVendor: Send {
     }
 
     /// Qualcomm L2 5GLAN — configure eth_cfg + CGDCONT + QWDSCFG (Step 1)
+    #[allow(clippy::too_many_arguments)]
     fn configure_qualcomm_5glan(
         &mut self, _t: &mut dyn AtTransport,
         _cid: i32, _apn: &str, _snssai: &str,

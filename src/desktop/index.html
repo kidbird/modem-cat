@@ -1406,22 +1406,28 @@ body {
 <body>
 
   <!-- Toast notification -->
-  <div id="toast" style="display:none;position:fixed;top:16px;right:16px;z-index:10000;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:opacity .2s;">
+  <div id="toast" class="toast">
     <span id="toastText"></span>
   </div>
 
   <!-- Loading overlay -->
-  <div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;justify-content:center;align-items:center;">
-    <div id="loadingCard" style="background:var(--bg-secondary);border:2px solid var(--accent);border-radius:16px;padding:22px 30px;display:flex;align-items:center;gap:18px;box-shadow:0 12px 40px rgba(0,0,0,0.45);min-width:240px;">
-      <div class="spinner" style="width:36px;height:36px;position:relative;flex-shrink:0;"></div>
+  <div id="loadingOverlay" class="loading-overlay">
+    <div id="loadingCard" class="loading-card">
+      <div class="spinner"></div>
       <div>
-        <div id="loadingText" style="color:var(--text-primary);font-size:14px;font-weight:500;">正在加载...</div>
-        <div id="loadingSub" style="color:var(--text-muted);font-size:12px;margin-top:3px;"></div>
+        <div id="loadingText" class="loading-text">正在加载...</div>
+        <div id="loadingSub" class="loading-sub"></div>
       </div>
     </div>
   </div>
   <style>
     @keyframes spin{to{transform:rotate(360deg)}}
+    .toast{display:none;position:fixed;top:16px;right:16px;z-index:10000;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:opacity .2s;}
+    .loading-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;justify-content:center;align-items:center;}
+    .loading-card{background:var(--bg-secondary);border:2px solid var(--accent);border-radius:16px;padding:22px 30px;display:flex;align-items:center;gap:18px;box-shadow:0 12px 40px rgba(0,0,0,0.45);min-width:240px;}
+    .loading-text{color:var(--text-primary);font-size:14px;font-weight:500;}
+    .loading-sub{color:var(--text-muted);font-size:12px;margin-top:3px;}
+    .spinner{width:36px;height:36px;position:relative;flex-shrink:0;}
     .spinner::before{
       content:'';position:absolute;inset:0;border-radius:50%;
       border:3.5px solid rgba(249,115,22,0.12);
@@ -2922,9 +2928,28 @@ body {
       vlanEnabled: false,
     };
 
+    // ── DOM cache (one-time lookup, avoids redundant getElementById) ──
+    const $ = {};
+    function cacheDom() {
+      $.statusLabel = document.getElementById('statusLabel');
+      $.connectBtn = document.getElementById('connectBtn');
+      $.dataStatusLabel = document.getElementById('dataStatusLabel');
+      $.dataDot = document.getElementById('dataDot');
+      $.dataConnectBtn = document.getElementById('dataConnectBtn');
+      $.terminal = document.getElementById('terminal');
+      $.atCommand = document.getElementById('atCommand');
+      $.toast = document.getElementById('toast');
+      $.toastText = document.getElementById('toastText');
+      $.loadingOverlay = document.getElementById('loadingOverlay');
+      $.loadingText = document.getElementById('loadingText');
+      $.loadingSub = document.getElementById('loadingSub');
+      $.connectionParams = document.getElementById('connectionParams');
+      $.appVersion = document.getElementById('appVersion');
+      $.aboutVersion = document.getElementById('aboutVersion');
+    }
+
     // ── Data Connection ──
     async function toggleDataConnection() {
-      const btn = document.getElementById('dataConnectBtn');
       if (state.dataConnected) {
         try {
           await invoke('disconnect_data');
@@ -2937,8 +2962,8 @@ body {
         }
       } else {
         if (!state.connected) { alert('请先连接模组'); return; }
-        btn.textContent = '连接中...';
-        btn.classList.add('connecting');
+        $.dataConnectBtn.textContent = '连接中...';
+        $.dataConnectBtn.classList.add('connecting');
         try {
           await invoke('connect_data');
           await flushAtLog();
@@ -2956,23 +2981,19 @@ body {
     }
 
     function updateDataConnectionUI() {
-      const statusLabel = document.getElementById('dataStatusLabel');
-      const icon = document.getElementById('dataDot');
-      const btn = document.getElementById('dataConnectBtn');
-
       if (state.dataConnected) {
-        statusLabel.textContent = state.dataApn || '已连接';
-        statusLabel.classList.add('active');
-        icon.classList.add('data-on');
-        btn.textContent = '断开';
-        btn.classList.add('active');
-        btn.classList.remove('connecting');
+        $.dataStatusLabel.textContent = state.dataApn || '已连接';
+        $.dataStatusLabel.classList.add('active');
+        $.dataDot.classList.add('data-on');
+        $.dataConnectBtn.textContent = '断开';
+        $.dataConnectBtn.classList.add('active');
+        $.dataConnectBtn.classList.remove('connecting');
       } else {
-        statusLabel.textContent = '未连接';
-        statusLabel.classList.remove('active');
-        icon.classList.remove('data-on');
-        btn.textContent = '连接';
-        btn.classList.remove('active', 'connecting');
+        $.dataStatusLabel.textContent = '未连接';
+        $.dataStatusLabel.classList.remove('active');
+        $.dataDot.classList.remove('data-on');
+        $.dataConnectBtn.textContent = '连接';
+        $.dataConnectBtn.classList.remove('active', 'connecting');
       }
     }
 
@@ -3207,19 +3228,17 @@ body {
 
     // ── Loading overlay ──
     function showLoading(text, sub) {
-      document.getElementById('loadingText').textContent = text || '正在加载...';
-      document.getElementById('loadingSub').textContent = sub || '';
-      const overlay = document.getElementById('loadingOverlay');
-      overlay.style.display = 'flex';
-      // Force reflow to ensure animation starts reliably
-      void overlay.offsetHeight;
+      $.loadingText.textContent = text || '正在加载...';
+      $.loadingSub.textContent = sub || '';
+      $.loadingOverlay.style.display = 'flex';
+      requestAnimationFrame(() => {});
     }
     function setLoadingText(text, sub) {
-      document.getElementById('loadingText').textContent = text || '正在加载...';
-      document.getElementById('loadingSub').textContent = sub || '';
+      $.loadingText.textContent = text || '正在加载...';
+      $.loadingSub.textContent = sub || '';
     }
     function hideLoading() {
-      document.getElementById('loadingOverlay').style.display = 'none';
+      $.loadingOverlay.style.display = 'none';
     }
 
     // ── Utility ──
@@ -3231,39 +3250,38 @@ body {
     // ── Toast notification ──
     let toastTimer = null;
     function showToast(text, type) {
-      const toast = document.getElementById('toast');
-      const toastText = document.getElementById('toastText');
-      toastText.textContent = text;
-      toast.style.background = type === 'ok' ? 'var(--success)' : 'var(--error)';
-      toast.style.color = '#fff';
-      toast.style.display = 'block';
-      toast.style.opacity = '1';
+      $.toastText.textContent = text;
+      $.toast.style.background = type === 'ok' ? 'var(--success)' : 'var(--error)';
+      $.toast.style.color = '#fff';
+      $.toast.style.display = 'block';
+      $.toast.style.opacity = '1';
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => { toast.style.display = 'none'; }, 200);
+        $.toast.style.opacity = '0';
+        setTimeout(() => { $.toast.style.display = 'none'; }, 200);
       }, type === 'err' ? 4000 : 2000);
     }
 
-    document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
-      item.addEventListener('click', function () {
-        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('page-' + this.dataset.page).classList.add('active');
-        if (this.dataset.page === 'hardware' && state.connected) {
-          loadHardwarePage();
-        }
-        if (this.dataset.page === 'ip' && state.connected) {
-          refreshLanConfig();
-        }
-        if (this.dataset.page === 'scene') {
-          loadScenePage();
-        }
-        if (this.dataset.page === 'atmanual') {
-          initAtdbPage();
-        }
-      });
+    // Event delegation: single listener on the nav parent instead of per-item
+    document.querySelector('.nav').addEventListener('click', (e) => {
+      const item = e.target.closest('.nav-item:not(.disabled)');
+      if (!item) return;
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.getElementById('page-' + item.dataset.page).classList.add('active');
+      if (item.dataset.page === 'hardware' && state.connected) {
+        loadHardwarePage();
+      }
+      if (item.dataset.page === 'ip' && state.connected) {
+        refreshLanConfig();
+      }
+      if (item.dataset.page === 'scene') {
+        loadScenePage();
+      }
+      if (item.dataset.page === 'atmanual') {
+        initAtdbPage();
+      }
     });
 
     async function loadHardwarePage() {
@@ -3278,8 +3296,6 @@ body {
 
     // ── Connection ──
     async function toggleConnection() {
-      const btn = document.getElementById('connectBtn');
-      const label = document.getElementById('statusLabel');
       if (state.connected) {
         // 断开：先挂断拨号，再断开串口
         if (state.dataConnected) {
@@ -3310,9 +3326,9 @@ body {
         addTerminalLine('[连接] 已断开', 'cmd');
       } else {
         // 连接
-        btn.textContent = '连接中...';
-        btn.disabled = true;
-        label.textContent = '正在检测AT端口...';
+        $.connectBtn.textContent = '连接中...';
+        $.connectBtn.disabled = true;
+        $.statusLabel.textContent = '正在检测AT端口...';
         showLoading('正在连接模组...', '检测 AT 端口');
         addTerminalLine('[连接] 正在检测AT端口...', 'info');
         try {
@@ -3320,10 +3336,10 @@ body {
           state.connected = true;
           state.idle = false;
           state.connectedPort = portName;
-          document.getElementById('connectionParams').value = portName;
+          $.connectionParams.value = portName;
           updateConnectionUI(true);
           addTerminalLine(`[连接] 已连接到 ${portName}`, 'ok');
-          label.textContent = portName;
+          $.statusLabel.textContent = portName;
           try {
             setLoadingText('正在获取模组数据...', '查询状态、硬件、频段信息');
             await refreshAll();
@@ -3340,40 +3356,36 @@ body {
           state.connected = false;
           state.idle = true;
           updateConnectionUI(false);
-          label.textContent = '待机中';
-          label.style.color = 'var(--text-muted)';
+          $.statusLabel.textContent = '待机中';
+          $.statusLabel.style.color = 'var(--text-muted)';
         }
       }
     }
 
     function updateConnectionUI(connected) {
-      const btn = document.getElementById('connectBtn');
-      const icon = document.getElementById('statusDot');
-      const label = document.getElementById('statusLabel');
       const connType = document.getElementById('connectionType');
-      const connParams = document.getElementById('connectionParams');
       connType.disabled = connected;
-      connParams.disabled = connected;
+      $.connectionParams.disabled = connected;
+      const icon = document.getElementById('statusDot');
       if (connected) {
-        btn.textContent = '断开';
-        btn.disabled = false;
-        btn.className = 'btn btn-danger';
+        $.connectBtn.textContent = '断开';
+        $.connectBtn.disabled = false;
+        $.connectBtn.className = 'btn btn-danger';
         icon.classList.add('connected');
-        label.style.color = '';
-        const params = document.getElementById('connectionParams').value.trim();
-        label.textContent = params || '已连接';
+        $.statusLabel.style.color = '';
+        $.statusLabel.textContent = $.connectionParams.value.trim() || '已连接';
         syncRfState().catch(() => {});
       } else {
-        btn.textContent = '连接';
-        btn.disabled = false;
-        btn.className = 'btn btn-primary';
+        $.connectBtn.textContent = '连接';
+        $.connectBtn.disabled = false;
+        $.connectBtn.className = 'btn btn-primary';
         icon.classList.remove('connected');
         if (state.idle) {
-          label.textContent = '待机中';
-          label.style.color = 'var(--text-muted)';
+          $.statusLabel.textContent = '待机中';
+          $.statusLabel.style.color = 'var(--text-muted)';
         } else {
-          label.textContent = '未连接';
-          label.style.color = '';
+          $.statusLabel.textContent = '未连接';
+          $.statusLabel.style.color = '';
         }
         resetHardwareTabs();
       }
@@ -3582,14 +3594,13 @@ body {
 
     // ── AT Terminal ──
     async function sendAtCommand() {
-      const input = document.getElementById('atCommand');
-      const cmd = input.value.trim();
+      const cmd = $.atCommand.value.trim();
       if (!cmd) return;
 
       state.atHistory.unshift(cmd);
       if (state.atHistory.length > 100) state.atHistory.pop();
       state.atHistoryIdx = -1;
-      input.value = '';
+      $.atCommand.value = '';
 
       addTerminalLine('› ' + cmd, 'cmd');
       const startTime = performance.now();
@@ -3610,40 +3621,38 @@ body {
     }
 
     function quickAt(cmd) {
-      document.getElementById('atCommand').value = cmd;
+      $.atCommand.value = cmd;
       sendAtCommand();
     }
 
     function handleAtKey(e) {
-      const input = document.getElementById('atCommand');
       if (e.key === 'Enter') { sendAtCommand(); return; }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         if (state.atHistoryIdx < state.atHistory.length - 1) {
           state.atHistoryIdx++;
-          input.value = state.atHistory[state.atHistoryIdx];
+          $.atCommand.value = state.atHistory[state.atHistoryIdx];
         }
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (state.atHistoryIdx > 0) {
           state.atHistoryIdx--;
-          input.value = state.atHistory[state.atHistoryIdx];
+          $.atCommand.value = state.atHistory[state.atHistoryIdx];
         } else {
           state.atHistoryIdx = -1;
-          input.value = '';
+          $.atCommand.value = '';
         }
       }
     }
 
     function addTerminalLine(text, cls) {
-      const terminal = document.getElementById('terminal');
       const line = document.createElement('div');
       line.className = 'terminal-line' + (cls ? ' ' + cls : '');
       line.textContent = text;
-      terminal.appendChild(line);
-      while (terminal.children.length > 500) terminal.removeChild(terminal.firstChild);
-      terminal.scrollTop = terminal.scrollHeight;
+      $.terminal.appendChild(line);
+      while ($.terminal.children.length > 500) $.terminal.removeChild($.terminal.firstChild);
+      $.terminal.scrollTop = $.terminal.scrollHeight;
     }
 
     async function flushAtLog() {
@@ -3656,7 +3665,7 @@ body {
     }
 
     function clearTerminal() {
-      document.getElementById('terminal').innerHTML = '';
+      $.terminal.innerHTML = '';
     }
 
     // ── 蜂窝网络 Tab 切换 ──
@@ -6278,15 +6287,13 @@ body {
     initTabSliders();
 
     async function doInit() {
-      const label = document.getElementById('statusLabel');
-      label.textContent = '正在初始化...';
+      cacheDom();
+      $.statusLabel.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');
       try {
         const ver = await invoke('get_app_version');
-        const el = document.getElementById('appVersion');
-        if (el) el.textContent = 'v' + ver;
-        const aboutEl = document.getElementById('aboutVersion');
-        if (aboutEl) aboutEl.textContent = 'v' + ver;
+        if ($.appVersion) $.appVersion.textContent = 'v' + ver;
+        if ($.aboutVersion) $.aboutVersion.textContent = 'v' + ver;
       } catch (_) {}
       try {
         await refreshPortList();

@@ -9,7 +9,7 @@ pub fn parse_hcsq(response: &str) -> SignalInfo {
                 .split(',')
                 .map(|s| s.trim().trim_matches('"'))
                 .collect();
-            let mode = parts.get(0).unwrap_or(&"");
+            let mode = parts.first().unwrap_or(&"");
             if *mode == "LTE" && parts.len() >= 5 {
                 // ^HCSQ: "LTE",rssi,rsrp,sinr,rsrq
                 let rsrp_idx: u32 = parts[2].parse().unwrap_or(255);
@@ -68,7 +68,7 @@ pub fn parse_monsc(response: &str) -> ServingCellInfo {
         let t = line.trim();
         if let Some(rest) = t.strip_prefix("^MONSC: ") {
             let parts: Vec<&str> = rest.split(',').map(|s| s.trim()).collect();
-            let rat = parts.get(0).unwrap_or(&"");
+            let rat = parts.first().unwrap_or(&"");
             if *rat == "LTE" && parts.len() >= 10 {
                 // ^MONSC: LTE,MCC,MNC,ARFCN,Cell_ID,PCI,TAC,RSRP,RSRQ,RSSI
                 return ServingCellInfo {
@@ -143,7 +143,7 @@ pub fn parse_syscfgex(response: &str) -> (String, String) {
                 .split(',')
                 .map(|s| s.trim().trim_matches('"'))
                 .collect();
-            let acqorder = parts.get(0).unwrap_or(&"").to_string();
+            let acqorder = parts.first().unwrap_or(&"").to_string();
             let lteband = parts.get(4).unwrap_or(&"").to_string();
             return (acqorder, lteband);
         }

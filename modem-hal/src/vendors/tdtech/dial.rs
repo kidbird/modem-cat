@@ -52,7 +52,7 @@ pub fn query_ip(t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
             let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
             return Ok(IpInfo {
                 ipv4_addr: parts
-                    .get(0)
+                    .first()
                     .map(|s| hex_ip_to_string(s))
                     .unwrap_or_default(),
                 ipv4_mask: parts

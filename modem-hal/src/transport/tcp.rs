@@ -3,6 +3,9 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 
+/// Maximum response size to prevent OOM from a misbehaving TCP server.
+const MAX_RESPONSE_SIZE: usize = 1024 * 1024; // 1 MB
+
 /// TCP transport
 pub struct TcpTransport {
     reader: BufReader<TcpStream>,
@@ -52,6 +55,13 @@ impl TcpTransport {
                     }
                     response.push_str(trimmed);
                     response.push('\n');
+
+                    if response.len() > MAX_RESPONSE_SIZE {
+                        return Err(format!(
+                            "Response exceeded {} bytes limit",
+                            MAX_RESPONSE_SIZE
+                        ));
+                    }
 
                     if trimmed == "OK"
                         || trimmed.starts_with("ERROR")

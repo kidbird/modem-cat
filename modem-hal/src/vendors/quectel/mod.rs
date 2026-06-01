@@ -622,7 +622,11 @@ impl ModemVendor for QuectelModem {
     }
 
     fn factory_reset(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
-        let resp = t.send_at("AT+QFACT=0")?;
+        let cmd = match self.chip {
+            QuectelChip::Qualcomm => "AT&F",
+            QuectelChip::UniSoc => "AT+QPRTPARA=3",
+        };
+        let resp = t.send_at(cmd)?;
         if is_ok(&resp) {
             Ok(())
         } else {

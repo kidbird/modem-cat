@@ -116,6 +116,18 @@
       }, 500);
     }
 
+    // ── Input validation helpers ──
+    function isValidIpv4(s) {
+      return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(s) &&
+        s.split('.').every(o => { const n = parseInt(o, 10); return n >= 0 && n <= 255; });
+    }
+    function isDigits(s, min, max) {
+      return /^\d+$/.test(s) && s.length >= min && s.length <= max;
+    }
+    function isPositiveInt(s) {
+      return /^\d+$/.test(s) && parseInt(s, 10) > 0;
+    }
+
     document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
       item.addEventListener('click', function () {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -870,6 +882,8 @@
       const mcc = document.getElementById('lockMcc').value.trim();
       const mnc = document.getElementById('lockMnc').value.trim();
       if (!mcc || !mnc) { showToast('请输入 MCC 和 MNC', 'err'); return; }
+      if (!isDigits(mcc, 3, 3)) { showToast('MCC 必须为 3 位数字', 'err'); return; }
+      if (!isDigits(mnc, 2, 3)) { showToast('MNC 必须为 2-3 位数字', 'err'); return; }
       const plmn = mcc + mnc;
       try {
         showLoading('正在锁定PLMN...');
@@ -980,6 +994,8 @@
       const arfcn = document.getElementById('lockArfcn').value.trim();
       const pci = document.getElementById('lockPci').value.trim();
       if (!arfcn) { showToast('请输入频点', 'err'); return; }
+      if (!isPositiveInt(arfcn)) { showToast('频点必须为正整数', 'err'); return; }
+      if (pci && !isPositiveInt(pci)) { showToast('PCI 必须为正整数', 'err'); return; }
       try {
         showLoading('正在保存锁定...');
         let cmd;
@@ -1113,6 +1129,7 @@
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       const ip = document.getElementById('dmzHost').value.trim();
       if (!ip) { showToast('请输入 DMZ 主机 IP 地址', 'err'); return; }
+      if (!isValidIpv4(ip)) { showToast('请输入有效的 IPv4 地址', 'err'); return; }
       try {
         showLoading('正在设置 DMZ...');
         await invoke('send_raw_at', { command: 'AT+QDMZ=1,4,' + ip });

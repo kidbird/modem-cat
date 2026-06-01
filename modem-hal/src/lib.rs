@@ -8,6 +8,48 @@ pub use modem_factory::ModemFactory;
 pub use modem_vendor::ModemVendor;
 pub use types::*;
 
+/// Validate a string parameter before embedding it in an AT command.
+/// Rejects characters that could break out of quoted AT parameters or inject extra commands.
+///
+/// Dangerous characters:
+/// - `\r`, `\n` — AT command terminators, enable command injection
+/// - `"` — breaks out of quoted string parameters
+/// - Other control characters (0x00-0x1F except common whitespace)
+pub fn validate_at_string(s: &str) -> Result<(), String> {
+    for (i, ch) in s.char_indices() {
+        if ch == '\r' || ch == '\n' {
+            return Err(format!(
+                "Invalid character at position {}: line break not allowed in AT parameter",
+                i
+            ));
+        }
+        if ch == '"' {
+            return Err(format!(
+                "Invalid character at position {}: double quote not allowed in AT parameter",
+                i
+            ));
+        }
+        if ch.is_control() && ch != '\t' {
+            return Err(format!(
+                "Invalid character at position {}: control character not allowed",
+                i
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validate that a CID (PDP context identifier) is within the valid range (1-16).
+pub fn validate_cid(cid: i32) -> Result<(), String> {
+    if cid < 1 || cid > 16 {
+        return Err(format!(
+            "Invalid CID {}: must be between 1 and 16",
+            cid
+        ));
+    }
+    Ok(())
+}
+
 // ── napi-rs surface for Bun/TS ──
 #[cfg(feature = "napi-feature")]
 mod napi_exports {

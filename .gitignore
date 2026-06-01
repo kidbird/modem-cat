@@ -69,3 +69,6 @@ docs/api-reference.html
 docs/architecture.html
 docs/code-review.html
 docs/AT_HANDBOOK_*.md
+
+# AtomCode local-scope configs (machine-specific)
+.atomcode/local/

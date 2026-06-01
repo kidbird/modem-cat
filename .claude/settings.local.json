@@ -8,7 +8,9 @@
       "Bash(taskkill //F //IM modem-cat.exe)",
       "Bash(cargo test *)",
       "PowerShell(Get-Content *)",
-      "Bash(RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release -p modem-cat)"
+      "Bash(RUSTFLAGS=\"-C target-feature=+crt-static\" cargo build --release -p modem-cat)",
+      "mcp__codegraph__codegraph_files",
+      "Bash(rtk git *)"
     ]
   }
 }

@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use modem_hal::transport::AtTransport;
 use modem_hal::types::*;
+use modem_hal::validate_at_string;
+use modem_hal::validate_cid;
 use modem_hal::ModemFactory;
 use modem_hal::ModemVendor;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
@@ -579,16 +581,22 @@ async fn set_apn_config(
     auth_type: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_cid(cid)?;
+    validate_at_string(&apn)?;
+    validate_at_string(&username)?;
+    validate_at_string(&password)?;
     with_vendor!(state, |t, v| v.set_apn(t, cid, context_type, &apn, &username, &password, auth_type))
 }
 
 #[tauri::command]
 async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    validate_cid(cid)?;
     with_vendor!(state, |t, v| v.delete_apn(t, cid))
 }
 
 #[tauri::command]
 async fn set_apn_active(cid: i32, active: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_apn_active(t, cid, active))
 }
 
@@ -619,6 +627,7 @@ async fn get_5glan(state: tauri::State<'_, AppState>) -> Result<Vec<L5GanEntry>,
 
 #[tauri::command]
 async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_5glan(t, cid, enabled, vlan_id))
 }
 
@@ -633,6 +642,9 @@ async fn configure_qualcomm_5glan(
     profile_id: i32, vlan_start: i32, vlan_end: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_cid(cid)?;
+    validate_at_string(&apn)?;
+    validate_at_string(&snssai)?;
     with_vendor!(state, |t, v| v.configure_qualcomm_5glan(t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end))
 }
 
@@ -674,11 +686,13 @@ async fn set_network_mode_cmd(
     mode: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_at_string(&mode)?;
     with_vendor!(state, |t, v| v.set_network_mode(t, &mode))
 }
 
 #[tauri::command]
 async fn set_nr5g_band_cmd(band: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    validate_at_string(&band)?;
     with_vendor!(state, |t, v| v.set_nr5g_bands(t, &band))
 }
 
@@ -732,6 +746,10 @@ async fn set_cell_lock(
     band: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_at_string(&arfcn)?;
+    validate_at_string(&pci)?;
+    validate_at_string(&scs)?;
+    validate_at_string(&band)?;
     with_vendor!(state, |t, v| v.set_cell_lock(t, &arfcn, &pci, &scs, &band))
 }
 
@@ -742,6 +760,7 @@ async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String
 
 #[tauri::command]
 async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    validate_at_string(&plmn)?;
     let pw = password.unwrap_or_else(|| "12345678".to_string());
     with_vendor!(state, |t, v| v.set_plmn_lock(t, &plmn, &pw))
 }
@@ -770,6 +789,8 @@ async fn set_bands(
     nr: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_at_string(&lte)?;
+    validate_at_string(&nr)?;
     with_vendor!(state, |t, v| v.set_bands(t, &lte, &nr))
 }
 
@@ -789,6 +810,7 @@ async fn set_feature_toggle(
     enabled: bool,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_at_string(&feature)?;
     with_vendor!(state, |t, v| v.set_feature_toggle(t, &feature, enabled))
 }
 
@@ -803,6 +825,8 @@ async fn set_qualcomm_config(
     value: String,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
+    validate_at_string(&param)?;
+    validate_at_string(&value)?;
     with_vendor!(state, |t, v| v.set_qualcomm_config(t, &param, &value))
 }
 

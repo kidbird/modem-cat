@@ -723,6 +723,11 @@ async fn set_sim_slot(slot: i32, state: tauri::State<'_, AppState>) -> Result<()
 
 #[tauri::command]
 async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Result<String, String> {
+    // SECURITY: send_raw_at is a powerful escape hatch (front-end can issue
+    // arbitrary AT). It MUST go through the same input validator as typed
+    // parameters, otherwise the 2c991a4 hardening for typed IPCs is bypassed.
+    // See REVIEW.md#2.
+    validate_at_string(&command)?;
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
         let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
@@ -761,13 +766,13 @@ async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String
 #[tauri::command]
 async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
     validate_at_string(&plmn)?;
-    let pw = password.unwrap_or_else(|| "12345678".to_string());
+    let pw = password.ok_or_else(|| "PLMN lock requires a password (the device-specific unlock code, NOT the public default)".to_string())?;
     with_vendor!(state, |t, v| v.set_plmn_lock(t, &plmn, &pw))
 }
 
 #[tauri::command]
 async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let pw = password.unwrap_or_else(|| "12345678".to_string());
+    let pw = password.ok_or_else(|| "PLMN unlock requires a password".to_string())?;
     with_vendor!(state, |t, v| v.clear_plmn_lock(t, &pw))
 }
 

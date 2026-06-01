@@ -1,7 +1,9 @@
 # Modem Band Specifications
 
-Supported models and their hardware band specifications. This is the reference source for
-`spec_bands_for_model()` in `modem-hal/src/types.rs`.
+> 最近更新：2026-06-01
+> ⚠️ **当前状态：参考文档**。原 `spec_bands_for_model()` 函数（`modem-hal/src/types.rs`）已在重构中删除（`types.rs` 现仅 252 行）。运行时实际拿硬件支持频段靠 `AT+QNWPREFCFG="rf_band"`（`modem-hal/src/vendors/quectel/mod.rs:283`）。本文档保留作为**型号资料参考**，未来 UI 校验（如"该型号能否选 B78"）可考虑接回。
+
+Supported models and their hardware band specifications (reference only).
 
 ## High-level Summary
 
@@ -51,5 +53,5 @@ Supported models and their hardware band specifications. This is the reference s
 ## Notes
 
 - Band numbers without prefix letter follow the previous prefix (e.g. `B34/ 38/ 39` means B34, B38, B39).
-- `spec_bands_for_model()` in `modem-hal/src/types.rs` is the authoritative implementation. Keep this doc in sync when adding new models.
+- ~~`spec_bands_for_model()` in `modem-hal/src/types.rs` is the authoritative implementation.~~ **已删除**（2026-05 重构时移除，函数从 types.rs 中去除）。本文档作为**纯参考资料**保留。
 - Models not listed here return empty spec bands — the app will still function but won't show hardware spec info.

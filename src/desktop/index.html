@@ -3478,6 +3478,9 @@ body {
         state.currentBand = s.band || '';
         updateVlanPanelAccess();
         updateCellLockUI();
+        // VLAN 面板此前从不向设备查询(refreshVlan 是死代码)，恒显示缓存/默认值。
+        // 已知 chipVendor 后从设备读取真实 VLAN 配置；refreshVlan 内部自带 qualcomm/已连接守卫。
+        try { await refreshVlan(); } catch (_) {}
 
         // Update data connection state from CGACT
         if (s.connStatus === '已连接' && !state.dataConnected) {
@@ -3489,7 +3492,14 @@ body {
           state.dataApn = '';
           updateDataConnectionUI();
         }
-        if (standalone) showToast('刷新成功', 'ok');
+        // 状态页"刷新"按钮(standalone)此前只调 get_modem_status，CQI/上下行带宽/上下行流量
+        // 会停留在连接时的缓存值；这里补刷，使页面数据全部来自实时 AT 查询。
+        // (refreshAll 路径 standalone=false，其自身已分别刷新 QoS/流量，避免重复。)
+        if (standalone) {
+          try { await refreshQos(); } catch (_) {}
+          try { await refreshTraffic(); } catch (_) {}
+          showToast('刷新成功', 'ok');
+        }
 
       } catch (e) {
         console.error('Failed to refresh modem status:', e);

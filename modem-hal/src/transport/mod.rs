@@ -16,18 +16,22 @@ pub trait AtTransport: Send {
 
 pub struct MockTransport {
     pub responses: std::collections::VecDeque<String>,
+    /// Records every command passed to `send_at`, in order — lets tests assert the exact AT string.
+    pub sent: Vec<String>,
 }
 
 impl MockTransport {
     pub fn new(responses: Vec<&str>) -> Self {
         Self {
             responses: responses.iter().map(|s| s.to_string()).collect(),
+            sent: Vec::new(),
         }
     }
 }
 
 impl AtTransport for MockTransport {
-    fn send_at(&mut self, _command: &str) -> Result<String, String> {
+    fn send_at(&mut self, command: &str) -> Result<String, String> {
+        self.sent.push(command.to_string());
         self.responses
             .pop_front()
             .ok_or("no more responses".to_string())

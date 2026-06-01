@@ -4,7 +4,10 @@ use super::parser::parse_cgact;
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QMAP=\"connect\",{}", cid))?;
+    // 高通手册 §12.10: AT+QMAP="connect",<rule_num>,<connect>  (<connect>: 1=发起, 0=终止)。
+    // 原代码缺少 <connect> 标志位。<rule_num> 为多数据呼叫规则号(0~3)，此处沿用 cid；
+    // 若硬件固定使用规则 0，请在真机验证后将 rule_num 改为 0。
+    let resp = t.send_at(&format!("AT+QMAP=\"connect\",{},1", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QMAP connect failed: {}", resp.trim()));
     }
@@ -13,7 +16,9 @@ pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
 
 pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QMAP=\"disconnect\",{}", cid))?;
+    // 高通手册 §12.10: 终止数据呼叫为 AT+QMAP="connect",<rule_num>,0
+    // QMAP 没有 "disconnect" 子命令(§12.1~12.16)，原写法会被模组返回 ERROR。
+    let resp = t.send_at(&format!("AT+QMAP=\"connect\",{},0", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QMAP disconnect failed: {}", resp.trim()));
     }
@@ -194,10 +199,13 @@ fn parse_qmap_wwan(response: &str) -> IpInfo {
                 .split(',')
                 .map(|s| s.trim().trim_matches('"'))
                 .collect();
-            if parts.len() >= 5 {
-                let family = parts.get(3).unwrap_or(&"");
-                let addr = parts.get(4).unwrap_or(&"");
-                if *addr == "0.0.0.0" {
+            // 手册 §12.2: +QMAP: "WWAN",<status>,<profileID>,<IP_family>,<IP_address>
+            // strip_prefix 已消费 "WWAN"，剩 4 个字段: [0]status [1]profileID [2]family [3]addr。
+            // 原代码误用 len>=5 + [3]/[4]，导致本快路径恒不命中而始终回退 CGPADDR。
+            if parts.len() >= 4 {
+                let family = parts.get(2).unwrap_or(&"");
+                let addr = parts.get(3).unwrap_or(&"");
+                if *addr == "0.0.0.0" || *addr == "0:0:0:0:0:0:0:0" {
                     continue;
                 }
                 if *family == "IPV4" {
@@ -293,4 +301,42 @@ pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
         ul_bytes: 0,
         dl_bytes: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport::MockTransport;
+
+    #[test]
+    fn connect_data_uses_qmap_connect_with_flag() {
+        let mut t = MockTransport::new(vec!["OK"]);
+        connect_data(&mut t, 1).unwrap();
+        assert_eq!(t.sent, vec![r#"AT+QMAP="connect",1,1"#]);
+    }
+
+    #[test]
+    fn disconnect_data_uses_qmap_connect_zero_not_disconnect() {
+        let mut t = MockTransport::new(vec!["OK"]);
+        disconnect_data(&mut t, 1).unwrap();
+        assert_eq!(t.sent, vec![r#"AT+QMAP="connect",1,0"#]);
+    }
+
+    // 手册 §12.2: +QMAP: "WWAN",<status>,<profileID>,<IP_family>,<IP_address>
+    #[test]
+    fn parse_qmap_wwan_extracts_ipv4_after_prefix_consumed() {
+        let resp = "+QMAP: \"WWAN\",0,1,\"IPV4\",\"10.1.2.3\"\r\nOK";
+        let info = parse_qmap_wwan(resp);
+        assert_eq!(info.ipv4_addr, "10.1.2.3");
+        assert!(info.ipv6_addr.is_empty());
+    }
+
+    #[test]
+    fn parse_qmap_wwan_skips_all_zero_addresses() {
+        let resp = "+QMAP: \"WWAN\",0,1,\"IPV4\",\"0.0.0.0\"\r\n\
+                    +QMAP: \"WWAN\",0,1,\"IPV6\",\"0:0:0:0:0:0:0:0\"\r\nOK";
+        let info = parse_qmap_wwan(resp);
+        assert!(info.ipv4_addr.is_empty());
+        assert!(info.ipv6_addr.is_empty());
+    }
 }

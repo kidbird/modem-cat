@@ -874,20 +874,33 @@ pub fn parse_qbaseline(response: &str) -> (String, String) {
 }
 
 pub fn parse_cops_with_act(response: &str) -> (String, String) {
+    let map_act = |code: &str| -> String {
+        match code {
+            "7" => "LTE".to_string(),
+            "9" | "11" => "5G NR".to_string(),
+            "12" => "5G NR-SA".to_string(),
+            "2" => "WCDMA".to_string(),
+            other => other.to_string(),
+        }
+    };
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+COPS:") {
-            let parts: Vec<&str> = rest.trim().split(',').collect();
+            let rest = rest.trim();
+            // 格式 <mode>,<format>,<oper>[,<AcT>]。运营商长名带引号且可能含逗号(如 "AT&T, Inc.")，
+            // 整行按逗号切分会错位，故先按引号提取名称，再取闭合引号之后的 <AcT>。
+            if let Some(q1) = rest.find('"') {
+                if let Some(q2_rel) = rest[q1 + 1..].find('"') {
+                    let name = rest[q1 + 1..q1 + 1 + q2_rel].to_string();
+                    let after = rest[q1 + 1 + q2_rel + 1..].trim_start_matches(|c| c == ',' || c == ' ');
+                    let act_code = after.split(',').next().unwrap_or("").trim();
+                    return (name, map_act(act_code));
+                }
+            }
+            // 回退：数字格式(<format>=2)无引号，沿用按逗号切分。
+            let parts: Vec<&str> = rest.split(',').collect();
             if parts.len() >= 4 {
                 let name = parts[2].trim().trim_matches('"').to_string();
-                let act = match parts[3].trim() {
-                    "7" => "LTE",
-                    "9" => "5G NR",
-                    "11" => "5G NR",
-                    "12" => "5G NR-SA",
-                    "2" => "WCDMA",
-                    other => other,
-                };
-                return (name, act.to_string());
+                return (name, map_act(parts[3].trim()));
             }
             if parts.len() >= 3 {
                 let name = parts[2].trim().trim_matches('"').to_string();
@@ -1225,5 +1238,24 @@ OK"#;
         let info = parse_qtemp(raw);
         assert_eq!(info.pa_temp, "35°C");
         assert_eq!(info.soc_temp, "38°C");
+    }
+
+    #[test]
+    fn parse_cops_handles_operator_name_with_comma() {
+        // 运营商名内含逗号：引号感知解析应保留完整名称并正确取到 AcT。
+        let (name, act) = parse_cops_with_act(r#"+COPS: 0,0,"AT&T, Inc.",12"#);
+        assert_eq!(name, "AT&T, Inc.");
+        assert_eq!(act, "5G NR-SA");
+    }
+
+    #[test]
+    fn parse_cops_handles_plain_named_and_numeric() {
+        let (name, act) = parse_cops_with_act(r#"+COPS: 0,0,"CHINA MOBILE",7"#);
+        assert_eq!(name, "CHINA MOBILE");
+        assert_eq!(act, "LTE");
+        // 未注册/无运营商字段
+        let (n2, a2) = parse_cops_with_act("+COPS: 0");
+        assert_eq!(n2, "");
+        assert_eq!(a2, "");
     }
 }

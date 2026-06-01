@@ -3,7 +3,9 @@ use crate::types::{IpInfo, TrafficInfo};
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QNETDEVCTL=1,{},1", cid))?;
+    // 展锐手册 p.194: AT+QNETDEVCTL=<cid>[,<op>,<state>] —— cid 在第一位。
+    // <op>=1 进行拨号(不保存配置)；<state>=1 开启自动重连(仅 op=1/3 有效)。
+    let resp = t.send_at(&format!("AT+QNETDEVCTL={},1,1", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QNETDEVCTL connect failed: {}", resp.trim()));
     }
@@ -12,7 +14,8 @@ pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
 
 pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QNETDEVCTL=0,{},1", cid))?;
+    // 断开：<cid>,<op=0 断开拨号、不保存配置>。<state> 仅 op=1/3 有效，断开不携带。
+    let resp = t.send_at(&format!("AT+QNETDEVCTL={},0", cid))?;
     if !is_ok(&resp) {
         return Err(format!("QNETDEVCTL disconnect failed: {}", resp.trim()));
     }
@@ -80,4 +83,25 @@ pub fn query_traffic(t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
         ul_bytes: 0,
         dl_bytes: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport::MockTransport;
+
+    // 用 cid=2（非 1）才能暴露参数顺序错误：cid=1 时 "=1,1,1" 在两种顺序下都"碰巧"正确。
+    #[test]
+    fn connect_data_puts_cid_first() {
+        let mut t = MockTransport::new(vec!["OK"]);
+        connect_data(&mut t, 2).unwrap();
+        assert_eq!(t.sent, vec!["AT+QNETDEVCTL=2,1,1"]);
+    }
+
+    #[test]
+    fn disconnect_data_puts_cid_first_without_state() {
+        let mut t = MockTransport::new(vec!["OK"]);
+        disconnect_data(&mut t, 2).unwrap();
+        assert_eq!(t.sent, vec!["AT+QNETDEVCTL=2,0"]);
+    }
 }

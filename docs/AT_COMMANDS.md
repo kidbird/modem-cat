@@ -38,8 +38,8 @@
 
 | 功能 | AT 指令 | 备注 |
 |------|---------|------|
-| 连接数据 | `AT+QNETDEVCTL=1,{cid},1` | |
-| 断开数据 | `AT+QNETDEVCTL=0,{cid},1` | |
+| 连接数据 | `AT+QNETDEVCTL={cid},1,1` | `<cid>,<op=1 拨号>,<state=1 自动重连>`（手册 p.194，cid 在首位） |
+| 断开数据 | `AT+QNETDEVCTL={cid},0` | `<cid>,<op=0 断开>`；`<state>` 仅 op=1/3 有效 |
 | 查询 IP | `AT+QNETDEVSTATUS={cid}` | 响应格式见下方说明 |
 | 流量统计 | `AT+QGDCNT?` | `parse_qgdcnt()` |
 | 重置流量 | `AT+QGDCNT=0` | |
@@ -55,8 +55,8 @@
 
 | 功能 | AT 指令 | 备注 |
 |------|---------|------|
-| 连接数据 | `AT+QMAP="connect",{cid}` | |
-| 断开数据 | `AT+QMAP="disconnect",{cid}` | |
+| 连接数据 | `AT+QMAP="connect",{rule},1` | `<rule_num>,<connect=1>`（手册 §12.10） |
+| 断开数据 | `AT+QMAP="connect",{rule},0` | `<rule_num>,<connect=0>`；QMAP 无 `"disconnect"` 子命令 |
 | 查询 IP | `AT+QMAP="WWAN"` | fallback: `AT+CGPADDR` |
 | 流量统计 | `AT+QGDNRCNT?` | `parse_qgdnrcnt()` |
 | 重置流量 | `AT+QGDNRCNT=0` | |

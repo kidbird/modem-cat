@@ -45,10 +45,10 @@
 | 重置流量 | `AT+QGDCNT=0` | |
 | 天线信号 | `AT+QANTRSSI?` | `parse_qantrssi()` → `[ANT0, ANT1, ANT2, ANT3]` |
 
-`AT+QNETDEVSTATUS` 响应格式（无 status 前缀字段）：
+`AT+QNETDEVSTATUS=<cid>` 响应格式（行首带 `+QNETDEVSTATUS:` 前缀，IP 为点分十进制，手册 p.195）：
 ```
-<ipv4>,<mask>,<gw>,,<dns1>,<dns2>,<ipv6>,,,,<v6dns1>,<v6dns2>
-  [0]   [1]   [2] [3] [4]   [5]   [6]  [7][8][9] [10]    [11]
++QNETDEVSTATUS: <ipv4>,<mask>,<gw>,,<dns1>,<dns2>,<ipv6>,,,,<v6dns1>,<v6dns2>
+                 [0]   [1]   [2] [3] [4]   [5]   [6]  [7][8][9] [10]    [11]
 ```
 
 ### Qualcomm（RM500Q / RG500Q / RM520N / RG520N / RM551E / RM530F 等）
@@ -62,15 +62,30 @@
 | 重置流量 | `AT+QGDNRCNT=0` | |
 | 天线信号 | `AT+QRSRP` | `parse_qrsrp()` → `[ANT0, ANT1, ANT2, ANT3]` |
 
+### Qualcomm IPPT / 桥接 与 5GLAN-L2（仅 Qualcomm 平台；代码在用，此前文档缺失）
+
+| 功能 | AT 指令 | 解析 / 备注 |
+|------|---------|------------|
+| 查询 MPDN 规则(IPPT 模式) | `AT+QMAP="MPDN_rule"` | `parse_mpdn_ippt_mode()` |
+| 清除规则 0 | `AT+QMAP="mPDN_rule",0` | |
+| IPPT 路由 | `AT+QMAP="mPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF"` | `<rule>,<profileID>,<VLAN>,<IPPT_mode=0 路由>,<auto_connect>,<MAC>` |
+| IPPT 桥接 | `AT+QMAP="mPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF"` | `<IPPT_mode=1>` 为桥接 |
+| 查询连接状态 | `AT+QMAP="MPDN_status"` | `parse_mpdn_connect_status()` |
+| 自动连接 查/设 | `AT+QMAP="auto_connect"[,<rule>,<0/1>]` | `parse_auto_connect()` / `set_auto_connect()` |
+| ETH PDU 查/启用 | `AT+QMAP="ETH_PDU"` / `AT+QMAP="ETH_PDU","enable"` | `parse_eth_pdu_enabled()` |
+| 5GLAN 查/设 | `AT+QCFG="5glan"` / `AT+QCFG="5glan",{cid},{0/1},{vlan}` | |
+| 以太网配置 | `AT+QNWCFG="eth_cfg",{profileID},{eth_mode}` | |
+| WDS Profile | `AT+QWDSCFG="profile",{cid},"Ethernet","{apn}",{vlan_start},{vlan_end}` | |
+
 ## 4. 频段配置（通用）
 
 | 功能 | AT 指令 | 解析函数 |
 |------|---------|----------|
-| 支持频段 | `AT+QNWPREFCFG=?` | `parse_qnwprefcfg_supported()` |
+| 支持频段(RF) | `AT+QNWPREFCFG="rf_band"` | `parse_qnwprefcfg_rf_band()` |
 | LTE 锁定频段 | `AT+QNWPREFCFG="lte_band"` | `parse_qnwprefcfg_bands()` |
 | NR 锁定频段 | `AT+QNWPREFCFG="nr5g_band"` | `parse_qnwprefcfg_bands()` |
-| 设置 LTE 频段 | `AT+QNWPREFCFG="lte_band","B1:B3:B5"` | |
-| 设置 NR 频段 | `AT+QNWPREFCFG="nr5g_band","n1:n3:n5"` | |
+| 设置 LTE 频段 | `AT+QNWPREFCFG="lte_band",1:3:5` | 频段号纯数字、冒号分隔、不带引号/不带 B 前缀（手册 §5.24.2，例 `=...,1:2`） |
+| 设置 NR 频段 | `AT+QNWPREFCFG="nr5g_band",78:79` | 同上，不带 n 前缀 |
 | 重置频段 | `AT+QNWPREFCFG="all_band_reset"` | |
 
 ## 5. QoS 信息（通用）
@@ -109,11 +124,11 @@
 | 射频关闭 | `AT+CFUN=0` | |
 | 查询射频状态 | `AT+CFUN?` | 响应 `+CFUN: N` |
 | 重启模组 | `AT+CFUN=1,1` | |
-| 恢复出厂 | `AT+QFACT=0` | |
+| 恢复出厂 | `AT&F`（Qualcomm）/ `AT+QPRTPARA=3`（UniSoc） | 代码按芯片分支下发（`factory_reset()`），非 `AT+QFACT` |
 | SIM 卡槽查询 | `AT+QUIMSLOT?` | |
 | SIM 卡槽切换 | `AT+QUIMSLOT={1/2}` | |
-| LAN IP 查询 | `AT+QCFG="lanip_ex"` | 响应 `+QCFG: "lanip_ex","<gw>","<start>","<end>"` |
-| LAN IP 设置 | `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | |
+| LAN IP 查询 | `AT+QCFG="lanip_ex"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
+| LAN IP 设置 | `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
 | 设置 APN | `AT+QICSGP={cid},{type},"<apn>","<user>","<pass>",{auth}` | |
 | 删除 APN | `AT+CGDCONT={cid}` | |
 | 激活/停用 PDP | `AT+CGACT={0/1},{cid}` | |

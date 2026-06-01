@@ -189,8 +189,8 @@ fn filter_tx_power(val: &str) -> String {
 fn filter_rx_level(val: &str) -> String {
     let v = val.trim();
     match v.parse::<i32>() {
-        Ok(n) if n >= 255 || n < 0 => String::new(),
-        Ok(n) if n == 0 => String::new(),
+        Ok(n) if !(0..255).contains(&n) => String::new(),
+        Ok(0) => String::new(),
         Ok(n) => format!("{} dB", n),
         Err(_) => String::new(),
     }
@@ -480,15 +480,15 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
                         rsrp: parts.get(2).unwrap_or(&"").to_string(),
                         rsrq: parts.get(3).unwrap_or(&"").to_string(),
                         sinr: parts.get(4).unwrap_or(&"").to_string(),
-                        earfcn: parts.get(0).unwrap_or(&"").to_string(),
-                        arfcn: parts.get(0).unwrap_or(&"").to_string(),
+                        earfcn: parts.first().unwrap_or(&"").to_string(),
+                        arfcn: parts.first().unwrap_or(&"").to_string(),
                         offset: String::new(),
                     });
                 }
             }
             "LTE" => {
                 if parts.len() >= 6 {
-                    let earfcn = parts.get(0).unwrap_or(&"").to_string();
+                    let earfcn = parts.first().unwrap_or(&"").to_string();
                     let pci = parts.get(1).unwrap_or(&"").to_string();
                     let rsrp = parts.get(2).unwrap_or(&"").to_string();
                     let rsrq = parts.get(3).unwrap_or(&"").to_string();
@@ -523,8 +523,8 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
                         rsrp: parts.get(3).unwrap_or(&"").to_string(),
                         rsrq: parts.get(4).unwrap_or(&"").to_string(),
                         sinr: parts.get(5).unwrap_or(&"").to_string(),
-                        earfcn: parts.get(0).unwrap_or(&"").to_string(),
-                        arfcn: parts.get(0).unwrap_or(&"").to_string(),
+                        earfcn: parts.first().unwrap_or(&"").to_string(),
+                        arfcn: parts.first().unwrap_or(&"").to_string(),
                         offset: String::new(),
                     });
                 }
@@ -580,7 +580,7 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
     }
 
     // Sentinel readings to ignore (offline/unused sensors).
-    let is_valid = |raw: i64| raw > -100 && !(raw == 0);
+    let is_valid = |raw: i64| raw > -100 && raw != 0;
 
     // PA temperature: prefer "modem-lte-sub6-pa1"; fall back to first "modem-*-pa*" with a valid reading.
     let pa = entries
@@ -765,9 +765,9 @@ pub fn parse_qnwprefcfg_rf_band(response: &str) -> (Vec<String>, Vec<String>) {
         if let Some(rest) = line.strip_prefix("+QNWPREFCFG:") {
             let rest = rest.trim();
             if let Some(value) = extract_quoted_band_value(rest, "lte_band") {
-                lte = parse_band_numbers(&value, "B");
+                lte = parse_band_numbers(value, "B");
             } else if let Some(value) = extract_quoted_band_value(rest, "nr5g_band") {
-                nr = parse_band_numbers(&value, "n");
+                nr = parse_band_numbers(value, "n");
             }
         }
     }
@@ -781,9 +781,9 @@ fn extract_quoted_band_value<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     let after = &line[pos + prefix.len()..];
     let after = after.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
     // Value is quoted: "1:3:5:7:8"
-    if after.starts_with('"') {
-        let end = after[1..].find('"')?;
-        Some(&after[1..=end])
+    if let Some(stripped) = after.strip_prefix('"') {
+        let end = stripped.find('"')?;
+        Some(&stripped[..end])
     } else {
         None
     }

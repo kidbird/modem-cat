@@ -47,10 +47,10 @@ pub fn parse_mpdn_connect_status(response: &str) -> bool {
         if let Some(rest) = line.strip_prefix("+QMAP:") {
             let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
             // parts[0]="MPDN_status", parts[1]=rule_num, parts[2]=profileID, parts[3]=IPPT_status, parts[4]=connect_status
-            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status") {
-                if parts[1].trim() == "0" {
-                    return parts[4].trim() == "1";
-                }
+            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status")
+                && parts[1].trim() == "0"
+            {
+                return parts[4].trim() == "1";
             }
         }
     }
@@ -75,10 +75,10 @@ pub fn parse_mpdn_rule_cid(response: &str, rule_id: i32) -> Option<i32> {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
             let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("MPDN_rule") {
-                if parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id {
-                    return parts[2].trim().parse::<i32>().ok();
-                }
+            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("MPDN_rule")
+                && parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id
+            {
+                return parts[2].trim().parse::<i32>().ok();
             }
         }
     }
@@ -90,10 +90,10 @@ pub fn parse_mpdn_connect_status_by_rule(response: &str, rule_id: i32) -> bool {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
             let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status") {
-                if parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id {
-                    return parts[4].trim() == "1";
-                }
+            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status")
+                && parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id
+            {
+                return parts[4].trim() == "1";
             }
         }
     }
@@ -149,8 +149,8 @@ fn parse_cgpaddr(response: &str, info: &mut IpInfo) {
     for line in response.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix("+CGPADDR:") {
-            let after_cid = match rest.trim().splitn(2, ',').nth(1) {
-                Some(s) => s.trim(),
+            let after_cid = match rest.trim().split_once(',') {
+                Some((_, s)) => s.trim(),
                 None => continue,
             };
             let addrs: Vec<&str> = after_cid.split("\",\"").collect();

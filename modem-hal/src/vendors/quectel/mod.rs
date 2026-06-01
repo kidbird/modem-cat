@@ -206,10 +206,7 @@ impl ModemVendor for QuectelModem {
         let cgmi_resp = send_and_delay(t, "AT+CGMI")?;
         let manufacturer = parse_cgmm(&cgmi_resp);
 
-        let gmr_resp = match t.send_at("AT+GMR") {
-            Ok(r) => r,
-            Err(_) => String::new(),
-        };
+        let gmr_resp = t.send_at("AT+GMR").unwrap_or_default();
         let firmware = parse_gmr(&gmr_resp);
 
         let (ap_baseline, cp_baseline) = match t.send_at("AT+QBASELINE") {

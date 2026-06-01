@@ -139,7 +139,7 @@ impl ModemVendor for TdTechModem {
         for line in resp.lines() {
             if let Some(rest) = line.trim().strip_prefix("+CEREG:") {
                 let parts: Vec<&str> = rest.trim().split(',').collect();
-                let stat = parts.get(1).unwrap_or(&parts.get(0).unwrap_or(&"0")).trim();
+                let stat = parts.get(1).unwrap_or(parts.first().unwrap_or(&"0")).trim();
                 let mapped = match stat {
                     "0" => "NOCONN",
                     "1" => "CONNECT",

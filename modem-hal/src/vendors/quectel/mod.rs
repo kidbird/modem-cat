@@ -3,6 +3,7 @@ use crate::transport::AtTransport;
 use crate::types::*;
 use parser::*;
 
+pub mod band_db;
 pub mod parser;
 pub mod qualcomm;
 pub mod unisoc;
@@ -325,14 +326,40 @@ impl ModemVendor for QuectelModem {
         &mut self,
         t: &mut dyn AtTransport,
     ) -> Result<BandConfig, String> {
-        let rf_resp = match t.send_at(r#"AT+QNWPREFCFG="rf_band""#) {
-            Ok(r) => r,
-            Err(e) => {
-                log::warn!("AT+QNWPREFCFG=\"rf_band\" failed: {}", e);
-                String::new()
+        // ── Spec bands: Qualcomm queries modem, UniSoc uses preset database ──
+        let (lte_spec, nr_spec) = match self.chip {
+            QuectelChip::Qualcomm => {
+                let rf_resp = match t.send_at(r#"AT+QNWPREFCFG="rf_band""#) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        log::warn!("AT+QNWPREFCFG=\"rf_band\" failed: {}", e);
+                        String::new()
+                    }
+                };
+                parse_qnwprefcfg_rf_band(&rf_resp)
+            }
+            QuectelChip::UniSoc => {
+                match band_db::get_supported_bands(&self.model) {
+                    Some(bands) => {
+                        log::info!(
+                            "UniSoc model {}, using band_db preset",
+                            self.model
+                        );
+                        (
+                            band_db::format_bands(bands.lte, "B"),
+                            band_db::format_bands(bands.nr, "n"),
+                        )
+                    }
+                    None => {
+                        log::warn!(
+                            "UniSoc model {} not in band_db, spec bands empty",
+                            self.model
+                        );
+                        (vec![], vec![])
+                    }
+                }
             }
         };
-        let (lte_spec, nr_spec) = parse_qnwprefcfg_rf_band(&rf_resp);
 
         let lte_resp = send_and_delay(t, r#"AT+QNWPREFCFG="lte_band""#)?;
         let nr_resp = send_and_delay(t, r#"AT+QNWPREFCFG="nr5g_band""#)?;

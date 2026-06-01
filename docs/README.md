@@ -15,6 +15,7 @@
 | [MODEM_BAND_SPECS.md](MODEM_BAND_SPECS.md) | 型号硬件频段参考（**当前未在代码中使用**，仅资料） | 翻规格 |
 | [BUILD.md](BUILD.md) | macOS / Windows 构建、版本管理、发版流程、常见问题 | 发布时查 |
 | [TECH_STACK.md](TECH_STACK.md) | 技术栈、依赖、模块依赖图 | 新人入门 |
+| [CODING.md](CODING.md) | AT 输入校验、敏感信息、前端入口、文档同步规范 | 改代码前查 |
 | [REVIEW.md](REVIEW.md) | 代码 review 报告（20 条可操作发现，按 P0/P1/P2 排序） | 排期修 bug 时查 |
 
 ## 文档维护原则
@@ -22,7 +23,7 @@
 1. **代码与文档不一致时，以代码为准**。本次 review 已发现多处偏差：
    - 前端"单文件"描述 → 实际已拆 3 文件
    - `at_adapter.rs` / `at_parser.rs` 描述 → 已删除
-   - `lib.rs ~1000 行` → 实际 1139 行（2026-06-01 F2/F4 安全修复后）
+   - `lib.rs ~1000 行` → 实际 1142 行（2026-06-01 raw AT / PLMN 安全修复后）
    - `commands.rs` 未提 → 实际是 504 行死代码（30 个 #[tauri::command] + 64 处 .unwrap()）
 2. **改代码必同步改文档**。三个高优先级文件（ARCHITECTURE.md / CODE_MAP.md / CALL_FLOW.md）每次结构变更后必须 review。
 3. **REVIEW.md 是 P0/P1 任务清单**。每条都有 file:line + 建议，可直接拿来排期。

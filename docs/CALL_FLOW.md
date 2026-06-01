@@ -253,7 +253,7 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
 
 ## 10. AT 调试页（`send_raw_at`）
 
-> ⚠️ **本路径绕过 `validate_at_string` 输入校验**，见 [REVIEW.md#2]。
+> 本路径发送完整 AT 命令，使用 `validate_raw_at_command` 校验；不要复用只面向参数的 `validate_at_string`。
 
 ```
 [app.js]  invoke('send_raw_at', { command: "AT+XXX" })

@@ -13,9 +13,10 @@
 ### 1.2 前端技术
 - **HTML5 + CSS3 + Vanilla JavaScript**（无框架）
 - **已拆分为 3 个文件**（不要再说"单文件"）：
-  - `src/desktop/index.html` (319KB, ~6500 行, 含 8 个 page 容器)
-  - `src/desktop/app.js` (62KB, ~1500 行, 全部交互逻辑)
+  - `src/desktop/index.html` (319KB, 6479 行, 含 8 个 page 容器)
+  - `src/desktop/app.js` (62KB, 1556 行, 同步副本交互逻辑)
   - `src/desktop/styles.css` (19KB, Claude Code 风皮肤主题)
+- 当前 Tauri 实际入口是 `index.html`；改前端行为前按 [CODING.md](CODING.md) 确认外部文件是否被引用。
 - 状态管理：单一全局 `state` 对象（无 Redux/Vuex/Pinia）
 - DOM 缓存：`$.dom` 一次预查常用 ID
 - 通过 Tauri IPC 调用后端命令

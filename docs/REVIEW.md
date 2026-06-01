@@ -14,7 +14,7 @@
 |---|---|---|
 | 前端结构 | `index.html` 单文件 ~98KB | 已拆为 `index.html` (319KB) + `app.js` (62KB) + `styles.css` (19KB)，`e26df93` "split index.html" 已合入 |
 | `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/{quectel,tdtech}/` |
-| `lib.rs` 行数 | ~1000 行 | **1139 行**（2026-06-01 F2/F4 安全修复后，拆分后仍是单文件最大者） |
+| `lib.rs` 行数 | ~1000 行 | **1142 行**（2026-06-01 raw AT / PLMN 安全修复后，拆分后仍是单文件最大者） |
 | `commands.rs` 状态 | （文档未提） | **504 行死代码**：30 个 `#[tauri::command]` 0 caller，`.unwrap()` **64 处**，会编译进二进制 |
 | `start_port_monitor` | 在 `lib.rs` | **重复**：lib.rs:869 与 monitor.rs:13 都有；lib.rs 版本带 `panic::catch_unwind` + 5s 后 sleep 重启（line 919），monitor.rs 版本带 `catch_unwind` 但**无重试 sleep**（catch_unwind 后线程直接退出）|
 | 厂商检测关键字 | 文档未列 | TdTech→Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`） |
@@ -31,10 +31,10 @@
 - **建议**：删除文件；或在 `lib.rs:1066` 注释 + `#[allow(dead_code)]` + `#[doc(hidden)]` 标记废弃
 
 ### [HIGH] #2 `send_raw_at` 完全绕过输入校验
-- **文件**：`src-tauri/src/lib.rs:724-734`（修复后 729 行加 `validate_at_string`）
-- **问题**：不调用 `validate_at_string`；前端 `app.js` 9 处用 `send_raw_at` 发 `AT+QSIMLOCK` / `AT+QNWLOCK` / `AT+QDMZ` 等带敏感字段命令
-- **影响**：2c991a4 的注入防护对此路径**完全失效**；XSS 攻击者可注入 `\r\n` 执行额外命令
-- **状态**：✅ **2026-06-01 FIXED** —— `send_raw_at` 首行加 `validate_at_string(&command)?;`
+- **文件**：`src-tauri/src/lib.rs:724-734`
+- **问题**：原先不校验 raw AT；第一次修复误用了参数校验器 `validate_at_string`，会拒绝 `AT+QCFG="ims"` 这类合法完整 AT 命令
+- **影响**：不校验会让 XSS 攻击者注入 `\r\n` 执行额外命令；误用参数校验器会导致带引号的合法 raw AT 全部失败
+- **状态**：✅ **2026-06-01 FIXED** —— `send_raw_at` 改用 `validate_raw_at_command(&command)?;`，允许合法引号并拒绝换行/控制字符/`;` 串联
 
 ### [HIGH] #3 `redact_at_command` 覆盖不全
 - **文件**：`modem-hal/src/transport/mod.rs:71-220`（修复后 3 层防御）
@@ -54,7 +54,7 @@
 - **文件**：`src-tauri/src/lib.rs:761-766, 768-772`
 - **问题**：`password.unwrap_or_else(|| "12345678".to_string())` —— 用户没传就套用默认密码
 - **影响**：用户误以为"未设置"实则模组已被锁定；安全审计等同于后门
-- **状态**：✅ **2026-06-01 FIXED** —— 改为 `password.ok_or_else(|| "PLMN lock requires a password ...")?;`，强制必传
+- **状态**：✅ **2026-06-01 FIXED** —— 强制必传 password；后端对 password 调 `validate_at_string`；前端增加供应商密码输入，不再硬编码默认密码
 
 ### [HIGH] #5 heartbeat 与 IPC 争同一把 std Mutex
 - **文件**：`src-tauri/src/lib.rs:929-970` (heartbeat) vs `lib.rs:64-97` (with_vendor 宏)

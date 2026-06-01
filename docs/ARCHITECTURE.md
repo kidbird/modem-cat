@@ -108,6 +108,8 @@
 
 ### 3.1 前端 (`src/desktop/`) — 8 个 page 容器
 
+> Tauri 当前实际加载 `index.html`。改前端行为时先确认是否引用外部 `app.js` / `styles.css`；若未引用，运行代码在 `index.html` 的内联块中，详见 [CODING.md](CODING.md)。
+
 | 行号 | Page | 中文名 | 备注 |
 |---|---|---|---|
 | 1674 | `#page-status` | 模组状态 | 默认 active，进 `doInit` 拉全部数据 |
@@ -125,7 +127,7 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | 1139 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（**与 monitor.rs 重复**） |
+| `lib.rs` | 1142 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（**与 monitor.rs 重复**） |
 | `commands.rs` | 504 | **死代码**（REVIEW.md#1）：旧 IPC 层 30 个 `#[tauri::command]`，0 caller，`.unwrap()` **64 处** |
 | `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
 | `monitor.rs` | 2.6K | `start_port_monitor` 独立线程（2s 轮询） |
@@ -147,7 +149,7 @@ pub struct AppState {
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | 3.7K | `validate_at_string` / `validate_cid` 校验；napi-rs 暴露（feature gate） |
+| `lib.rs` | 3.7K | `validate_at_string` / `validate_raw_at_command` / `validate_cid` 校验；napi-rs 暴露（feature gate） |
 | `modem_vendor.rs` | 481 | `ModemVendor` trait 定义（**62 个方法**） |
 | `modem_factory.rs` | 4.3K | `ModemFactory::create()` —— AT+CGMM → ChipsetVendor → ModemVendor |
 | `types.rs` | 6.5K / 252 行 | 所有共享结构体（`spec_bands_for_model()` 已在重构中删除，见 [MODEM_BAND_SPECS.md](MODEM_BAND_SPECS.md)） |

@@ -41,7 +41,7 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件，�
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← 1139 行: Tauri Builder 装配 + AppState + LoggingTransport + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏
+   lib.rs       ← 1142 行: Tauri Builder 装配 + AppState + LoggingTransport + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏
    commands.rs  ← 504 行死代码 (REVIEW.md#1)：30 个 #[tauri::command] + 64 处 .unwrap()，编译进 binary 但 0 caller
    ports.rs     ← 串口列表 + Windows 注册表友好名
    monitor.rs   ← start_port_monitor 后台线程
@@ -68,11 +68,11 @@ modem-hal/src/                                  ← 共享 HAL crate
 
 ### Frontend（`src/desktop/`）
 
-- **已拆 3 文件**：`index.html` (319KB, ~6500 行) + `app.js` (62KB, 1551 行) + `styles.css` (19KB)
+- **已拆 3 文件**：`index.html` (319KB, 6479 行) + `app.js` (62KB, 1556 行) + `styles.css` (19KB)
 - 无前端框架；8 个 page 容器（`#page-status` / `#page-cellular` / `#page-ip` / `#page-at` / `#page-hardware` / `#page-scene` / `#page-atmanual` / `#page-settings`）
 - 单一全局 `state` 对象（位于 `app.js` 顶部全局 `let state = { ... }`，具体行随 commit 漂移；**勿引用具体行号**，以"全局 state 对象"为锚点）
 - `$.dom` 在 `cacheDom()` 函数中（`app.js` 启动段；同上行号漂移）
-- **前端 invoke 调用 30 个唯一名字**（`grep -oE "invoke\('[a-z_]+'" src/desktop/app.js | sort -u | wc -l`）
+- **前端 invoke 调用**：实际入口 `index.html` 44 个唯一名字；同步副本 `app.js` 32 个唯一名字。
 - 通过 `window.__TAURI__.core.invoke()` 调用后端，监听 `port-changed` + `show-about` 事件
 
 ## Vendor Detection（型号 → 厂商）
@@ -93,9 +93,9 @@ modem-hal/src/                                  ← 共享 HAL crate
 详见 [docs/REVIEW.md](docs/REVIEW.md) 的 P0 清单（5 条 HIGH）：
 
 1. **`commands.rs` 是死代码**（504 行，30 个 IPC，64 处 `.unwrap()`，编译进 binary，应删除）
-2. **`send_raw_at` 绕过 `validate_at_string`**（输入校验失效）
+2. **`send_raw_at` 必须使用 `validate_raw_at_command`**（完整 AT 校验，不能误用参数校验）
 3. **`redact_at_command` 覆盖不全**（APN 密码 / PCO 凭据未 redact）
-4. **`set_plmn_lock` 硬编码默认密码 "12345678"**（安全后门）
+4. **`set_plmn_lock` / `clear_plmn_lock` 必须由用户传密码并校验**（禁止硬编码默认密码）
 5. **heartbeat 与 IPC 争同一 std Mutex**（USB 拔插感知延迟 4-12s）
 
 ## Key Conventions

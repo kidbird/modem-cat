@@ -36,7 +36,7 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件）
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← 1139 行: Tauri Builder 装配 + AppState + LoggingTransport + 52 IPC（invoke_handler 注册）+ with_vendor! 宏
+   lib.rs       ← 1142 行: Tauri Builder 装配 + AppState + LoggingTransport + 52 IPC（invoke_handler 注册）+ with_vendor! 宏
    commands.rs  ← 504 行死代码（30 个 #[tauri::command]，0 caller，64 处 .unwrap()，REVIEW.md#1）
    ports.rs     ← 串口列表 + Windows 注册表
    monitor.rs   ← start_port_monitor 后台线程
@@ -90,7 +90,7 @@ modem-hal/src/                                  ← 共享 HAL crate
 - **Tray menu**: "控制面板" (显示窗口) / "退出" (退出 app)
 - **Auto-connect**: 启动时自动扫描端口并连接 AT 端口
 
-## Tauri IPC Commands（lib.rs 注册 52 个，commands.rs 死代码 30 个，前端 invoke 30 个）
+## Tauri IPC Commands（lib.rs 注册 52 个，commands.rs 死代码 30 个，index.html 实际 invoke 44 个，app.js 同步副本 invoke 32 个）
 
 > 完整清单见 [docs/CODE_MAP.md](docs/CODE_MAP.md) §1。
 
@@ -131,7 +131,7 @@ modem-hal/src/                                  ← 共享 HAL crate
 详见 [docs/REVIEW.md](docs/REVIEW.md)。本周应修 5 条 HIGH：
 
 1. 删除 `commands.rs` 死代码
-2. `send_raw_at` 加 `validate_at_string` 校验
+2. `send_raw_at` 使用 `validate_raw_at_command` 校验完整 AT 命令
 3. `redact_at_command` 补全敏感字段
-4. `set_plmn_lock` 移除硬编码默认密码
+4. `set_plmn_lock` / `clear_plmn_lock` 移除硬编码默认密码并校验用户输入密码
 5. heartbeat 改 atomic / try_lock 避免阻塞

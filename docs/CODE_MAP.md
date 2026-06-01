@@ -3,9 +3,9 @@
 > 最近更新：2026-06-01
 > 覆盖：前端 UI 元素 → IPC 命令 → 后端实现 三列映射
 
-## 1. 后端 IPC 命令清单（30 个，由 `lib.rs` 暴露）
+## 1. 后端 IPC 命令清单（52 个，由 `lib.rs` 暴露）
 
-> 旧 `commands.rs` 还有 32 个同名/类似命令，但 0 caller 全部死代码（见 [REVIEW.md](REVIEW.md)#1）。
+> 旧 `commands.rs` 还有 30 个同名/类似命令，但 0 caller 全部死代码（见 [REVIEW.md](REVIEW.md)#1）。
 
 | # | IPC 命令 | 后端位置 | 类别 | 异步模型 |
 |---|---|---|---|---|
@@ -36,36 +36,38 @@
 | 25 | `set_apn_active` | lib.rs | APN | spawn_blocking |
 | 26 | `set_5glan` | lib.rs | 5GLAN | spawn_blocking |
 | 27 | `set_network_mode_cmd` | lib.rs | 网络 | spawn_blocking |
-| 28 | `set_bands` | lib.rs | 频段 | spawn_blocking |
-| 29 | `reset_all_bands` | lib.rs | 频段 | spawn_blocking |
-| 30 | `set_feature_toggle` | lib.rs | 开关 | spawn_blocking |
-| 31 | `set_usbnet_mode` | lib.rs | 开关 | spawn_blocking |
-| 32 | `set_sim_slot` | lib.rs | SIM | spawn_blocking |
-| 33 | `set_nat_mode` | lib.rs | 情景 | spawn_blocking |
-| 34 | `set_vlan` | lib.rs | VLAN | spawn_blocking |
-| 35 | `set_qualcomm_config` | lib.rs | 高通 | spawn_blocking |
-| 36 | `connect_data` | lib.rs | 数据 | spawn_blocking |
-| 37 | `disconnect_data` | lib.rs | 数据 | spawn_blocking |
-| 38 | `set_cfun` | lib.rs | 射频 | spawn_blocking |
-| 39 | `reboot_modem` | lib.rs | 系统 | spawn_blocking |
-| 40 | `factory_reset` | lib.rs | 系统 | spawn_blocking |
-| 41 | `set_plmn_lock` | lib.rs | PLMN | spawn_blocking |
-| 42 | `clear_plmn_lock` | lib.rs | PLMN | spawn_blocking |
-| 43 | `query_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 44 | `set_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 45 | `clear_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 46 | `query_qualcomm_5glan_status` | lib.rs | 5GLAN | spawn_blocking |
-| 47 | `configure_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 48 | `enable_eth_pdu` | lib.rs | 5GLAN | spawn_blocking |
-| 49 | `connect_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 50 | `send_raw_at` | lib.rs | AT | spawn_blocking（**绕过校验，见 REVIEW.md#2**） |
-| 51 | `pop_at_commands` | lib.rs | AT 日志 | 同步 |
+| 28 | `set_nr5g_band_cmd` | lib.rs | 频段 | spawn_blocking |
+| 29 | `set_bands` | lib.rs | 频段 | spawn_blocking |
+| 30 | `reset_all_bands` | lib.rs | 频段 | spawn_blocking |
+| 31 | `set_feature_toggle` | lib.rs | 开关 | spawn_blocking |
+| 32 | `set_usbnet_mode` | lib.rs | 开关 | spawn_blocking |
+| 33 | `set_sim_slot` | lib.rs | SIM | spawn_blocking |
+| 34 | `set_nat_mode` | lib.rs | 情景 | spawn_blocking |
+| 35 | `set_vlan` | lib.rs | VLAN | spawn_blocking |
+| 36 | `set_qualcomm_config` | lib.rs | 高通 | spawn_blocking |
+| 37 | `connect_data` | lib.rs | 数据 | spawn_blocking |
+| 38 | `disconnect_data` | lib.rs | 数据 | spawn_blocking |
+| 39 | `set_cfun` | lib.rs | 射频 | spawn_blocking |
+| 40 | `reboot_modem` | lib.rs | 系统 | spawn_blocking |
+| 41 | `factory_reset` | lib.rs | 系统 | spawn_blocking |
+| 42 | `set_plmn_lock` | lib.rs | PLMN | spawn_blocking |
+| 43 | `clear_plmn_lock` | lib.rs | PLMN | spawn_blocking |
+| 44 | `query_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
+| 45 | `set_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
+| 46 | `clear_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
+| 47 | `query_qualcomm_5glan_status` | lib.rs | 5GLAN | spawn_blocking |
+| 48 | `configure_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
+| 49 | `enable_eth_pdu` | lib.rs | 5GLAN | spawn_blocking |
+| 50 | `connect_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
+| 51 | `send_raw_at` | lib.rs | AT | spawn_blocking；完整 AT 命令走 `validate_raw_at_command` |
+| 52 | `pop_at_commands` | lib.rs | AT 日志 | 同步 |
 
 > 注：三套独立数字：
-> - 前端 `app.js` 有 **30 个**唯一 `invoke('...')` 调用（`grep -oE "invoke\('[a-z_]+'" src/desktop/app.js | sort -u | wc -l`）
-> - 后端 `lib.rs` 实际暴露 **52 个** `#[tauri::command]`（`invoke_handler!` 块中注册，见 lib.rs:1066-1118）
+> - 前端同步副本 `app.js` 有 **32 个**唯一 `invoke('...')` 调用（`grep -oE "invoke\('[a-z_]+'" src/desktop/app.js | sort -u | wc -l`）
+> - 实际入口 `index.html` 有 **44 个**唯一 `invoke('...')` 调用（同上命令替换文件名）
+> - 后端 `lib.rs` 实际暴露 **52 个** `#[tauri::command]`（`invoke_handler!` 块中注册）
 > - `commands.rs` 另有 **30 个**同名/类似死代码（0 caller，REVIEW.md#1）
-> 三套数加起来不一致是正常的（前端需要=后端实际，不算死代码）。
+> 三套数加起来不一致是正常的；要求是前端调用名必须都能在后端实际暴露命令中找到，不算死代码。
 
 ## 2. 前端 UI → IPC 触发点
 

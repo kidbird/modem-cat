@@ -881,13 +881,15 @@
     async function applyOperatorLock() {
       const mcc = document.getElementById('lockMcc').value.trim();
       const mnc = document.getElementById('lockMnc').value.trim();
+      const password = document.getElementById('lockPassword').value.trim();
       if (!mcc || !mnc) { showToast('请输入 MCC 和 MNC', 'err'); return; }
       if (!isDigits(mcc, 3, 3)) { showToast('MCC 必须为 3 位数字', 'err'); return; }
       if (!isDigits(mnc, 2, 3)) { showToast('MNC 必须为 2-3 位数字', 'err'); return; }
+      if (!password) { showToast('请输入供应商提供的锁定密码', 'err'); return; }
       const plmn = mcc + mnc;
       try {
         showLoading('正在锁定PLMN...');
-        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678",2,"' + plmn + '"' });
+        await invoke('set_plmn_lock', { plmn, password });
         await flushAtLog();
         hideLoading();
         showToast('PLMN 锁定成功', 'ok');
@@ -900,15 +902,18 @@
     }
 
     async function clearOperatorLock() {
+      const password = document.getElementById('lockPassword').value.trim();
+      if (!password) { showToast('请输入供应商提供的锁定密码', 'err'); return; }
       try {
         showLoading('正在解锁PLMN...');
-        await invoke('send_raw_at', { command: 'AT+QSIMLOCK="PN","12345678"' });
+        await invoke('clear_plmn_lock', { password });
         await flushAtLog();
         hideLoading();
         showToast('PLMN 已解锁', 'ok');
         addTerminalLine('[PLMN锁定] 已解锁', 'ok');
         document.getElementById('lockMcc').value = '';
         document.getElementById('lockMnc').value = '';
+        document.getElementById('lockPassword').value = '';
       } catch (e) {
         hideLoading();
         showToast('解锁失败: ' + e, 'err');

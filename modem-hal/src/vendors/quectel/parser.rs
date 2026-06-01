@@ -539,11 +539,25 @@ pub fn parse_qeng_neighbour_cells(response: &str) -> NeighborCells {
     }
 }
 
-/// UniSoc: `+QTEMP: <soc_temp>,<pa_temp>` — plain positional integers, no labels.
+/// UniSoc: auto-detects FW format.
+///
+/// Older FW returns positional `+QTEMP: <soc>,<pa>` (plain integers).
+/// Newer FW returns labeled `+QTEMP: "<label>","<value>"` — same layout as
+/// Qualcomm but with different sensor labels.
 pub fn parse_qtemp_unisoc(response: &str) -> TemperatureInfo {
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QTEMP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim()).collect();
+            let trimmed = rest.trim();
+            // Auto-detect: if the first field is quoted, it is the labeled format.
+            if trimmed.starts_with('"') {
+                let (soc, pa) = parse_qtemp_rich(response);
+                return TemperatureInfo {
+                    soc_temp: soc,
+                    pa_temp: pa,
+                };
+            }
+            // Legacy positional: +QTEMP: <soc>,<pa>
+            let parts: Vec<&str> = trimmed.split(',').map(|s| s.trim()).collect();
             if parts.len() >= 2 {
                 return TemperatureInfo {
                     soc_temp: format!("{}°C", parts[0]),
@@ -582,22 +596,24 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
     // Sentinel readings to ignore (offline/unused sensors).
     let is_valid = |raw: i64| raw > -100 && raw != 0;
 
-    // PA temperature: prefer "modem-lte-sub6-pa1"; fall back to first "modem-*-pa*" with a valid reading.
+    // PA temperature: prefer chip-specific primary sensor; fall back to any valid PA entry.
     let pa = entries
         .iter()
-        .find(|(l, _, _)| l == "modem-lte-sub6-pa1")
+        .find(|(l, _, _)| l == "modem-lte-sub6-pa1" || l == "pa-thermal")
         .or_else(|| {
-            entries
-                .iter()
-                .find(|(l, raw, _)| l.starts_with("modem-") && l.contains("-pa") && is_valid(*raw))
+            entries.iter().find(|(l, raw, _)| {
+                is_valid(*raw)
+                    && (l.starts_with("modem-") && l.contains("-pa")
+                        || l.starts_with("pa") && l.contains("thermal"))
+            })
         })
         .map(|(_, _, v)| v.clone())
         .unwrap_or_default();
 
-    // SOC temperature: prefer "aoss-0-usr"; fall back to aoss-*/cpuss-*/mdmss-*/socsensor*.
+    // SOC temperature: prefer chip-specific primary sensor; fall back to any valid SOC/thermal entry.
     let soc = entries
         .iter()
-        .find(|(l, _, _)| l == "aoss-0-usr")
+        .find(|(l, _, _)| l == "aoss-0-usr" || l == "soc-thermal")
         .or_else(|| {
             entries.iter().find(|(l, raw, _)| {
                 is_valid(*raw)
@@ -605,7 +621,8 @@ pub fn parse_qtemp_rich(response: &str) -> (String, String) {
                         || l.starts_with("cpuss")
                         || l.starts_with("mdmss")
                         || l.contains("socsensor")
-                        || l.contains("xo-therm"))
+                        || l.contains("xo-therm")
+                        || l.starts_with("soc") && l.contains("thermal"))
             })
         })
         .map(|(_, _, v)| v.clone())
@@ -1221,6 +1238,18 @@ mod tests {
         let info = parse_qtemp_unisoc(raw);
         assert_eq!(info.soc_temp, "42°C");
         assert_eq!(info.pa_temp, "38°C");
+    }
+
+    #[test]
+    fn parse_qtemp_unisoc_labeled() {
+        // Newer UniSoc firmware returns labeled format with chip-specific labels.
+        let raw = r#"+QTEMP: "soc-thermal","51"
++QTEMP: "pa-thermal","49"
++QTEMP: "pa5g-thermal","50"
+OK"#;
+        let info = parse_qtemp_unisoc(raw);
+        assert_eq!(info.soc_temp, "51°C", "soc-thermal → SOC");
+        assert_eq!(info.pa_temp, "49°C", "pa-thermal → PA, not pa5g-thermal");
     }
 
     #[test]

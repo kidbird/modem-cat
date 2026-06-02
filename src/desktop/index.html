@@ -1069,6 +1069,30 @@
   color-scheme: light;
 }
 
+[data-theme="blue-light"] {
+  --bg-primary:    #f0f5fa !important;
+  --bg-secondary:  #ffffff !important;
+  --bg-tertiary:   #f8fafc !important;
+  --border-color:  #cbd5e1 !important;
+  --border-hover:  #0f62fe !important;
+  --text-primary:  #0f2537 !important;
+  --text-secondary:#2c4a63 !important;
+  --text-muted:    #627d98 !important;
+  --accent:        #0f62fe !important;
+  --accent-hover:  #0043ce !important;
+  --accent-glow:   rgba(15, 98, 254, 0.18) !important;
+  --success:       #2F8A53 !important;
+  --success-glow:  rgba(47, 138, 83, 0.15) !important;
+  --warning:       #B5870F !important;
+  --error:         #B5483A !important;
+  --danger:        #B5483A !important;
+  --danger-hover:  #8F362B !important;
+  --cyan:          #4A6F9E !important;
+  --tab-bar-bg:    #e2ecef !important;
+  --tab-active-bg: #ffffff !important;
+  color-scheme: light;
+}
+
 [data-theme="dark"] {
   --bg-primary:    #1A1714 !important;
   --bg-secondary:  #25211C !important;
@@ -1106,6 +1130,7 @@ body {
 [data-theme="light"] .sidebar,
 :root .sidebar { background: #EFEAE0; }
 [data-theme="dark"] .sidebar { background: #221E1A; }
+[data-theme="blue-light"] .sidebar { background: #e2ecf5; }
 .logo { border-color: var(--border-color); }
 .logo-icon { filter: none !important; }
 
@@ -2736,6 +2761,7 @@ body {
             <div class="toggle-group">
               <button class="toggle-btn" id="themeDark" onclick="setTheme('dark')">☾ <span data-i18n="theme_dark">深色</span></button>
               <button class="toggle-btn" id="themeLight" onclick="setTheme('light')">☀ <span data-i18n="theme_light">浅色</span></button>
+              <button class="toggle-btn" id="themeBlueLight" onclick="setTheme('blue-light')">🌐 <span data-i18n="theme_blue_light">科技蓝</span></button>
             </div>
           </div>
           <div class="settings-row">
@@ -3005,10 +3031,16 @@ body {
     (function () {
       const saved = localStorage.getItem('theme');
       if (saved === 'light') setTheme('light');
+      else if (saved === 'blue-light') setTheme('blue-light');
       else setTheme('dark');
     })();
 
-    function toggleTheme() { setTheme(state.isDark ? 'light' : 'dark'); }
+    function toggleTheme() {
+      const current = localStorage.getItem('theme') || 'dark';
+      if (current === 'dark') setTheme('light');
+      else if (current === 'light') setTheme('blue-light');
+      else setTheme('dark');
+    }
 
     function setTheme(theme) {
       state.isDark = theme === 'dark';
@@ -3018,10 +3050,13 @@ body {
     }
 
     function updateThemeToggle() {
+      const currentTheme = localStorage.getItem('theme') || 'dark';
       const darkBtn = document.getElementById('themeDark');
       const lightBtn = document.getElementById('themeLight');
-      if (darkBtn) darkBtn.classList.toggle('active', state.isDark);
-      if (lightBtn) lightBtn.classList.toggle('active', !state.isDark);
+      const blueLightBtn = document.getElementById('themeBlueLight');
+      if (darkBtn) darkBtn.classList.toggle('active', currentTheme === 'dark');
+      if (lightBtn) lightBtn.classList.toggle('active', currentTheme === 'light');
+      if (blueLightBtn) blueLightBtn.classList.toggle('active', currentTheme === 'blue-light');
     }
 
     const LANG = {
@@ -3107,7 +3142,7 @@ body {
         ph_dmz: '如 192.168.1.100', ph_optional: '（可选）', ph_pci: '如 123',
         ph_plmn_password: '供应商提供',
         label_language: '语言 / Language', label_theme: '外观主题',
-        theme_dark: '深色', theme_light: '浅色', label_app_version: '当前版本',
+        theme_dark: '深色', theme_light: '浅色', theme_blue_light: '科技蓝', label_app_version: '当前版本',
       },
       en: {
         nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
@@ -3193,7 +3228,7 @@ body {
         ph_optional: '(optional)', ph_pci: 'e.g. 123',
         ph_plmn_password: 'Provided by vendor',
         label_language: 'Language / 语言', label_theme: 'Theme',
-        theme_dark: 'Dark', theme_light: 'Light', label_app_version: 'Version',
+        theme_dark: 'Dark', theme_light: 'Light', theme_blue_light: 'Tech Blue', label_app_version: 'Version',
       },
     };
 

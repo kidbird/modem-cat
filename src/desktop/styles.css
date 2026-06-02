@@ -31,6 +31,20 @@
   --danger-hover: #dc2626;
 }
 
+[data-theme="blue-light"] {
+  --bg-primary: #f0f5fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e6eff8;
+  --border-color: #cbd5e1;
+  --text-primary: #0f2537;
+  --text-secondary: #2c4a63;
+  --text-muted: #627d98;
+  --accent: #0f62fe;
+  --accent-hover: #0043ce;
+  --danger: #da1e28;
+  --danger-hover: #ba1a23;
+}
+
 body {
   font-family: -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Microsoft YaHei', 'Segoe UI', sans-serif;
   background: var(--bg-primary);

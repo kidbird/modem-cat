@@ -110,7 +110,10 @@
     }
 
     function setTheme(theme) {
-      state.isDark = theme === 'dark';
+      // state.isDark was a 2-state flag that no longer reflects the 3 themes
+      // (dark/light/blue-light) — toggleTheme + updateThemeToggle both read
+      // localStorage directly. Drop the dead-write; the `isDark: true` field
+      // in the state literal above is harmless initial seed.
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
       updateThemeToggle(theme);

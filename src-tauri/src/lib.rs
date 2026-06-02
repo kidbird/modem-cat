@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -22,23 +22,41 @@ pub struct AppState {
     pub connected_port: Arc<Mutex<Option<String>>>,
     /// Log of AT commands sent internally (not from raw AT terminal).
     /// Populated by LoggingTransport, consumed by pop_at_commands.
-    pub at_command_log: Arc<Mutex<Vec<String>>>,
+    pub at_command_log: Arc<Mutex<VecDeque<String>>>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
 struct LoggingTransport {
     inner: Box<dyn AtTransport>,
-    log: Arc<Mutex<Vec<String>>>,
+    log: Arc<Mutex<VecDeque<String>>>,
 }
+
+/// Maximum AT log entries kept in memory. Older entries are evicted FIFO when
+/// the ring is full. Frontend's `pop_at_commands` IPC drains the entire queue.
+const AT_LOG_CAPACITY: usize = 1000;
 
 impl AtTransport for LoggingTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        let mut log = self.log.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        if log.len() < 1000 {
-            log.push(modem_hal::transport::redact_at_command(command));
+        // Send FIRST, log AFTER with the actual outcome — that way the log
+        // reflects what really happened on the wire, not what we *hoped* to
+        // send. Previously the log was pushed before send_at ran, so a
+        // disconnected-port or write error left a phantom "successful" entry.
+        let result = self.inner.send_at(command);
+        // try_lock so a slow consumer holding the log Mutex never blocks the
+        // AT path; if we can't grab it, drop the log entry (the next
+        // successful command will replace it).
+        if let Ok(mut log) = self.log.try_lock() {
+            let redacted = modem_hal::transport::redact_at_command(command);
+            let entry = match &result {
+                Ok(_) => redacted,
+                Err(e) => format!("{}  ⟵ {}", redacted, e),
+            };
+            if log.len() >= AT_LOG_CAPACITY {
+                log.pop_front();
+            }
+            log.push_back(entry);
         }
-        drop(log);
-        self.inner.send_at(command)
+        result
     }
     fn close(&mut self) {
         self.inner.close();
@@ -50,7 +68,7 @@ impl AtTransport for LoggingTransport {
 
 fn wrap_transport(
     transport: Box<dyn AtTransport>,
-    log: Arc<Mutex<Vec<String>>>,
+    log: Arc<Mutex<VecDeque<String>>>,
 ) -> Box<dyn AtTransport> {
     Box::new(LoggingTransport {
         inner: transport,
@@ -783,7 +801,8 @@ async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppSt
 #[tauri::command]
 fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
     let mut log = state.at_command_log.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-    Ok(std::mem::take(&mut *log))
+    // drain(..) empties the VecDeque in place and yields owned elements.
+    Ok(log.drain(..).collect())
 }
 
 #[tauri::command]
@@ -1004,7 +1023,7 @@ pub fn run() {
             vendor: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(Mutex::new(1)),
             connected_port: Arc::new(Mutex::new(None)),
-            at_command_log: Arc::new(Mutex::new(Vec::new())),
+            at_command_log: Arc::new(Mutex::new(VecDeque::new())),
         })
         .setup(|app| {
             // ── Build menu bar ──

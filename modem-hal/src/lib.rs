@@ -67,11 +67,39 @@ pub fn validate_raw_at_command(command: &str) -> Result<(), String> {
                 i
             ));
         }
+        if ch == '&' {
+            // Hayes "AT&F" (factory reset) / "AT&W" (write profile) / "AT&V" (view)
+            // can wipe modem NV. send_raw_at is a debugging affordance, not a
+            // S-register / Hayes configuration path — refuse it.
+            return Err(format!(
+                "Invalid character at position {}: Hayes '&' commands not allowed in send_raw_at (use the dedicated UI)",
+                i
+            ));
+        }
         if ch.is_control() {
             return Err(format!(
                 "Invalid character at position {}: control character not allowed",
                 i
             ));
+        }
+    }
+    // Reject S-register writes like "ATS0=0" / "ATS13=1" (auto-answer,
+    // echo-off, etc.). Hayes allows multi-digit register numbers, so we
+    // scan past all leading digits before checking for '='.
+    let after_at = trimmed.get(2..).unwrap_or("");
+    if !after_at.is_empty() && after_at.as_bytes()[0].eq_ignore_ascii_case(&b'S') {
+        let bytes = after_at.as_bytes();
+        let mut i = 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        // i is the first non-digit; if it's '=' we have ATSn=… (a write).
+        // Reads like ATS0? / ATS5 (no '=') stay allowed.
+        if i > 1 && i < bytes.len() && bytes[i] == b'=' {
+            return Err(
+                "S-register writes (e.g. ATS0=0, ATS13=1) are not allowed in send_raw_at"
+                    .to_string(),
+            );
         }
     }
     Ok(())
@@ -112,79 +140,29 @@ mod tests {
     }
 
     #[test]
+    fn raw_at_command_rejects_hayes_amp_and_s_register() {
+        // Hayes & commands (factory reset, profile write, etc.)
+        assert!(validate_raw_at_command("AT&F").is_err());
+        assert!(validate_raw_at_command("AT&F0").is_err());
+        assert!(validate_raw_at_command("AT&W").is_err());
+        // S-register writes (auto-answer, echo, etc.)
+        assert!(validate_raw_at_command("ATS0=0").is_err());
+        assert!(validate_raw_at_command("ATS3=13").is_err());
+        assert!(validate_raw_at_command("ats13=1").is_err()); // case-insensitive
+        // S-registers READS are still allowed (no '=')
+        assert!(validate_raw_at_command("ATS0?").is_ok());
+        assert!(validate_raw_at_command("ATS5").is_ok());
+    }
+
+    #[test]
     fn at_parameter_rejects_quote_escape() {
         assert!(validate_at_string(r#"abc"def"#).is_err());
         assert!(validate_at_string("abc\r\nAT+CFUN=1,1").is_err());
         assert!(validate_at_string("cmnet").is_ok());
     }
 }
-
-// ── napi-rs surface for Bun/TS ──
-#[cfg(feature = "napi-feature")]
-mod napi_exports {
-    use crate::transport::SerialTransport;
-    use crate::ModemFactory;
-    use napi_derive::napi;
-
-    #[napi]
-    pub struct ModemHandle {
-        inner: Box<dyn crate::ModemVendor + Send>,
-        transport: SerialTransport,
-    }
-
-    #[napi]
-    impl ModemHandle {
-        #[napi(factory)]
-        pub fn connect(port: String, baud: u32) -> napi::Result<Self> {
-            let mut transport =
-                SerialTransport::new(&port, baud).map_err(|e| napi::Error::from_reason(e))?;
-            let modem =
-                ModemFactory::create(&mut transport).map_err(|e| napi::Error::from_reason(e))?;
-            Ok(Self {
-                inner: modem,
-                transport,
-            })
-        }
-
-        #[napi]
-        pub fn query_signal(&mut self) -> napi::Result<crate::types::SignalInfo> {
-            self.inner
-                .query_signal_strength(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn query_status(&mut self) -> napi::Result<crate::types::ModemStatus> {
-            self.inner
-                .query_modem_status(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn connect_data(&mut self, cid: i32) -> napi::Result<()> {
-            self.inner
-                .connect_data(&mut self.transport, cid)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn disconnect_data(&mut self, cid: i32) -> napi::Result<()> {
-            self.inner
-                .disconnect_data(&mut self.transport, cid)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn reboot(&mut self) -> napi::Result<()> {
-            self.inner
-                .reboot(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn close(&mut self) {
-            use crate::transport::AtTransport;
-            self.transport.close();
-        }
-    }
-}
+// ── (history) napi-rs surface for Bun/TS removed 2026-06-02 ──
+//   The `napi-feature` Cargo feature was declared but never enabled, so the
+//   `ModemHandle` napi bindings were dead code at every commit. Deleted the
+//   module + the feature + the `napi` / `napi-derive` / `napi-build` deps.
+//   Re-enable from git history if a Node/Bun consumer actually materialises.

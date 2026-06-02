@@ -132,16 +132,19 @@ describe('styles.css structure', () => {
     },
   );
 
-  it('blue-light block uses !important on every var (matches light/dark defensive pattern)', () => {
-    const block = blocks.find((b) => b.selector === '[data-theme="blue-light"]');
-    const vars = extractVars(block.body);
-    for (const [name, value] of Object.entries(vars)) {
-      expect(
-        value.endsWith('!important'),
-        `blue-light var ${name} = "${value}" is missing !important`,
-      ).toBe(true);
+  it.each([':root', '[data-theme="light"]', '[data-theme="blue-light"]', '[data-theme="dark"]'])(
+    '%s theme vars avoid !important so themes can cascade normally',
+    (selector) => {
+      const block = blocks.find((b) => b.selector === selector);
+      const vars = extractVars(block.body);
+      for (const [name, value] of Object.entries(vars)) {
+        expect(
+          value.endsWith('!important'),
+          `${selector} var ${name} = "${value}" should not use !important`,
+        ).toBe(false);
+      }
     }
-  });
+  );
 
   it('blue-light background (#f0f5fa) differs from :root default (#0a0e1a)', () => {
     // Regression guard: if someone reverts blue-light to use the same

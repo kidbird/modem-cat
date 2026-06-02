@@ -136,7 +136,6 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-<<<<<<< HEAD
 | `lib.rs` | ~1367 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器（VecDeque 环形 + try_lock + log-after-send）；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（lib.rs:1085） |
 | `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
 | `main.rs` | 0.3K | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |

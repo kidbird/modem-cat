@@ -11,7 +11,9 @@ pub trait AtTransport: Send {
     fn close(&mut self);
     /// Returns false when the underlying hardware has been removed (e.g. USB unplug).
     /// Does not send any bytes — safe to call from a background heartbeat.
-    fn is_alive(&self) -> bool { true }
+    fn is_alive(&self) -> bool {
+        true
+    }
 }
 
 pub struct MockTransport {
@@ -111,6 +113,58 @@ mod tests {
             r#"AT+FOO=1,password="******",2"#
         );
     }
+
+    #[test]
+    fn test_redact_at_command_keyed_passwd_pwd_token_secret_auth() {
+        // SENSITIVE_KEYS variants: passwd / pwd / token / secret / auth.
+        // Each branch is a separate logical redaction path inside the
+        // generic key-matcher; testing them together guards against
+        // accidental key-list edits.
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,passwd="shh",2"#),
+            r#"AT+FOO=1,passwd="******",2"#
+        );
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,pwd="shh",2"#),
+            r#"AT+FOO=1,pwd="******",2"#
+        );
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,token="abc.def.ghi",2"#),
+            r#"AT+FOO=1,token="******",2"#
+        );
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,secret="top",2"#),
+            r#"AT+FOO=1,secret="******",2"#
+        );
+        // `auth` is also in SENSITIVE_KEYS; covered here for completeness.
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,auth="bearer_xyz",2"#),
+            r#"AT+FOO=1,auth="******",2"#
+        );
+        // Non-sensitive key passes through untouched.
+        assert_eq!(
+            redact_at_command(r#"AT+FOO=1,user="alice",2"#),
+            r#"AT+FOO=1,user="alice",2"#
+        );
+    }
+
+    #[test]
+    fn test_redact_at_command_tdtech_ndisdup() {
+        // TdTech: AT^NDISDUP=<cid>,1,"<apn>","<user>","<pass>",<auth>
+        // The 5th quoted value is the APN password. Previously this slipped
+        // through the CGAUTH/CGDCONT list; the dial.rs caller currently
+        // passes empty strings, but the moment real auth is plumbed through,
+        // the password would land in the 1000-entry AT log ring.
+        assert_eq!(
+            redact_at_command(r#"AT^NDISDUP=1,1,"cmnet","u","hunter2",0"#),
+            r#"AT^NDISDUP=1,1,"cmnet","u","******",0"#
+        );
+        // Bare NDISDUP without password fields stays intact.
+        assert_eq!(
+            redact_at_command(r#"AT^NDISDUP=1,0"#),
+            r#"AT^NDISDUP=1,0"#
+        );
+    }
 }
 
 /// AT command names whose quoted value is a credential. The first quoted
@@ -129,7 +183,7 @@ const SENSITIVE_KEYS: &[&str] = &["password", "passwd", "pwd", "token", "auth", 
 ///
 /// Driven by the commands the codebase actually issues — see
 /// `modem-hal/src/vendors/tdtech/mod.rs:247,249`.
-const POSITIONAL_PASSWORD_CMDS: &[&str] = &["CGAUTH", "CGDCONT"];
+const POSITIONAL_PASSWORD_CMDS: &[&str] = &["CGAUTH", "CGDCONT", "NDISDUP"];
 
 /// Replace credentials in an AT command with `******` before logging.
 ///
@@ -156,8 +210,12 @@ pub fn redact_at_command(command: &str) -> String {
 fn redact_last_quoted_for_known_cmds(command: &str, cmds: &[&str]) -> Option<String> {
     let upper = command.to_ascii_uppercase();
     for cmd in cmds {
-        // Match `AT+CMD` (or `CMD` at start of string)
-        if upper.starts_with(&format!("AT+{}", cmd)) || upper.starts_with(cmd) {
+        // Match `AT+CMD` (3GPP / Quectel), `AT^CMD` (TdTech Hayes-style),
+        // or bare `CMD` at start of string.
+        if upper.starts_with(&format!("AT+{}", cmd))
+            || upper.starts_with(&format!("AT^{}", cmd))
+            || upper.starts_with(cmd)
+        {
             if let Some(r) = redact_last_quoted_value(command) {
                 return Some(r);
             }
@@ -189,13 +247,8 @@ fn redact_last_quoted_value(command: &str) -> Option<String> {
             i += 1;
         }
     }
-    last_open.map(|(open, close)| {
-        format!(
-            "{}\"******\"{}",
-            &command[..open],
-            &command[close + 1..]
-        )
-    })
+    last_open
+        .map(|(open, close)| format!("{}\"******\"{}", &command[..open], &command[close + 1..]))
 }
 
 /// QSIMLOCK: keep `"PN"` literal, replace the next quoted value.
@@ -285,4 +338,3 @@ fn redact_quoted_value_after_key(command: &str, keys: &[&str]) -> String {
     }
     out
 }
-

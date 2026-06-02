@@ -137,9 +137,12 @@ fn test_at_with_parser() {
         // ── Parse IP ──
         let ipresp = send_at(&mut port, "AT+QNETDEVSTATUS=1");
         let mut mock = modem_hal::transport::MockTransport::new(vec![&ipresp]);
-        let ip = modem_hal::vendors::quectel::unisoc::query_ip_info(&mut mock, 1)
-            .unwrap_or_default();
-        println!("[IP] addr={} mask={} gw={} dns={}", ip.ipv4_addr, ip.ipv4_mask, ip.ipv4_gw, ip.ipv4_dns);
+        let ip =
+            modem_hal::vendors::quectel::unisoc::query_ip_info(&mut mock, 1).unwrap_or_default();
+        println!(
+            "[IP] addr={} mask={} gw={} dns={}",
+            ip.ipv4_addr, ip.ipv4_mask, ip.ipv4_gw, ip.ipv4_dns
+        );
         if !ip.ipv6_addr.is_empty() {
             println!("[IP] ipv6={} dns6={}", ip.ipv6_addr, ip.ipv6_dns);
         }

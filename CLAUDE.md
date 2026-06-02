@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> 最近更新：2026-06-01
+> 最近更新：2026-06-02（加 vitest + happy-dom 前端测试 / safeStorage 包装 / 删 monitor.rs / commands.rs 早删 / heartbeat try_lock / 6 项 review 修复 / blue-light 主题 / 并行 probe）
 > 详细文档见 [docs/](docs/)，尤其是 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/CODE_MAP.md](docs/CODE_MAP.md)、[docs/CALL_FLOW.md](docs/CALL_FLOW.md)、[docs/REVIEW.md](docs/REVIEW.md)。
 
 ## Project Overview
@@ -26,6 +26,10 @@ cargo test -p modem-cat
 
 # Run a specific test
 cargo test -p modem-hal parse_qeng_serving_cell
+
+# Frontend tests (vitest + happy-dom)
+npm test              # 一次性跑
+npm run test:watch    # watch 模式
 ```
 
 ## Windows Build Note
@@ -41,11 +45,11 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件，�
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← 1142 行: Tauri Builder 装配 + AppState + LoggingTransport + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏
-   commands.rs  ← 504 行死代码 (REVIEW.md#1)：30 个 #[tauri::command] + 64 处 .unwrap()，编译进 binary 但 0 caller
+   lib.rs       ← ~1367 行: Tauri Builder 装配 + AppState + LoggingTransport (VecDeque+try_lock) + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏 + start_port_monitor
    ports.rs     ← 串口列表 + Windows 注册表友好名
-   monitor.rs   ← start_port_monitor 后台线程
    main.rs      ← 入口
+
+> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删；`monitor.rs` (2.6K 孤儿，与 lib.rs:1085 重复版) 2026-06-02 已删。
         │
 modem-hal/src/                                  ← 共享 HAL crate
    modem_vendor.rs    ← ModemVendor trait (**62 个方法**)
@@ -62,13 +66,13 @@ modem-hal/src/                                  ← 共享 HAL crate
 ### 关键运行模式
 
 - **with_vendor! 宏**（lib.rs:64）：所有 IPC handler 都用它消除 lock/spawn_blocking 样板
-- **LoggingTransport 装饰器**（lib.rs:33）：包装真实 transport，旁路记录 1000 条 AT 日志
-- **start_port_monitor**（lib.rs:869 **与** monitor.rs:13 重复，REVIEW 待清理）
-- **start_connection_heartbeat**（lib.rs:929）：4s 间隔，硬件拔插通过 `port-changed` 事件通知前端
+- **LoggingTransport 装饰器**（lib.rs:33）：包装真实 transport，旁路记录 1000 条 AT 日志（VecDeque 环形 + try_lock + log-after-send）
+- **start_port_monitor**（lib.rs:1085）：2s 轮询 `serialport::available_ports()` 差集 → emit `port-changed`（原 monitor.rs 副本已删，2026-06-02）
+- **start_connection_heartbeat**（lib.rs:1155）：4s 间隔，try_lock 不阻塞 IPC，硬件拔插通过 `port-changed` 事件通知前端
 
 ### Frontend（`src/desktop/`）
 
-- **已拆 3 文件**：`index.html` (319KB, 6479 行) + `app.js` (62KB, 1556 行) + `styles.css` (19KB)
+- **已拆 3 文件**：`index.html` (~1494 行, 81KB) + `app.js` (~3621 行, 191KB) + `styles.css` (~1436 行, 50KB)。`index.html` 通过 `<link rel="stylesheet" href="styles.css">` + `<script src="app.js"></script>` 真正加载（commit 4f2fb83 落实）。早期 e26df93 split 阶段两文件是孤儿，已修复。
 - 无前端框架；8 个 page 容器（`#page-status` / `#page-cellular` / `#page-ip` / `#page-at` / `#page-hardware` / `#page-scene` / `#page-atmanual` / `#page-settings`）
 - 单一全局 `state` 对象（位于 `app.js` 顶部全局 `let state = { ... }`，具体行随 commit 漂移；**勿引用具体行号**，以"全局 state 对象"为锚点）
 - `$.dom` 在 `cacheDom()` 函数中（`app.js` 启动段；同上行号漂移）
@@ -88,15 +92,17 @@ modem-hal/src/                                  ← 共享 HAL crate
 
 详见 [docs/AT_COMMANDS.md](docs/AT_COMMANDS.md) 顶部表格。
 
-## 已知问题（P0 修，本周内）
+## 已知问题（2026-06-02 状态）
 
-详见 [docs/REVIEW.md](docs/REVIEW.md) 的 P0 清单（5 条 HIGH）：
+P0 5/5 ✅ 已修（详见 [REVIEW.md](docs/REVIEW.md)）：
 
-1. **`commands.rs` 是死代码**（504 行，30 个 IPC，64 处 `.unwrap()`，编译进 binary，应删除）
-2. **`send_raw_at` 必须使用 `validate_raw_at_command`**（完整 AT 校验，不能误用参数校验）
-3. **`redact_at_command` 覆盖不全**（APN 密码 / PCO 凭据未 redact）
-4. **`set_plmn_lock` / `clear_plmn_lock` 必须由用户传密码并校验**（禁止硬编码默认密码）
-5. **heartbeat 与 IPC 争同一 std Mutex**（USB 拔插感知延迟 4-12s）
+1. ✅ `commands.rs` 死代码 —— 2026-06-02 删（commit 0d4853e）
+2. ✅ `send_raw_at` 校验 —— 用 `validate_raw_at_command`（上游 2026-06-01）
+3. ✅ `redact_at_command` 3 层防御（上游 2026-06-01）
+4. ✅ PLMN 密码用户必传 + 后端 `validate_at_string`（上游 2026-06-01）
+5. ✅ heartbeat 改 `try_lock()`，不阻塞 IPC（commit 0d4853e）
+
+P1/P2 进度：#6 #8 #9 #12 #15 #16 #18 #19 #20 已修。剩余 #7（is_alive macOS 暂缓） / #10 #11（TdTech 暂缓） / #13 #14（parser 测试/helper） / #17（thiserror 迁移）。
 
 ## Key Conventions
 

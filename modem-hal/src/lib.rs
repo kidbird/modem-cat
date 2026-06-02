@@ -35,6 +35,16 @@ pub fn validate_at_string(s: &str) -> Result<(), String> {
                 i
             ));
         }
+        // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are in
+        // Unicode categories Zl/Zp, NOT Cc, so `is_control()` misses them.
+        // They are valid in JS string literals (template literals) but would
+        // break naive log post-processors that split on newlines.
+        if (ch as u32) == 0x2028 || (ch as u32) == 0x2029 {
+            return Err(format!(
+                "Invalid character at position {}: Unicode line/paragraph separator (U+2028/U+2029) not allowed in AT parameter",
+                i
+            ));
+        }
     }
     Ok(())
 }
@@ -67,11 +77,39 @@ pub fn validate_raw_at_command(command: &str) -> Result<(), String> {
                 i
             ));
         }
+        if ch == '&' {
+            // Hayes "AT&F" (factory reset) / "AT&W" (write profile) / "AT&V" (view)
+            // can wipe modem NV. send_raw_at is a debugging affordance, not a
+            // S-register / Hayes configuration path — refuse it.
+            return Err(format!(
+                "Invalid character at position {}: Hayes '&' commands not allowed in send_raw_at (use the dedicated UI)",
+                i
+            ));
+        }
         if ch.is_control() {
             return Err(format!(
                 "Invalid character at position {}: control character not allowed",
                 i
             ));
+        }
+    }
+    // Reject S-register writes like "ATS0=0" / "ATS13=1" (auto-answer,
+    // echo-off, etc.). Hayes allows multi-digit register numbers, so we
+    // scan past all leading digits before checking for '='.
+    let after_at = trimmed.get(2..).unwrap_or("");
+    if !after_at.is_empty() && after_at.as_bytes()[0].eq_ignore_ascii_case(&b'S') {
+        let bytes = after_at.as_bytes();
+        let mut i = 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        // i is the first non-digit; if it's '=' we have ATSn=… (a write).
+        // Reads like ATS0? / ATS5 (no '=') stay allowed.
+        if i > 1 && i < bytes.len() && bytes[i] == b'=' {
+            return Err(
+                "S-register writes (e.g. ATS0=0, ATS13=1) are not allowed in send_raw_at"
+                    .to_string(),
+            );
         }
     }
     Ok(())
@@ -80,10 +118,7 @@ pub fn validate_raw_at_command(command: &str) -> Result<(), String> {
 /// Validate that a CID (PDP context identifier) is within the valid range (1-16).
 pub fn validate_cid(cid: i32) -> Result<(), String> {
     if cid < 1 || cid > 16 {
-        return Err(format!(
-            "Invalid CID {}: must be between 1 and 16",
-            cid
-        ));
+        return Err(format!("Invalid CID {}: must be between 1 and 16", cid));
     }
     Ok(())
 }
@@ -96,7 +131,10 @@ mod tests {
     fn raw_at_command_allows_quoted_complete_commands() {
         assert!(validate_raw_at_command(r#"AT+QCFG="ims""#).is_ok());
         assert!(validate_raw_at_command(r#"AT+QNWLOCK="common/5g",1,630000,123"#).is_ok());
-        assert!(validate_raw_at_command(r#"AT+QCFG="lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254""#).is_ok());
+        assert!(validate_raw_at_command(
+            r#"AT+QCFG="lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254""#
+        )
+        .is_ok());
     }
 
     #[test]
@@ -112,79 +150,42 @@ mod tests {
     }
 
     #[test]
+    fn raw_at_command_rejects_hayes_amp_and_s_register() {
+        // Hayes & commands (factory reset, profile write, etc.)
+        assert!(validate_raw_at_command("AT&F").is_err());
+        assert!(validate_raw_at_command("AT&F0").is_err());
+        assert!(validate_raw_at_command("AT&W").is_err());
+        // S-register writes (auto-answer, echo, etc.)
+        assert!(validate_raw_at_command("ATS0=0").is_err());
+        assert!(validate_raw_at_command("ATS3=13").is_err());
+        assert!(validate_raw_at_command("ats13=1").is_err()); // case-insensitive
+
+        // S-registers READS are still allowed (no '=')
+        assert!(validate_raw_at_command("ATS0?").is_ok());
+        assert!(validate_raw_at_command("ATS5").is_ok());
+    }
+
+    #[test]
     fn at_parameter_rejects_quote_escape() {
         assert!(validate_at_string(r#"abc"def"#).is_err());
         assert!(validate_at_string("abc\r\nAT+CFUN=1,1").is_err());
         assert!(validate_at_string("cmnet").is_ok());
     }
-}
 
-// ── napi-rs surface for Bun/TS ──
-#[cfg(feature = "napi-feature")]
-mod napi_exports {
-    use crate::transport::SerialTransport;
-    use crate::ModemFactory;
-    use napi_derive::napi;
-
-    #[napi]
-    pub struct ModemHandle {
-        inner: Box<dyn crate::ModemVendor + Send>,
-        transport: SerialTransport,
-    }
-
-    #[napi]
-    impl ModemHandle {
-        #[napi(factory)]
-        pub fn connect(port: String, baud: u32) -> napi::Result<Self> {
-            let mut transport =
-                SerialTransport::new(&port, baud).map_err(|e| napi::Error::from_reason(e))?;
-            let modem =
-                ModemFactory::create(&mut transport).map_err(|e| napi::Error::from_reason(e))?;
-            Ok(Self {
-                inner: modem,
-                transport,
-            })
-        }
-
-        #[napi]
-        pub fn query_signal(&mut self) -> napi::Result<crate::types::SignalInfo> {
-            self.inner
-                .query_signal_strength(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn query_status(&mut self) -> napi::Result<crate::types::ModemStatus> {
-            self.inner
-                .query_modem_status(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn connect_data(&mut self, cid: i32) -> napi::Result<()> {
-            self.inner
-                .connect_data(&mut self.transport, cid)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn disconnect_data(&mut self, cid: i32) -> napi::Result<()> {
-            self.inner
-                .disconnect_data(&mut self.transport, cid)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn reboot(&mut self) -> napi::Result<()> {
-            self.inner
-                .reboot(&mut self.transport)
-                .map_err(|e| napi::Error::from_reason(e))
-        }
-
-        #[napi]
-        pub fn close(&mut self) {
-            use crate::transport::AtTransport;
-            self.transport.close();
-        }
+    #[test]
+    fn at_parameter_rejects_unicode_line_separator() {
+        // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR pass
+        // `is_control()` (only Cc) but are still effectively newlines
+        // for downstream log post-processors.
+        assert!(validate_at_string("ab\u{2028}cd").is_err());
+        assert!(validate_at_string("ab\u{2029}cd").is_err());
+        // Other Zl/Zp-like chars (RTL/LTR overrides) still allowed;
+        // we only block the two explicit separators.
+        assert!(validate_at_string("\u{202A}cmnet\u{202C}").is_ok());
     }
 }
+// ── (history) napi-rs surface for Bun/TS removed 2026-06-02 ──
+//   The `napi-feature` Cargo feature was declared but never enabled, so the
+//   `ModemHandle` napi bindings were dead code at every commit. Deleted the
+//   module + the feature + the `napi` / `napi-derive` / `napi-build` deps.
+//   Re-enable from git history if a Node/Bun consumer actually materialises.

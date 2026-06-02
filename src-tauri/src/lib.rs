@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
+use std::future::Future;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -16,29 +18,51 @@ use tauri::Manager;
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
-    pub data_cid: Arc<Mutex<i32>>,
+    /// Currently-connected PDP context ID. Stored as `AtomicI32` (not `Mutex`)
+    /// because every read/write is a single integer and the field is only ever
+    /// touched while transport + vendor are already held — no need to nest a
+    /// third std::Mutex and risk std::Mutex deadlock (REVIEW.md #8).
+    pub data_cid: Arc<AtomicI32>,
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
     /// Used by the USB monitor to know if the active port was unplugged.
     pub connected_port: Arc<Mutex<Option<String>>>,
     /// Log of AT commands sent internally (not from raw AT terminal).
     /// Populated by LoggingTransport, consumed by pop_at_commands.
-    pub at_command_log: Arc<Mutex<Vec<String>>>,
+    pub at_command_log: Arc<Mutex<VecDeque<String>>>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
 struct LoggingTransport {
     inner: Box<dyn AtTransport>,
-    log: Arc<Mutex<Vec<String>>>,
+    log: Arc<Mutex<VecDeque<String>>>,
 }
+
+/// Maximum AT log entries kept in memory. Older entries are evicted FIFO when
+/// the ring is full. Frontend's `pop_at_commands` IPC drains the entire queue.
+const AT_LOG_CAPACITY: usize = 1000;
 
 impl AtTransport for LoggingTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        let mut log = self.log.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        if log.len() < 1000 {
-            log.push(modem_hal::transport::redact_at_command(command));
+        // Send FIRST, log AFTER with the actual outcome — that way the log
+        // reflects what really happened on the wire, not what we *hoped* to
+        // send. Previously the log was pushed before send_at ran, so a
+        // disconnected-port or write error left a phantom "successful" entry.
+        let result = self.inner.send_at(command);
+        // try_lock so a slow consumer holding the log Mutex never blocks the
+        // AT path; if we can't grab it, drop the log entry (the next
+        // successful command will replace it).
+        if let Ok(mut log) = self.log.try_lock() {
+            let redacted = modem_hal::transport::redact_at_command(command);
+            let entry = match &result {
+                Ok(_) => redacted,
+                Err(e) => format!("{}  ⟵ {}", redacted, e),
+            };
+            if log.len() >= AT_LOG_CAPACITY {
+                log.pop_front();
+            }
+            log.push_back(entry);
         }
-        drop(log);
-        self.inner.send_at(command)
+        result
     }
     fn close(&mut self) {
         self.inner.close();
@@ -50,7 +74,7 @@ impl AtTransport for LoggingTransport {
 
 fn wrap_transport(
     transport: Box<dyn AtTransport>,
-    log: Arc<Mutex<Vec<String>>>,
+    log: Arc<Mutex<VecDeque<String>>>,
 ) -> Box<dyn AtTransport> {
     Box::new(LoggingTransport {
         inner: transport,
@@ -67,8 +91,10 @@ macro_rules! with_vendor {
         let transport = $state.transport.clone();
         let vendor = $state.vendor.clone();
         tokio::task::spawn_blocking(move || {
-            let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-            let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let mut tguard = transport
+                .lock()
+                .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+            let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
             $body
@@ -78,18 +104,25 @@ macro_rules! with_vendor {
     }};
 }
 
-/// Same as `with_vendor!` but also locks `data_cid` and binds it as `$c`.
+/// Same as `with_vendor!` but also reads `data_cid` (lock-free via AtomicI32)
+/// and binds it as `$c`. The atomic means the macro no longer holds a third
+/// Mutex while transport + vendor are held, so connect_data can no longer
+/// deadlock with any concurrent IPC handler that touches data_cid.
 macro_rules! with_vendor_cid {
     ($state:expr, |$t:ident, $v:ident, $c:ident| $body:expr) => {{
         let transport = $state.transport.clone();
         let vendor = $state.vendor.clone();
         let data_cid = $state.data_cid.clone();
         tokio::task::spawn_blocking(move || {
-            let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-            let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let mut tguard = transport
+                .lock()
+                .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+            let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-            let $c = *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            // Lock-free load: AtomicI32 needs no Mutex, so we never nest
+            // a third lock under transport + vendor (REVIEW.md #8).
+            let $c = data_cid.load(Ordering::Relaxed);
             $body
         })
         .await
@@ -347,6 +380,30 @@ fn is_at_port(
     false
 }
 
+/// Per-port timeout for the AT probe. The probe does open() + send_at("AT") +
+/// wait for OK; an unresponsive or busy port can hang serialport::open() for
+/// many seconds, so cap each probe at 2 s. Total wall time is ~2 s for N
+/// ports (parallel) vs the old ~3-8 s × N (serial) — REVIEW.md #15.
+const AT_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn run_after_at_probe_timeout<T, U, Probe, Detect, DetectFuture>(
+    probe_timeout: Duration,
+    at_probe: Probe,
+    detect_vendor: Detect,
+) -> Result<U, String>
+where
+    Probe: Future<Output = Result<T, String>>,
+    Detect: FnOnce(T) -> DetectFuture,
+    DetectFuture: Future<Output = Result<U, String>>,
+{
+    let transport = match tokio::time::timeout(probe_timeout, at_probe).await {
+        Ok(result) => result?,
+        Err(_) => return Err(format!("AT probe timed out after {:?}", probe_timeout)),
+    };
+
+    detect_vendor(transport).await
+}
+
 /// Auto-detect and connect to an AT port.
 /// Scans all port types (not just USB) and uses WMI info on Windows for
 /// reliable identification, matching the logic in `list_ports`.
@@ -377,56 +434,136 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
     log::info!("AT candidates: {:?}", at_candidates);
 
+    // Parallel probe: spawn one tokio task per candidate. Each task wraps only
+    // the blocking serial open + AT handshake in a 2 s timeout. Vendor
+    // detection runs after the AT probe succeeds and uses the transport's
+    // normal serial read timeout, so slow AT+CGMM responses can still connect.
+    let mut handles = Vec::with_capacity(at_candidates.len());
+    for port_name in &at_candidates {
+        let pn = port_name.clone();
+        log::info!("Probing port: {}", pn);
+        handles.push(tokio::spawn(async move {
+            // `pn_block` is moved into spawn_blocking; the outer `pn` lives
+            // through the async block so we can return it in the tuple below.
+            let pn_block = pn.clone();
+            let pn_probe = pn.clone();
+            let pn_detect = pn.clone();
+            let probe = tokio::task::spawn_blocking(
+                move || -> Result<modem_hal::transport::SerialTransport, String> {
+                    let mut transport =
+                        modem_hal::transport::SerialTransport::new(&pn_block, 115200)?;
+                    let response = transport.send_at("AT");
+                    match response {
+                        Ok(r) if r.trim().ends_with("OK") => Ok(transport),
+                        Ok(r) => Err(format!("Port {} responded but not OK: {}", pn_block, r)),
+                        Err(e) => Err(format!("Port {} AT probe failed: {}", pn_block, e)),
+                    }
+                },
+            );
+            let result = run_after_at_probe_timeout(
+                AT_PROBE_TIMEOUT,
+                async move {
+                    probe
+                        .await
+                        .map_err(|e| format!("Port {} probe task panicked: {}", pn_probe, e))?
+                },
+                move |mut transport| async move {
+                    tokio::task::spawn_blocking(move || {
+                        let vendor_result = ModemFactory::create(&mut transport);
+                        Ok((transport, vendor_result))
+                    })
+                    .await
+                    .map_err(|e| {
+                        format!("Port {} vendor detection task panicked: {}", pn_detect, e)
+                    })?
+                },
+            )
+            .await;
+            (pn, result)
+        }));
+    }
+
     let transport_arc = state.transport.clone();
     let vendor_arc = state.vendor.clone();
-    for port_name in &at_candidates {
-        log::info!("Probing port: {}", port_name);
+    let at_log = state.at_command_log.clone();
+    let connected_port_arc = state.connected_port.clone();
 
-        let pn = port_name.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            // Open, send AT, verify OK, detect vendor, and return both
-            let mut transport = modem_hal::transport::SerialTransport::new(&pn, 115200)?;
-            let response = transport.send_at("AT");
-            match response {
-                Ok(r) if r.trim().ends_with("OK") => {
-                    let vendor_result = ModemFactory::create(&mut transport);
-                    Ok((transport, vendor_result))
-                }
-                Ok(r) => Err(format!("Port {} responded but not OK: {}", pn, r)),
-                Err(e) => Err(format!("Port {} AT probe failed: {}", pn, e)),
+    // Collect every probe's result; pick the first successful (transport +
+    // vendor) pair. Losers' transports drop naturally when their tasks end.
+    for h in handles {
+        let (pn, probe_result) = match h.await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Probe task join error: {}", e);
+                continue;
             }
-        })
-        .await
-        .map_err(|e| format!("Task error: {}", e))?;
-
-        match result {
-            Ok((transport, vendor_result)) => {
-                match vendor_result {
-                    Ok(vendor) => {
-                        log::info!("Connected to AT port: {} (vendor: {:?})", port_name, vendor.vendor());
-                        *transport_arc.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-                            Box::new(transport),
-                            state.at_command_log.clone(),
-                        ));
-                        *vendor_arc.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(vendor);
-                        let cp = state.connected_port.clone();
-                        *cp.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name.clone());
-                        return Ok(port_name.clone());
-                    }
-                    Err(e) => {
-                        log::warn!("Port {} AT ok but vendor detection failed: {}", port_name, e);
-                        continue;
-                    }
-                }
+        };
+        let (transport, vendor_result) = match probe_result {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Failed to open/probe {}: {}", pn, e);
+                continue;
+            }
+        };
+        match vendor_result {
+            Ok(vendor) => {
+                log::info!(
+                    "Connected to AT port: {} (vendor: {:?})",
+                    pn,
+                    vendor.vendor()
+                );
+                *transport_arc
+                    .lock()
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
+                    Some(wrap_transport(Box::new(transport), at_log.clone()));
+                *vendor_arc
+                    .lock()
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(vendor);
+                *connected_port_arc
+                    .lock()
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(pn.clone());
+                return Ok(pn);
             }
             Err(e) => {
-                log::warn!("Failed to open {}: {}", port_name, e);
+                log::warn!("Port {} AT ok but vendor detection failed: {}", pn, e);
                 continue;
             }
         }
     }
 
     Err(format!("所有候选端口均无法打开: {:?}", at_candidates))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn vendor_detection_is_not_limited_by_at_probe_timeout() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("tokio runtime");
+        let detection_ran = Arc::new(AtomicBool::new(false));
+        let detection_ran_for_task = detection_ran.clone();
+
+        let result = runtime.block_on(async move {
+            run_after_at_probe_timeout(
+                Duration::from_millis(10),
+                async { Ok::<_, String>("transport") },
+                move |transport| async move {
+                    tokio::time::sleep(Duration::from_millis(30)).await;
+                    detection_ran_for_task.store(true, Ordering::SeqCst);
+                    Ok::<_, String>((transport, "vendor"))
+                },
+            )
+            .await
+        });
+
+        assert_eq!(result.unwrap(), ("transport", "vendor"));
+        assert!(detection_ran.load(Ordering::SeqCst));
+    }
 }
 
 // ── Connection management ──
@@ -441,27 +578,32 @@ async fn connect_serial(
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
     let at_log_state = state.at_command_log.clone();
-    
+
     let port_name_clone = port_name.clone();
     tokio::task::spawn_blocking(move || {
-        let mut transport = modem_hal::transport::SerialTransport::new(&port_name_clone, baud_rate)?;
+        let mut transport =
+            modem_hal::transport::SerialTransport::new(&port_name_clone, baud_rate)?;
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("serial_{}", port_name_clone);
-        
+
         let v = match vendor {
             Ok(v) => v,
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-            Box::new(transport),
-            at_log_state,
-        ));
-        
-        log::info!("Detected vendor: {:?}", v.vendor());
-        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+        *transport_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
+            Some(wrap_transport(Box::new(transport), at_log_state));
 
-        *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *vendor_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(v);
+
+        *conn_port_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(port_name_clone.clone());
         log::info!(
             "Connected to serial port {} at {} baud",
             port_name_clone,
@@ -483,26 +625,30 @@ async fn connect_tcp(
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
     let at_log_state = state.at_command_log.clone();
-    
+
     let host_clone = host.clone();
     tokio::task::spawn_blocking(move || {
         let mut transport = modem_hal::transport::TcpTransport::new(&host_clone, port)?;
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("tcp_{}:{}", host_clone, port);
-        
+
         let v = match vendor {
             Ok(v) => v,
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-            Box::new(transport),
-            at_log_state,
-        ));
-        
+        *conn_port_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
+        *transport_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
+            Some(wrap_transport(Box::new(transport), at_log_state));
+
         log::info!("Detected vendor: {:?}", v.vendor());
-        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+        *vendor_state
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(v);
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -517,16 +663,20 @@ async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String>
     let vendor = state.vendor.clone();
     let connected_port = state.connected_port.clone();
     let data_cid = state.data_cid.clone();
-    
+
     tokio::task::spawn_blocking(move || {
-        let mut t = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut t = transport
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         if let Some(ref mut transport) = *t {
             transport.close();
         }
         *t = None;
-        *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *connected_port.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))? = 1;
+        *vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
+        *connected_port
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
+        data_cid.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
     .await
@@ -547,7 +697,8 @@ async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<Hardware
 
 #[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v.query_ip_info(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .query_ip_info(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -562,7 +713,8 @@ async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<Neighbo
 
 #[tauri::command]
 async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v.query_qos(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .query_qos(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -586,7 +738,15 @@ async fn set_apn_config(
     validate_at_string(&apn)?;
     validate_at_string(&username)?;
     validate_at_string(&password)?;
-    with_vendor!(state, |t, v| v.set_apn(t, cid, context_type, &apn, &username, &password, auth_type))
+    with_vendor!(state, |t, v| v.set_apn(
+        t,
+        cid,
+        context_type,
+        &apn,
+        &username,
+        &password,
+        auth_type
+    ))
 }
 
 #[tauri::command]
@@ -596,7 +756,11 @@ async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
-async fn set_apn_active(cid: i32, active: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_apn_active(
+    cid: i32,
+    active: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_apn_active(t, cid, active))
 }
@@ -607,14 +771,26 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        let mut cid_guard = data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut tguard = transport
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+        let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-        let cid = if *cid_guard > 0 { *cid_guard } else { 1 };
+        // Lock-free read: if it's still at the default 0 (uninitialised),
+        // pick 1; otherwise use the stored CID.
+        let cid = {
+            let cur = data_cid.load(Ordering::Relaxed);
+            if cur > 0 {
+                cur
+            } else {
+                1
+            }
+        };
         v.connect_data(t, cid)?;
-        *cid_guard = cid;
+        // Lock-free write of the same CID back so subsequent calls
+        // re-use the actually-connected one.
+        data_cid.store(cid, Ordering::Relaxed);
         Ok(())
     })
     .await
@@ -627,7 +803,12 @@ async fn get_5glan(state: tauri::State<'_, AppState>) -> Result<Vec<L5GanEntry>,
 }
 
 #[tauri::command]
-async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_5glan(
+    cid: i32,
+    enabled: bool,
+    vlan_id: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_5glan(t, cid, enabled, vlan_id))
 }
@@ -639,14 +820,20 @@ fn get_app_version() -> String {
 
 #[tauri::command]
 async fn configure_qualcomm_5glan(
-    cid: i32, apn: String, snssai: String,
-    profile_id: i32, vlan_start: i32, vlan_end: i32,
+    cid: i32,
+    apn: String,
+    snssai: String,
+    profile_id: i32,
+    vlan_start: i32,
+    vlan_end: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     validate_cid(cid)?;
     validate_at_string(&apn)?;
     validate_at_string(&snssai)?;
-    with_vendor!(state, |t, v| v.configure_qualcomm_5glan(t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end))
+    with_vendor!(state, |t, v| v.configure_qualcomm_5glan(
+        t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end
+    ))
 }
 
 #[tauri::command]
@@ -656,14 +843,17 @@ async fn enable_eth_pdu(state: tauri::State<'_, AppState>) -> Result<(), String>
 
 #[tauri::command]
 async fn connect_qualcomm_5glan(
-    rule_id: i32, cid: i32,
+    rule_id: i32,
+    cid: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     with_vendor!(state, |t, v| v.connect_qualcomm_5glan(t, rule_id, cid))
 }
 
 #[tauri::command]
-async fn query_qualcomm_5glan_status(state: tauri::State<'_, AppState>) -> Result<Qualcomm5GlanStatus, String> {
+async fn query_qualcomm_5glan_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<Qualcomm5GlanStatus, String> {
     with_vendor!(state, |t, v| v.query_qualcomm_5glan_status(t))
 }
 
@@ -673,13 +863,18 @@ async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String>
 }
 
 #[tauri::command]
-async fn set_vlan(vlan_id: i32, enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_vlan(
+    vlan_id: i32,
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     with_vendor!(state, |t, v| v.set_vlan(t, vlan_id, enabled))
 }
 
 #[tauri::command]
 async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vendor_cid!(state, |t, v, cid| v.disconnect_data(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .disconnect_data(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -731,7 +926,9 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
     validate_raw_at_command(&command)?;
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut tguard = transport
+            .lock()
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         t.send_at(&command)
     })
@@ -765,7 +962,11 @@ async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String
 }
 
 #[tauri::command]
-async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_plmn_lock(
+    plmn: String,
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_at_string(&plmn)?;
     let pw = password.ok_or_else(|| "PLMN lock requires a password (the device-specific unlock code, NOT the public default)".to_string())?;
     validate_at_string(&pw)?;
@@ -773,7 +974,10 @@ async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::Sta
 }
 
 #[tauri::command]
-async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn clear_plmn_lock(
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     let pw = password.ok_or_else(|| "PLMN unlock requires a password".to_string())?;
     validate_at_string(&pw)?;
     with_vendor!(state, |t, v| v.clear_plmn_lock(t, &pw))
@@ -782,8 +986,12 @@ async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppSt
 /// Return all AT commands logged by internal operations since last call, then clear the log.
 #[tauri::command]
 fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
-    let mut log = state.at_command_log.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-    Ok(std::mem::take(&mut *log))
+    let mut log = state
+        .at_command_log
+        .lock()
+        .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+    // drain(..) empties the VecDeque in place and yields owned elements.
+    Ok(log.drain(..).collect())
 }
 
 #[tauri::command]
@@ -895,22 +1103,32 @@ fn start_port_monitor(app_handle: tauri::AppHandle) {
                             }
                         };
 
-                        let current_names: HashSet<String> = ports.iter().map(|p| p.port_name.clone()).collect();
+                        let current_names: HashSet<String> =
+                            ports.iter().map(|p| p.port_name.clone()).collect();
 
-                        let added: Vec<String> = current_names.difference(&previous_ports).cloned().collect();
-                        let removed: Vec<String> = previous_ports.difference(&current_names).cloned().collect();
+                        let added: Vec<String> =
+                            current_names.difference(&previous_ports).cloned().collect();
+                        let removed: Vec<String> =
+                            previous_ports.difference(&current_names).cloned().collect();
                         previous_ports = current_names;
 
                         if added.is_empty() && removed.is_empty() {
                             continue;
                         }
 
-                        log::info!("[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}", added, removed);
+                        log::info!(
+                            "[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}",
+                            added,
+                            removed
+                        );
 
-                        if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
-                            added: added.clone(),
-                            removed: removed.clone(),
-                        }) {
+                        if let Err(e) = app_handle.emit(
+                            "port-changed",
+                            PortChangeEvent {
+                                added: added.clone(),
+                                removed: removed.clone(),
+                            },
+                        ) {
                             log::warn!("[USB监控] 发送事件失败: {}", e);
                         }
                     }
@@ -945,13 +1163,19 @@ fn start_connection_heartbeat(
             loop {
                 std::thread::sleep(Duration::from_secs(4));
 
-                let port_name = match connected_port.lock() {
+                // Use try_lock so heartbeat NEVER blocks IPC handlers.
+                // If another thread holds the transport/port lock (long AT command
+                // in flight, IPC handler, reconnect) we simply skip this tick and
+                // retry on the next 4 s cycle. Without try_lock the heartbeat
+                // could block 3-8 s behind a single AT command and miss the
+                // USB-disconnect window.
+                let port_name = match connected_port.try_lock() {
                     Ok(g) => g.clone(),
                     Err(_) => continue,
                 };
                 let Some(port) = port_name else { continue };
 
-                let alive = match transport.lock() {
+                let alive = match transport.try_lock() {
                     Ok(g) => match g.as_deref() {
                         Some(t) => t.is_alive(),
                         None => continue,
@@ -962,13 +1186,16 @@ fn start_connection_heartbeat(
                 if !alive {
                     log::warn!("[心跳] 检测到硬件断连，端口: {}", port);
                     // Clear connected_port immediately so subsequent ticks don't re-fire
-                    if let Ok(mut g) = connected_port.lock() {
+                    if let Ok(mut g) = connected_port.try_lock() {
                         *g = None;
                     }
-                    if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
-                        added: vec![],
-                        removed: vec![port],
-                    }) {
+                    if let Err(e) = app_handle.emit(
+                        "port-changed",
+                        PortChangeEvent {
+                            added: vec![],
+                            removed: vec![port],
+                        },
+                    ) {
                         log::warn!("[心跳] 发送断连事件失败: {}", e);
                     }
                 }
@@ -996,20 +1223,15 @@ pub fn run() {
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             vendor: Arc::new(Mutex::new(None)),
-            data_cid: Arc::new(Mutex::new(1)),
+            data_cid: Arc::new(AtomicI32::new(1)),
             connected_port: Arc::new(Mutex::new(None)),
-            at_command_log: Arc::new(Mutex::new(Vec::new())),
+            at_command_log: Arc::new(Mutex::new(VecDeque::new())),
         })
         .setup(|app| {
             // ── Build menu bar ──
-            let about = MenuItemBuilder::with_id("about", "关于 Modem Cat")
-                .build(app)?;
-            let help_menu = SubmenuBuilder::new(app, "帮助")
-                .item(&about)
-                .build()?;
-            let menu = MenuBuilder::new(app)
-                .item(&help_menu)
-                .build()?;
+            let about = MenuItemBuilder::with_id("about", "关于 Modem Cat").build(app)?;
+            let help_menu = SubmenuBuilder::new(app, "帮助").item(&about).build()?;
+            let menu = MenuBuilder::new(app).item(&help_menu).build()?;
             app.set_menu(menu)?;
             app.on_menu_event(|handle, event| {
                 if event.id() == "about" {
@@ -1026,7 +1248,8 @@ pub fn run() {
                 state.connected_port.clone(),
             );
 
-            let show_item = tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
+            let show_item =
+                tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
             let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
             let menu = tauri::menu::MenuBuilder::new(app)
                 .item(&show_item)
@@ -1044,23 +1267,25 @@ pub fn run() {
                 log::error!("Failed to set tray menu: {}", e);
             }
 
-            tray_icon.on_menu_event(|app, event| {
-                match event.id.as_ref() {
-                    "show_window" => {
-                        if let Some(window) = app.webview_windows().get("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+            tray_icon.on_menu_event(|app, event| match event.id.as_ref() {
+                "show_window" => {
+                    if let Some(window) = app.webview_windows().get("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
                     }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
                 }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
             });
 
             tray_icon.on_tray_icon_event(|tray, event| {
-                if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    ..
+                } = event
+                {
                     let app = tray.app_handle();
                     if let Some(window) = app.webview_windows().get("main") {
                         let _ = window.show();

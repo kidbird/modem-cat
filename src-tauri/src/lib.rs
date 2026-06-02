@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -16,7 +17,11 @@ use tauri::Manager;
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
-    pub data_cid: Arc<Mutex<i32>>,
+    /// Currently-connected PDP context ID. Stored as `AtomicI32` (not `Mutex`)
+    /// because every read/write is a single integer and the field is only ever
+    /// touched while transport + vendor are already held — no need to nest a
+    /// third std::Mutex and risk std::Mutex deadlock (REVIEW.md #8).
+    pub data_cid: Arc<AtomicI32>,
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
     /// Used by the USB monitor to know if the active port was unplugged.
     pub connected_port: Arc<Mutex<Option<String>>>,
@@ -96,7 +101,10 @@ macro_rules! with_vendor {
     }};
 }
 
-/// Same as `with_vendor!` but also locks `data_cid` and binds it as `$c`.
+/// Same as `with_vendor!` but also reads `data_cid` (lock-free via AtomicI32)
+/// and binds it as `$c`. The atomic means the macro no longer holds a third
+/// Mutex while transport + vendor are held, so connect_data can no longer
+/// deadlock with any concurrent IPC handler that touches data_cid.
 macro_rules! with_vendor_cid {
     ($state:expr, |$t:ident, $v:ident, $c:ident| $body:expr) => {{
         let transport = $state.transport.clone();
@@ -107,7 +115,9 @@ macro_rules! with_vendor_cid {
             let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-            let $c = *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            // Lock-free load: AtomicI32 needs no Mutex, so we never nest
+            // a third lock under transport + vendor (REVIEW.md #8).
+            let $c = data_cid.load(Ordering::Relaxed);
             $body
         })
         .await
@@ -365,6 +375,12 @@ fn is_at_port(
     false
 }
 
+/// Per-port timeout for the AT probe. The probe does open() + send_at("AT") +
+/// wait for OK; an unresponsive or busy port can hang serialport::open() for
+/// many seconds, so cap each probe at 2 s. Total wall time is ~2 s for N
+/// ports (parallel) vs the old ~3-8 s × N (serial) — REVIEW.md #15.
+const AT_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Auto-detect and connect to an AT port.
 /// Scans all port types (not just USB) and uses WMI info on Windows for
 /// reliable identification, matching the logic in `list_ports`.
@@ -395,50 +411,96 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
     log::info!("AT candidates: {:?}", at_candidates);
 
+    // Parallel probe: spawn one tokio task per candidate. Each task wraps a
+    // blocking serial open + AT handshake in a 2 s timeout. We then await
+    // ALL of them and take the first OK — wall time ≈ 2 s (worst case
+    // slowest port) instead of N × 3-8 s.
+    let mut handles = Vec::with_capacity(at_candidates.len());
+    for port_name in &at_candidates {
+        let pn = port_name.clone();
+        log::info!("Probing port: {}", pn);
+        handles.push(tokio::spawn(async move {
+            // `pn_block` is moved into spawn_blocking; the outer `pn` lives
+            // through the async block so we can return it in the tuple below.
+            let pn_block = pn.clone();
+            let probe = tokio::task::spawn_blocking(move || -> Result<
+                (modem_hal::transport::SerialTransport, ModemFactoryProbe),
+                String,
+            > {
+                let mut transport =
+                    modem_hal::transport::SerialTransport::new(&pn_block, 115200)?;
+                let response = transport.send_at("AT");
+                match response {
+                    Ok(r) if r.trim().ends_with("OK") => {
+                        let vendor_result = ModemFactory::create(&mut transport);
+                        Ok((transport, vendor_result))
+                    }
+                    Ok(r) => Err(format!("Port {} responded but not OK: {}", pn_block, r)),
+                    Err(e) => Err(format!("Port {} AT probe failed: {}", pn_block, e)),
+                }
+            });
+            (pn, tokio::time::timeout(AT_PROBE_TIMEOUT, probe).await)
+        }));
+    }
+
     let transport_arc = state.transport.clone();
     let vendor_arc = state.vendor.clone();
-    for port_name in &at_candidates {
-        log::info!("Probing port: {}", port_name);
+    let at_log = state.at_command_log.clone();
+    let connected_port_arc = state.connected_port.clone();
 
-        let pn = port_name.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            // Open, send AT, verify OK, detect vendor, and return both
-            let mut transport = modem_hal::transport::SerialTransport::new(&pn, 115200)?;
-            let response = transport.send_at("AT");
-            match response {
-                Ok(r) if r.trim().ends_with("OK") => {
-                    let vendor_result = ModemFactory::create(&mut transport);
-                    Ok((transport, vendor_result))
-                }
-                Ok(r) => Err(format!("Port {} responded but not OK: {}", pn, r)),
-                Err(e) => Err(format!("Port {} AT probe failed: {}", pn, e)),
+    // Collect every probe's result; pick the first successful (transport +
+    // vendor) pair. Losers' transports drop naturally when their tasks end.
+    for h in handles {
+        let (pn, timed) = match h.await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Probe task join error: {}", e);
+                continue;
             }
-        })
-        .await
-        .map_err(|e| format!("Task error: {}", e))?;
-
-        match result {
-            Ok((transport, vendor_result)) => {
-                match vendor_result {
-                    Ok(vendor) => {
-                        log::info!("Connected to AT port: {} (vendor: {:?})", port_name, vendor.vendor());
-                        *transport_arc.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-                            Box::new(transport),
-                            state.at_command_log.clone(),
-                        ));
-                        *vendor_arc.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(vendor);
-                        let cp = state.connected_port.clone();
-                        *cp.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name.clone());
-                        return Ok(port_name.clone());
-                    }
-                    Err(e) => {
-                        log::warn!("Port {} AT ok but vendor detection failed: {}", port_name, e);
-                        continue;
-                    }
+        };
+        let probe_result = match timed {
+            Ok(join_res) => match join_res {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("Port {} probe task panicked: {}", pn, e);
+                    continue;
                 }
+            },
+            Err(_) => {
+                log::warn!("Port {} probe timed out after {:?}", pn, AT_PROBE_TIMEOUT);
+                continue;
+            }
+        };
+        let (transport, vendor_result) = match probe_result {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Failed to open/probe {}: {}", pn, e);
+                continue;
+            }
+        };
+        match vendor_result {
+            Ok(vendor) => {
+                log::info!(
+                    "Connected to AT port: {} (vendor: {:?})",
+                    pn,
+                    vendor.vendor()
+                );
+                *transport_arc
+                    .lock()
+                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
+                    Box::new(transport),
+                    at_log.clone(),
+                ));
+                *vendor_arc
+                    .lock()
+                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(vendor);
+                *connected_port_arc
+                    .lock()
+                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(pn.clone());
+                return Ok(pn);
             }
             Err(e) => {
-                log::warn!("Failed to open {}: {}", port_name, e);
+                log::warn!("Port {} AT ok but vendor detection failed: {}", pn, e);
                 continue;
             }
         }
@@ -446,6 +508,12 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
     Err(format!("所有候选端口均无法打开: {:?}", at_candidates))
 }
+
+/// Alias so the inner probe closure can name its return type.
+type ModemFactoryProbe = Result<
+    Box<dyn modem_hal::ModemVendor>,
+    String,
+>;
 
 // ── Connection management ──
 
@@ -544,7 +612,7 @@ async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String>
         *t = None;
         *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *connected_port.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))? = 1;
+        data_cid.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
     .await
@@ -627,12 +695,18 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
-        let mut cid_guard = data_cid.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-        let cid = if *cid_guard > 0 { *cid_guard } else { 1 };
+        // Lock-free read: if it's still at the default 0 (uninitialised),
+        // pick 1; otherwise use the stored CID.
+        let cid = {
+            let cur = data_cid.load(Ordering::Relaxed);
+            if cur > 0 { cur } else { 1 }
+        };
         v.connect_data(t, cid)?;
-        *cid_guard = cid;
+        // Lock-free write of the same CID back so subsequent calls
+        // re-use the actually-connected one.
+        data_cid.store(cid, Ordering::Relaxed);
         Ok(())
     })
     .await
@@ -1021,7 +1095,7 @@ pub fn run() {
         .manage(AppState {
             transport: Arc::new(Mutex::new(None)),
             vendor: Arc::new(Mutex::new(None)),
-            data_cid: Arc::new(Mutex::new(1)),
+            data_cid: Arc::new(AtomicI32::new(1)),
             connected_port: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
         })

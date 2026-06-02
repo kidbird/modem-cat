@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> 最近更新：2026-06-02（前端拆分落实 / commands.rs 删除 / heartbeat try_lock / 6 项 review 修复 / blue-light 主题 / 并行 probe）
+> 最近更新：2026-06-02（删 monitor.rs 孤儿 / commands.rs 早删 / heartbeat try_lock / 6 项 review 修复 / blue-light 主题 / 并行 probe）
 > 详细文档见 [docs/](docs/)，尤其是 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/CODE_MAP.md](docs/CODE_MAP.md)、[docs/CALL_FLOW.md](docs/CALL_FLOW.md)、[docs/REVIEW.md](docs/REVIEW.md)。
 
 ## Project Overview
@@ -41,12 +41,11 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件，�
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← ~1367 行: Tauri Builder 装配 + AppState + LoggingTransport (VecDeque+try_lock) + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏
+   lib.rs       ← ~1367 行: Tauri Builder 装配 + AppState + LoggingTransport (VecDeque+try_lock) + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏 + start_port_monitor
    ports.rs     ← 串口列表 + Windows 注册表友好名
-   monitor.rs   ← start_port_monitor 后台线程 (孤儿：lib.rs:1085 有重复版，待清理)
    main.rs      ← 入口
 
-> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删除（commit 0d4853e）。
+> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删；`monitor.rs` (2.6K 孤儿，与 lib.rs:1085 重复版) 2026-06-02 已删。
         │
 modem-hal/src/                                  ← 共享 HAL crate
    modem_vendor.rs    ← ModemVendor trait (**62 个方法**)
@@ -63,9 +62,9 @@ modem-hal/src/                                  ← 共享 HAL crate
 ### 关键运行模式
 
 - **with_vendor! 宏**（lib.rs:64）：所有 IPC handler 都用它消除 lock/spawn_blocking 样板
-- **LoggingTransport 装饰器**（lib.rs:33）：包装真实 transport，旁路记录 1000 条 AT 日志
-- **start_port_monitor**（lib.rs:869 **与** monitor.rs:13 重复，REVIEW 待清理）
-- **start_connection_heartbeat**（lib.rs:929）：4s 间隔，硬件拔插通过 `port-changed` 事件通知前端
+- **LoggingTransport 装饰器**（lib.rs:33）：包装真实 transport，旁路记录 1000 条 AT 日志（VecDeque 环形 + try_lock + log-after-send）
+- **start_port_monitor**（lib.rs:1085）：2s 轮询 `serialport::available_ports()` 差集 → emit `port-changed`（原 monitor.rs 副本已删，2026-06-02）
+- **start_connection_heartbeat**（lib.rs:1155）：4s 间隔，try_lock 不阻塞 IPC，硬件拔插通过 `port-changed` 事件通知前端
 
 ### Frontend（`src/desktop/`）
 
@@ -99,7 +98,7 @@ P0 5/5 ✅ 已修（详见 [REVIEW.md](docs/REVIEW.md)）：
 4. ✅ PLMN 密码用户必传 + 后端 `validate_at_string`（上游 2026-06-01）
 5. ✅ heartbeat 改 `try_lock()`，不阻塞 IPC（commit 0d4853e）
 
-P1/P2 进度：#6 #8 #9 #12 #15 #16 #18 #19 #20 已修（commits 4f2fb83 / 0d4853e / 6c9765a / 63efedd）。剩余 #7（is_alive macOS 暂缓） / #10 #11（TdTech 暂缓） / #13 #14（parser 测试/helper） / #17（thiserror 迁移）。
+P1/P2 进度：#6 #8 #9 #12 #15 #16 #18 #19 #20 已修。剩余 #7（is_alive macOS 暂缓） / #10 #11（TdTech 暂缓） / #13 #14（parser 测试/helper） / #17（thiserror 迁移）。
 
 ## Key Conventions
 

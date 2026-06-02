@@ -294,7 +294,7 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
         }
       })
 
-  注：lib.rs:869 与 monitor.rs:13 是同一函数的两个副本（REVIEW 待清理）
+  注：原 monitor.rs:13 与 lib.rs:1085 重复，已删（2026-06-02）
 ```
 
 ### 11.2 `connection-heartbeat`（4s 间隔）

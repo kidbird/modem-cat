@@ -25,8 +25,8 @@
 │   main.rs        ← 入口（设置 NO_PROXY）              │
 │   lib.rs         ← Tauri Builder 装配 + AppState      │
 │                     + LoggingTransport + 52 IPC cmd   │
+│                     + start_port_monitor (lib.rs:1085) │
 │   ports.rs       ← 串口列表探测 (Windows 注册表)       │
-│   monitor.rs     ← start_port_monitor 后台线程         │
 │                                                      │
 │  (历史) commands.rs (504 行) 2026-06-02 已删除        │
 │   —— 旧 IPC 层，0 caller，.unwrap() 64 处             │
@@ -136,12 +136,12 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | ~1367 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器（VecDeque 环形 + try_lock + log-after-send）；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（**与 monitor.rs 重复**，待清理） |
+<<<<<<< HEAD
+| `lib.rs` | ~1367 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器（VecDeque 环形 + try_lock + log-after-send）；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（lib.rs:1085） |
 | `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
-| `monitor.rs` | 2.6K | `start_port_monitor` 独立线程（2s 轮询） |
 | `main.rs` | 0.3K | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
 
-> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删除（见 [REVIEW.md#1](REVIEW.md) 状态 `✅ FIXED`）。
+> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删；`monitor.rs` (2.6K 孤儿，与 lib.rs:1085 重复版) 2026-06-02 已删。
 
 **AppState 字段**（lib.rs:15-25）：
 
@@ -254,8 +254,8 @@ pub struct AppState {
 
 | 线程 | 文件 | 间隔 | 锁策略 | 作用 |
 |---|---|---|---|---|
-| `usb-monitor` | monitor.rs:13 / lib.rs:869（**重复**） | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
-| `connection-heartbeat` | lib.rs:929 | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
+| `usb-monitor` | lib.rs:1085 | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
+| `connection-heartbeat` | lib.rs:1155 | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
 
 > 2026-06-02 修复：heartbeat 原用 `.lock()` 阻塞等待，与 IPC handler 抢同一把 std Mutex，单条 AT 命令（3-8s）期间会阻塞 4-12s，USB 拔插感知延迟。改为 `.try_lock()` 拿不到直接 `continue`（下一 tick 再试），不再阻塞 IPC。
 

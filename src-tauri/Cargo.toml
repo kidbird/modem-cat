@@ -1,6 +1,6 @@
 [package]
 name = "modem-cat"
-version = "0.2.1"
+version = "0.2.3"
 description = "5G Modem调试工具"
 authors = ["modem-cat"]
 edition = "2021"

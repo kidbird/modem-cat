@@ -29,6 +29,12 @@ pub fn validate_at_string(s: &str) -> Result<(), String> {
                 i
             ));
         }
+        if ch == ';' {
+            return Err(format!(
+                "Invalid character at position {}: semicolon not allowed in AT parameter",
+                i
+            ));
+        }
         if ch.is_control() && ch != '\t' {
             return Err(format!(
                 "Invalid character at position {}: control character not allowed",
@@ -158,6 +164,7 @@ mod tests {
     fn at_parameter_rejects_quote_escape() {
         assert!(validate_at_string(r#"abc"def"#).is_err());
         assert!(validate_at_string("abc\r\nAT+CFUN=1,1").is_err());
+        assert!(validate_at_string("cmnet;AT+CFUN=1,1").is_err());
         assert!(validate_at_string("cmnet").is_ok());
     }
 }

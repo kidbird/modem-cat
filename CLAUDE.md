@@ -41,11 +41,11 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件，�
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← 1142 行: Tauri Builder 装配 + AppState + LoggingTransport + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏
-   commands.rs  ← 504 行死代码 (REVIEW.md#1)：30 个 #[tauri::command] + 64 处 .unwrap()，编译进 binary 但 0 caller
+   lib.rs       ← Tauri Builder 装配 + AppState + LoggingTransport + **52 个 IPC**（invoke_handler 注册）+ with_vendor! 宏 + start_port_monitor
    ports.rs     ← 串口列表 + Windows 注册表友好名
-   monitor.rs   ← start_port_monitor 后台线程
    main.rs      ← 入口
+
+> 历史：`commands.rs` (504 行死代码) 与 `monitor.rs` (孤儿重复版 start_port_monitor) 均已删除。
         │
 modem-hal/src/                                  ← 共享 HAL crate
    modem_vendor.rs    ← ModemVendor trait (**62 个方法**)
@@ -63,7 +63,7 @@ modem-hal/src/                                  ← 共享 HAL crate
 
 - **with_vendor! 宏**（lib.rs:64）：所有 IPC handler 都用它消除 lock/spawn_blocking 样板
 - **LoggingTransport 装饰器**（lib.rs:33）：包装真实 transport，旁路记录 1000 条 AT 日志
-- **start_port_monitor**（lib.rs:869 **与** monitor.rs:13 重复，REVIEW 待清理）
+- **start_port_monitor**（lib.rs）：2s 轮询串口变化，原 `monitor.rs` 重复孤儿文件已删除
 - **start_connection_heartbeat**（lib.rs:929）：4s 间隔，硬件拔插通过 `port-changed` 事件通知前端
 
 ### Frontend（`src/desktop/`）

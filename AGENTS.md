@@ -36,11 +36,11 @@ src/desktop/{index.html, app.js, styles.css}    ← 前端（已拆 3 文件）
      Tauri IPC (invoke + listen)
         │
 src-tauri/src/
-   lib.rs       ← 1142 行: Tauri Builder 装配 + AppState + LoggingTransport + 52 IPC（invoke_handler 注册）+ with_vendor! 宏
-   commands.rs  ← 504 行死代码（30 个 #[tauri::command]，0 caller，64 处 .unwrap()，REVIEW.md#1）
+   lib.rs       ← Tauri Builder 装配 + AppState + LoggingTransport + 52 IPC（invoke_handler 注册）+ with_vendor! 宏 + start_port_monitor
    ports.rs     ← 串口列表 + Windows 注册表
-   monitor.rs   ← start_port_monitor 后台线程
    main.rs      ← 入口
+
+> 历史：`commands.rs`（504 行死代码）与 `monitor.rs`（孤儿重复版 start_port_monitor）均已删除。
         │
 modem-hal/src/                                  ← 共享 HAL crate
         │
@@ -57,9 +57,8 @@ modem-hal/src/                                  ← 共享 HAL crate
 ### Tauri Backend（`src-tauri/src/`）
 
 - `lib.rs` — 全部 52 个 `#[tauri::command]` handlers（invoke_handler! 注册）+ `AppState`（transport, vendor, data_cid, connected_port, at_command_log）+ `LoggingTransport` 装饰器
-- `commands.rs` — **504 行死代码**（30 个旧 IPC，0 caller，64 处 `.unwrap()`，Mutex 中毒即 panic；应删除，详见 REVIEW.md#1）
 - `ports.rs` — 串口列表探测
-- `monitor.rs` — start_port_monitor 后台线程
+- `commands.rs` / `monitor.rs` — 历史孤儿文件，均已删除
 
 ### modem-hal（`modem-hal/src/`）
 

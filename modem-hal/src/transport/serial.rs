@@ -172,7 +172,24 @@ impl AtTransport for SerialTransport {
 
     fn is_alive(&self) -> bool {
         // bytes_to_read() is a lightweight ioctl that fails immediately if the
-        // underlying USB device has been physically removed.
-        self.port.bytes_to_read().is_ok()
+        // underlying USB device has been physically removed on Windows.
+        if !self.port.bytes_to_read().is_ok() {
+            return false;
+        }
+
+        // On Linux, ioctl FIONREAD might still succeed (returning Ok(0)) for up to
+        // 20s after a USB-serial adapter is unplugged due to driver-level caching.
+        // Verifying that the serial device file still exists on the filesystem
+        // provides near-instantaneous disconnection detection.
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(name) = self.port.name() {
+                if !std::path::Path::new(&name).exists() {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 }

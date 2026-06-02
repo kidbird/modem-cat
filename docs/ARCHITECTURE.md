@@ -25,11 +25,13 @@
 │   main.rs        ← 入口（设置 NO_PROXY）              │
 │   lib.rs         ← Tauri Builder 装配 + AppState      │
 │                     + LoggingTransport + 52 IPC cmd   │
+│                     + start_port_monitor              │
 │   ports.rs       ← 串口列表探测 (Windows 注册表)       │
-│   monitor.rs     ← start_port_monitor 后台线程         │
 │                                                      │
 │  (历史) commands.rs (504 行) 2026-06-02 已删除        │
 │   —— 旧 IPC 层，0 caller，.unwrap() 64 处             │
+│  (历史) monitor.rs 2026-06-02 已删除                  │
+│   —— start_port_monitor 重复孤儿文件                  │
 └──────────────────────────────────────────────────────┘
                        │ Box<dyn ModemVendor>
                        ▼
@@ -136,12 +138,11 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | ~1140 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（**与 monitor.rs 重复**） |
+| `lib.rs` | ~1140 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor` |
 | `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
-| `monitor.rs` | 2.6K | `start_port_monitor` 独立线程（2s 轮询） |
 | `main.rs` | 0.3K | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
 
-> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删除（见 [REVIEW.md#1](REVIEW.md) 状态 `✅ FIXED`）。
+> 历史：`commands.rs` (504 行死代码) 与 `monitor.rs` (重复孤儿版 `start_port_monitor`) 已删除。
 
 **AppState 字段**（lib.rs:15-25）：
 
@@ -151,7 +152,7 @@ pub struct AppState {
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,      // 厂商驱动
     pub data_cid: Arc<Mutex<i32>>,                              // 当前 PDP CID
     pub connected_port: Arc<Mutex<Option<String>>>,             // 已连接串口名（用于 USB 拔插判断）
-    pub at_command_log: Arc<Mutex<Vec<String>>>,                // 1000 条环形日志（待改 VecDeque）
+    pub at_command_log: Arc<Mutex<VecDeque<String>>>,           // 1000 条环形日志
 }
 ```
 
@@ -254,7 +255,7 @@ pub struct AppState {
 
 | 线程 | 文件 | 间隔 | 锁策略 | 作用 |
 |---|---|---|---|---|
-| `usb-monitor` | monitor.rs:13 / lib.rs:869（**重复**） | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
+| `usb-monitor` | lib.rs | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
 | `connection-heartbeat` | lib.rs:929 | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
 
 > 2026-06-02 修复：heartbeat 原用 `.lock()` 阻塞等待，与 IPC handler 抢同一把 std Mutex，单条 AT 命令（3-8s）期间会阻塞 4-12s，USB 拔插感知延迟。改为 `.try_lock()` 拿不到直接 `continue`（下一 tick 再试），不再阻塞 IPC。
@@ -288,7 +289,7 @@ pub trait AtTransport: Send {
 - Tauri v2 + `withGlobalTauri: true`：前端直接用 `window.__TAURI__.core.invoke`
 - 系统托盘：关闭窗口隐藏到托盘（`on_window_event` 拦截）；右键菜单"控制面板 / 退出"
 - 启动时自动扫描 AT 端口并连接（`doInit → toggleConnection → auto_connect_at`）
-- 端口变化：USB 拔插 4s 内通过 `port-changed` 事件通知前端（Windows 可靠，macOS 可能更慢，见 REVIEW.md#7）
+- 端口变化：USB 拔插 4s 内通过 `port-changed` 事件通知前端（Windows 可靠；Linux 额外检查设备路径存在性，见 REVIEW.md#7）
 
 ## 9. 添加新 vendor 的步骤
 

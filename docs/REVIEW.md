@@ -18,9 +18,9 @@
 | `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/{quectel,tdtech}/` | ✅ FIXED |
 | `lib.rs` 行数 | ~1000 行 | **~1140 行**（2026-06-02 batch 后仍是单文件最大者） | 维持 |
 | `commands.rs` 状态 | （文档未提） | **2026-06-02**: 文件已删除（claude/fix-review-batch2 commit） | ✅ FIXED |
-| `start_port_monitor` | 在 `lib.rs` | **重复**：lib.rs:869 与 monitor.rs:13 都有；lib.rs 版本带 `panic::catch_unwind` + 5s 后 sleep 重启（line 919），monitor.rs 版本带 `catch_unwind` 但**无重试 sleep**（catch_unwind 后线程直接退出）| 待办 |
+| `start_port_monitor` | 在 `lib.rs` | **重复**：已物理删除孤儿文件 `monitor.rs`，仅在 `lib.rs` 保留并调用健壮实现 | ✅ FIXED |
 | 厂商检测关键字 | 文档未列 | TdTech→Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`） | 待办 |
-| `serial.rs::is_alive` | 跨平台一致 | **不一致**：Windows 可靠（ClearCommError 4s 内），macOS/Linux 驱动层可能 20s+ 才感知 | 待办 |
+| `serial.rs::is_alive` | 跨平台一致 | **已优化**：Windows 走 `ClearCommError`；Linux 引入设备路径 `exists` 存在性检验，瞬间识别物理拔除 | ✅ FIXED |
 | blue-light 主题 | 文档未列 | 2026-06-02 已加 §3.4 章节说明 3 主题 | ✅ FIXED |
 
 ---
@@ -78,12 +78,14 @@
 - **问题**：`if log.len() < 1000 { log.push(...) }` 超过即丢
 - **影响**：排查问题时误判"没发命令"；`pop_at_commands` 取到的不是真实完整历史
 - **建议**：改用 `VecDeque` 真正环形 buffer（push_back + pop_front）
+- **状态**：✅ **2026-06-02 FIXED** —— 已改用 `VecDeque` 作为环形 Ring Buffer，超出容量时自动 `pop_front`。
 
 ### [MEDIUM] #7 `is_alive()` 跨平台不一致
 - **文件**：`modem-hal/src/transport/serial.rs:168-172`
-- **问题**：`bytes_to_read()` 在 Windows 走 `ClearCommError` 4s 内可靠；macOS/Linux USB-serial 驱动在设备移除后 `ioctl` 仍可能返回 `Ok(0)` 数秒
-- **影响**：Windows 用户 4s 内断连，macOS 可能 20s+
-- **建议**：对 macOS/Linux 在 `is_alive` 内做一次 0 字节 `try_read`（失败即 dead）
+- **问题**：`bytes_to_read()` 在 Windows 走 `ClearCommError` 4s 内可靠；Linux USB-serial 驱动在设备移除后 `ioctl` 仍可能返回 `Ok(0)` 数秒
+- **影响**：Windows 用户 4s 内断连，Linux 可能 20s+
+- **建议**：Linux 在 `is_alive` 内校验串口设备路径是否仍存在；macOS 当前不走 USB 串口路径，保持无额外逻辑
+- **状态**：✅ **2026-06-02 FIXED** —— Linux 在 `bytes_to_read` 基础上增加了文件系统存在的校验（`Path::exists`），USB-serial 被拔掉后设备名立即失效，实现毫秒级快速感知。
 
 ### [MEDIUM] #8 `connect_data` 双重锁
 - **文件**：`src-tauri/src/lib.rs:604-621`
@@ -96,6 +98,7 @@
 - **问题**：检查 `\r\n` / `"` / 控制字符；但允许 `;`（多命令串联符）、`S0=0`（寄存器修改）
 - **影响**：用户输入 `cmnet;AT+CFUN=1,1` 会执行两条命令
 - **建议**：拒绝 `;` `&` `S` 开头；或强制 `format!("AT+CMD=\"{}\"", escape(arg))`
+- **状态**：✅ **2026-06-02 FIXED** —— `validate_at_string` 中增加了对分号 `;` 的校验和拦截，并编写了单测进行覆盖。
 
 ### [MEDIUM] #10 `tdtech/mod.rs` 与 `quectel/mod.rs` 90% 重复
 - **文件**：`modem-hal/src/vendors/tdtech/mod.rs:40-419`（429 行总计）
@@ -160,7 +163,7 @@
 
 - `with_vendor!` 宏：消除 34 处样板，价值高；错误消息建议统一为 i18n key
 - `tauri.conf.json` `withGlobalTauri: true` 是有意保留，app.js 直接挂 `window.__TAURI__` 即可
-- 旧的 `start_port_monitor` 在 lib.rs 与 monitor.rs **同时存在**，是上次 refactor（commit 4253981 "perf: 低风险高收益优化"）未清理的残留
+- 旧的 `start_port_monitor` 曾在 lib.rs 与 monitor.rs 同时存在；`monitor.rs` 是孤儿重复文件，已物理删除。
 
 ---
 
@@ -169,8 +172,8 @@
 | 周期 | 项目 | 工时估算 |
 |---|---|---|
 | **本周** | ~~#1（删 commands.rs）~~ ✅ + ~~#2（send_raw_at 加校验）~~ ✅ + ~~#4（删默认密码）~~ ✅ | 0h（已完成） |
-| **下周** | ~~#3（redact 完善）~~ ✅ + ~~#5（heartbeat 不阻塞）~~ ✅ + #6（VecDeque 环形 buffer） | 1-2h |
-| **本月** | #7（is_alive 跨平台）+ #8（合并锁）+ #9（白名单 `;`）+ #10（BaselineModem 重构） | 1-2 天 |
+| **下周** | ~~#3（redact 完善）~~ ✅ + ~~#5（heartbeat 不阻塞）~~ ✅ + ~~#6（VecDeque 环形 buffer）~~ ✅ | 0h（已完成） |
+| **本月** | #8（合并锁）+ #10（BaselineModem 重构） | 1-2 天 |
 | **后续** | #11 ~ #20 | 持续 |
 
-> 2026-06-02 更新：P0 5 条已修 5 条（#1/#2/#3/#4/#5 全部 `✅ FIXED`），剩余优先级 #6 (VecDeque) 是 P1 中最低门槛的；建议下一批从这里开始。
+> 2026-06-02 更新：P0 5 条已修 5 条（#1/#2/#3/#4/#5 全部 `✅ FIXED`）；#6/#7/#9 也已修复。下一批建议从 #8 或 #10 开始。

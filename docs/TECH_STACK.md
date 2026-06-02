@@ -43,7 +43,7 @@ src/desktop/{index.html, app.js, styles.css}
         |
      invoke() / listen()
         |
-src-tauri/src/{lib.rs, commands.rs(死), ports.rs, monitor.rs}
+src-tauri/src/{lib.rs, ports.rs, main.rs}
         |
    Box<dyn ModemVendor>  (lib.rs:AppState.vendor)
         |

@@ -149,7 +149,8 @@ mod tests {
         assert!(validate_raw_at_command("ATS0=0").is_err());
         assert!(validate_raw_at_command("ATS3=13").is_err());
         assert!(validate_raw_at_command("ats13=1").is_err()); // case-insensitive
-                                                              // S-registers READS are still allowed (no '=')
+
+        // S-registers READS are still allowed (no '=')
         assert!(validate_raw_at_command("ATS0?").is_ok());
         assert!(validate_raw_at_command("ATS5").is_ok());
     }

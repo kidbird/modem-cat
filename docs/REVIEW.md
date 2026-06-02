@@ -78,6 +78,7 @@
 - **问题**：`if log.len() < 1000 { log.push(...) }` 超过即丢
 - **影响**：排查问题时误判"没发命令"；`pop_at_commands` 取到的不是真实完整历史
 - **建议**：改用 `VecDeque` 真正环形 buffer（push_back + pop_front）
+- **状态**：✅ **2026-06-02 FIXED** —— `Vec<String>` 改 `VecDeque<String>`，`AT_LOG_CAPACITY = 1000` 上限 + `pop_front` 真环形。`pop_at_commands` 改 `drain(..).collect()`。
 
 ### [MEDIUM] #7 `is_alive()` 跨平台不一致
 - **文件**：`modem-hal/src/transport/serial.rs:168-172`
@@ -90,12 +91,15 @@
 - **问题**：`with_vendor_cid!` 宏外额外 `data_cid.lock()`，与其它命令共享同一把 std Mutex
 - **影响**：若某命令在持锁期间再调 `connect_data`（嵌套 IPC），std Mutex 死锁
 - **建议**：合并 `data_cid` 进 `AppState` 复合结构，或改用 `parking_lot::Mutex`（非可中毒）
+- **状态**：✅ **2026-06-02 FIXED** —— `data_cid: Arc<Mutex<i32>>` 改 `Arc<AtomicI32>`。`with_vendor_cid!` 宏 / `connect_data` / `disconnect` 三处改 `load(Relaxed)` / `store(Relaxed)`。嵌套 IPC 不再可能死锁。
 
 ### [MEDIUM] #9 `validate_at_string` 未覆盖多命令串联
 - **文件**：`modem-hal/src/lib.rs:18-40`
 - **问题**：检查 `\r\n` / `"` / 控制字符；但允许 `;`（多命令串联符）、`S0=0`（寄存器修改）
 - **影响**：用户输入 `cmnet;AT+CFUN=1,1` 会执行两条命令
 - **建议**：拒绝 `;` `&` `S` 开头；或强制 `format!("AT+CMD=\"{}\"", escape(arg))`
+- **状态**：✅ **2026-06-02 FIXED**（`validate_raw_at_command` 路径）—— `;` 早被拒；`&`（Hayes `AT&F` / `AT&W` 工厂重置）新拒；`ATSn=value` 多位 S-register 写也新拒。`S-register` 读（`ATS0?` / `ATS5`）仍允许。新增测试 `raw_at_command_rejects_hayes_amp_and_s_register`。
+- **遗留**：`validate_at_string`（参数校验）仍允许 `;` —— 因为 `;` 走的是 `format!()` 进引号路径，不构成命令串联。`U+2028 LINE SEPARATOR` / `U+2029 PARAGRAPH SEPARATOR` (Zl/Zp) 仍未被 `is_control()` 捕获（仅 Cc 类），后续 wt 处理。
 
 ### [MEDIUM] #10 `tdtech/mod.rs` 与 `quectel/mod.rs` 90% 重复
 - **文件**：`modem-hal/src/vendors/tdtech/mod.rs:40-419`（429 行总计）
@@ -116,6 +120,7 @@
 ### [LOW] #12 `QuectelChip` 未来加变体会引发连锁 panic
 - **文件**：`modem-hal/src/vendors/quectel/mod.rs` 17 处 `match self.chip`
 - **建议**：加 `#[non_exhaustive]`，每个 match 末尾加 `_ => return Err(...)`
+- **状态**：✅ **2026-06-02 FIXED** —— `pub enum QuectelChip` 加 `#[non_exhaustive]`。下游 crate 不再能 exhaustive-match；同 crate 内的 match 加新 variant 时编译器会强制提示。
 
 ### [LOW] #13 `parser.rs` 80+ 解析函数无单元测试
 - **文件**：`modem-hal/src/vendors/quectel/parser.rs` (1260 行)
@@ -130,10 +135,13 @@
 - **文件**：`src-tauri/src/lib.rs:353-429`（函数定义 353-；循环体 ~381-426）
 - **问题**：循环里 `spawn_blocking` 同步等待，N 端口 × 3-8s = 3N~8s，期间 UI 卡住
 - **建议**：`futures::future::select_all` 并行 probe；或加 `tokio::time::timeout(2s)`
+- **状态**：✅ **2026-06-02 FIXED**（commits 63efedd + fcdd5c6）—— N 个端口并行 `tokio::spawn` probe + `tokio::time::timeout(2s)` 兜底。启动 3 端口从 9-24s 降到 ~2s。`fcdd5c6` 把 vendor detection 移出 timeout 防止误切。
+- **遗留**：vendor detection 自身无上限（`ModemFactory::create` 内部），若某型号 SKU 检测 hang 会阻塞拿 first-success 路径。
 
 ### [LOW] #16 `serial.rs` drain 阶段无 max-loop 保护
 - **文件**：`modem-hal/src/transport/serial.rs:138-145`
 - **建议**：加 `for _ in 0..64 { ... }` 限制循环次数
+- **状态**：✅ **2026-06-02 FIXED** —— `for _ in 0..MAX_DRAIN_READS`（MAX_DRAIN_READS = 64，64 × 4096 B = 256 KB 远超合理 stale buffer）。
 
 ### [LOW] #17 `Result<T, String>` 迁移到 `thiserror`
 - **文件**：`modem-hal/` (166 处) + `src-tauri/` (78 处) = **244 处**签名（`grep -rE "Result<[^>]+, *String>" modem-hal/src/ src-tauri/src/ | wc -l`）
@@ -143,16 +151,19 @@
 ### [LOW] #18 `LoggingTransport` 锁覆盖 send_at 失败
 - **文件**：`src-tauri/src/lib.rs:33-48`
 - **建议**：把 `log.push` 移到 `inner.send_at` 返回 `Ok` 之后
+- **状态**：✅ **2026-06-02 FIXED** —— `send_at` 先调用 `inner.send_at`，结果拿到后再 push 日志。失败时条目附 `⟵ error` 信息。锁改 `try_lock` 永不阻塞 AT 路径。
 
 ### [LOW] #19 napi-feature 是死代码
 - **文件**：`modem-hal/src/lib.rs:54-121`
 - **问题**：`#[napi]` 暴露的 `ModemHandle` 在 `feature = "napi-feature"` 下，但 `Cargo.toml` 未声明此 feature
 - **建议**：删除，或在 `Cargo.toml` 启用并补 README
+- **状态**：✅ **2026-06-02 FIXED** —— `napi_exports` 模块（70 行）删除；`Cargo.toml` 移除 `napi` / `napi-derive` 依赖 + `napi-feature` feature + `napi-build` build-dep；`build.rs` 简化为 `fn main() {}`；`types.rs` 2 个 `#[cfg_attr(feature = "napi-feature", ...)]` 删除。`Cargo.lock` -83 行。
 
 ### [LOW] #20 `commands.rs` vs `lib.rs` 锁顺序不一致
 - **文件**：`src-tauri/src/commands.rs:47` vs `lib.rs:91`
 - **影响**：删除 commands.rs 后此问题消失
 - **建议**：同 #1
+- **状态**：✅ **2026-06-02 FIXED** —— 随 #1 `commands.rs` 删除而消失。`src-tauri/src/commands.rs` 已不存在。
 
 ---
 
@@ -166,11 +177,14 @@
 
 ## 5. 修复优先级建议
 
+> 2026-06-02 更新：P0 5 条 + 9 条 P1/P2 已修（#6/#8/#9 + #12/#15/#16/#18/#19/#20）。剩余 #7（macOS 暂缓）、#10/#11（TdTech 暂缓）、#13/#14（parser 测试/抽 helper）、#17（thiserror 迁移）。
+
 | 周期 | 项目 | 工时估算 |
 |---|---|---|
-| **本周** | ~~#1（删 commands.rs）~~ ✅ + ~~#2（send_raw_at 加校验）~~ ✅ + ~~#4（删默认密码）~~ ✅ | 0h（已完成） |
-| **下周** | ~~#3（redact 完善）~~ ✅ + ~~#5（heartbeat 不阻塞）~~ ✅ + #6（VecDeque 环形 buffer） | 1-2h |
-| **本月** | #7（is_alive 跨平台）+ #8（合并锁）+ #9（白名单 `;`）+ #10（BaselineModem 重构） | 1-2 天 |
-| **后续** | #11 ~ #20 | 持续 |
+| ~~本周~~ | ~~#1（删 commands.rs）~~ ✅ + ~~#2/#4（安全校验）~~ ✅ | 0h（已完成） |
+| ~~下周~~ | ~~#3/#5（redact 完善 + heartbeat 不阻塞）~~ ✅ + ~~#6（VecDeque）~~ ✅ | 0h |
+| ~~本月~~ | ~~#8（合并锁 → AtomicI32）~~ ✅ + ~~#9（拒绝 `; & S`）~~ ✅ + ~~#12/#15/#16/#18/#19/#20~~ ✅ | 0h |
+| **下一批** | #13（parser 单测）+ #14（parser 抽 `find_line` helper）+ #17（thiserror 迁移 244 处）| 半天-2 天 |
+| **后续** | #7（is_alive macOS — 暂缓）+ #10/#11（TdTech — 暂缓） | 持续 |
 
 > 2026-06-02 更新：P0 5 条已修 5 条（#1/#2/#3/#4/#5 全部 `✅ FIXED`），剩余优先级 #6 (VecDeque) 是 P1 中最低门槛的；建议下一批从这里开始。

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-#[cfg_attr(feature = "napi-feature", napi_derive::napi(object))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AtTimingEntry {
@@ -227,7 +226,6 @@ pub struct ServingCellInfo {
 }
 
 /// Signal strength information (unified format)
-#[cfg_attr(feature = "napi-feature", napi_derive::napi(object))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SignalInfo {
     pub rsrp: String,

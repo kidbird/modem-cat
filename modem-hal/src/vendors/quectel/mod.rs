@@ -77,6 +77,13 @@ fn parse_qnwlock_response(resp: &str, prefix: &str) -> Vec<(String, String)> {
     items
 }
 
+/// Quectel chip variant. `#[non_exhaustive]` blocks external crates from
+/// constructing/exhaustively-matching this enum, so adding a new variant
+/// (e.g. an as-yet-unreleased Mediatek-based Quectel SKU) won't silently
+/// break downstream consumers. Internal `match` arms in this crate remain
+/// exhaustive at compile time — when a new variant is added, the compiler
+/// will surface every `match self.chip { ... }` that needs updating.
+#[non_exhaustive]
 pub enum QuectelChip {
     Qualcomm,
     UniSoc,

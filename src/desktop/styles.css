@@ -1040,39 +1040,37 @@
 /* ── 1. Tokens · 默认 = 浅色 ─────────────────────────────── */
 :root,
 [data-theme="light"] {
-  --bg-primary:    #F7F3EC !important;
-  --bg-secondary:  #FFFFFF !important;
-  --bg-tertiary:   #FAF6EE !important;
-  --border-color:  #E5DDCB !important;
-  --border-hover:  #EA580C !important;
-  --text-primary:  #1E1B16 !important;
-  --text-secondary:#5F574A !important;
-  --text-muted:    #8C8474 !important;
-  --accent:        #EA580C !important;
-  --accent-hover:  #C2410C !important;
-  --accent-glow:   rgba(234, 88, 12, 0.18) !important;
-  --success:       #2F8A53 !important;
-  --success-glow:  rgba(47, 138, 83, 0.15) !important;
-  --warning:       #B5870F !important;
-  --error:         #B5483A !important;
-  --danger:        #B5483A !important;
-  --danger-hover:  #8F362B !important;
-  --cyan:          #4A6F9E !important;
-  --tab-bar-bg:    #EFEAE0 !important;
-  --tab-active-bg: #FFFFFF !important;
+  --bg-primary:    #F7F3EC;
+  --bg-secondary:  #FFFFFF;
+  --bg-tertiary:   #FAF6EE;
+  --border-color:  #E5DDCB;
+  --border-hover:  #EA580C;
+  --text-primary:  #1E1B16;
+  --text-secondary:#5F574A;
+  --text-muted:    #8C8474;
+  --accent:        #EA580C;
+  --accent-hover:  #C2410C;
+  --accent-glow:   rgba(234, 88, 12, 0.18);
+  --success:       #2F8A53;
+  --success-glow:  rgba(47, 138, 83, 0.15);
+  --warning:       #B5870F;
+  --error:         #B5483A;
+  --danger:        #B5483A;
+  --danger-hover:  #8F362B;
+  --cyan:          #4A6F9E;
+  --tab-bar-bg:    #EFEAE0;
+  --tab-active-bg: #FFFFFF;
   color-scheme: light;
 }
 
-/* [data-theme="blue-light"] no longer needs !important on every var:
- *   - :root has specificity (0,0,1); [data-theme="blue-light"] has (0,1,0).
- *   - When documentElement has data-theme="blue-light", both selectors match
- *     the :root vars from the light-default block; the blue-light rule wins
- *     by specificity, not by !important.
- *   - Keeping !important here would block future per-component overrides
- *     (e.g. [data-theme="blue-light"] .special-card { --accent: ... }).
- * The light and dark blocks keep !important for now — they share a combined
- * selector (:root, [data-theme="light"]) and removing it there is out of scope
- * for this commit. */
+/* All theme CSS variables do not use '!important'. 
+ * - `:root` and `[data-theme="light"]` represent the default light theme.
+ * - When `html` element has `data-theme="blue-light"` or `data-theme="dark"`,
+ *   they match the respective selector with specificity (0, 1, 0), which matches
+ *   the specificity of `:root` / `[data-theme="light"]` selectors.
+ * - Since these custom theme rules are declared later in the file, they naturally
+ *   cascade and override the default variables without locking them down with '!important'.
+ * - This allows clean components to perform local overrides when needed. */
 [data-theme="blue-light"] {
   --bg-primary:    #f0f5fa;
   --bg-secondary:  #ffffff;
@@ -1098,26 +1096,26 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary:    #1A1714 !important;
-  --bg-secondary:  #25211C !important;
-  --bg-tertiary:   #2C2823 !important;
-  --border-color:  #36312A !important;
-  --border-hover:  #F97316 !important;
-  --text-primary:  #F2ECDC !important;
-  --text-secondary:#B5AB97 !important;
-  --text-muted:    #847B6B !important;
-  --accent:        #F97316 !important;
-  --accent-hover:  #FB8732 !important;
-  --accent-glow:   rgba(249, 115, 22, 0.28) !important;
-  --success:       #6FBE85 !important;
-  --success-glow:  rgba(111, 190, 133, 0.25) !important;
-  --warning:       #E0B548 !important;
-  --error:         #E07A6B !important;
-  --danger:        #E07A6B !important;
-  --danger-hover:  #C2493A !important;
-  --cyan:          #8AA9D6 !important;
-  --tab-bar-bg:    #221E1A !important;
-  --tab-active-bg: #2C2823 !important;
+  --bg-primary:    #1A1714;
+  --bg-secondary:  #25211C;
+  --bg-tertiary:   #2C2823;
+  --border-color:  #36312A;
+  --border-hover:  #F97316;
+  --text-primary:  #F2ECDC;
+  --text-secondary:#B5AB97;
+  --text-muted:    #847B6B;
+  --accent:        #F97316;
+  --accent-hover:  #FB8732;
+  --accent-glow:   rgba(249, 115, 22, 0.28);
+  --success:       #6FBE85;
+  --success-glow:  rgba(111, 190, 133, 0.25);
+  --warning:       #E0B548;
+  --error:         #E07A6B;
+  --danger:        #E07A6B;
+  --danger-hover:  #C2493A;
+  --cyan:          #8AA9D6;
+  --tab-bar-bg:    #221E1A;
+  --tab-active-bg: #2C2823;
   color-scheme: dark;
 }
 

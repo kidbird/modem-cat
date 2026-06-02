@@ -93,8 +93,8 @@ macro_rules! with_vendor {
         tokio::task::spawn_blocking(move || {
             let mut tguard = transport
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
-            let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+                .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+            let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
             $body
@@ -116,8 +116,8 @@ macro_rules! with_vendor_cid {
         tokio::task::spawn_blocking(move || {
             let mut tguard = transport
                 .lock()
-                .map_err(|e| format!("Lock poisoned: {}", e))?;
-            let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+                .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+            let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
             // Lock-free load: AtomicI32 needs no Mutex, so we never nest
@@ -514,14 +514,14 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
                 );
                 *transport_arc
                     .lock()
-                    .map_err(|e| format!("Lock poisoned: {}", e))? =
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
                     Some(wrap_transport(Box::new(transport), at_log.clone()));
                 *vendor_arc
                     .lock()
-                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(vendor);
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(vendor);
                 *connected_port_arc
                     .lock()
-                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(pn.clone());
+                    .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(pn.clone());
                 return Ok(pn);
             }
             Err(e) => {
@@ -593,17 +593,17 @@ async fn connect_serial(
 
         *transport_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? =
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
             Some(wrap_transport(Box::new(transport), at_log_state));
 
         log::info!("Detected vendor: {:?}", v.vendor());
         *vendor_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(v);
 
         *conn_port_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(port_name_clone.clone());
         log::info!(
             "Connected to serial port {} at {} baud",
             port_name_clone,
@@ -639,16 +639,16 @@ async fn connect_tcp(
 
         *conn_port_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
         *transport_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? =
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) =
             Some(wrap_transport(Box::new(transport), at_log_state));
 
         log::info!("Detected vendor: {:?}", v.vendor());
         *vendor_state
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = Some(v);
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -667,15 +667,15 @@ async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String>
     tokio::task::spawn_blocking(move || {
         let mut t = transport
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         if let Some(ref mut transport) = *t {
             transport.close();
         }
         *t = None;
-        *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
         *connected_port
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() }) = None;
         data_cid.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
@@ -773,8 +773,8 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let mut tguard = transport
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
-        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
+        let mut vguard = vendor.lock().unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         // Lock-free read: if it's still at the default 0 (uninitialised),
@@ -928,7 +928,7 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
     tokio::task::spawn_blocking(move || {
         let mut tguard = transport
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
+            .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         t.send_at(&command)
     })
@@ -989,7 +989,7 @@ fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<String>, Str
     let mut log = state
         .at_command_log
         .lock()
-        .map_err(|e| format!("Lock poisoned: {}", e))?;
+        .unwrap_or_else(|e| { log::warn!("[lib] recovering poisoned lock: {}", e); e.into_inner() });
     // drain(..) empties the VecDeque in place and yields owned elements.
     Ok(log.drain(..).collect())
 }

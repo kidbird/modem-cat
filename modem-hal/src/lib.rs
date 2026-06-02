@@ -35,6 +35,16 @@ pub fn validate_at_string(s: &str) -> Result<(), String> {
                 i
             ));
         }
+        // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are in
+        // Unicode categories Zl/Zp, NOT Cc, so `is_control()` misses them.
+        // They are valid in JS string literals (template literals) but would
+        // break naive log post-processors that split on newlines.
+        if (ch as u32) == 0x2028 || (ch as u32) == 0x2029 {
+            return Err(format!(
+                "Invalid character at position {}: Unicode line/paragraph separator (U+2028/U+2029) not allowed in AT parameter",
+                i
+            ));
+        }
     }
     Ok(())
 }
@@ -160,6 +170,18 @@ mod tests {
         assert!(validate_at_string(r#"abc"def"#).is_err());
         assert!(validate_at_string("abc\r\nAT+CFUN=1,1").is_err());
         assert!(validate_at_string("cmnet").is_ok());
+    }
+
+    #[test]
+    fn at_parameter_rejects_unicode_line_separator() {
+        // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR pass
+        // `is_control()` (only Cc) but are still effectively newlines
+        // for downstream log post-processors.
+        assert!(validate_at_string("ab\u{2028}cd").is_err());
+        assert!(validate_at_string("ab\u{2029}cd").is_err());
+        // Other Zl/Zp-like chars (RTL/LTR overrides) still allowed;
+        // we only block the two explicit separators.
+        assert!(validate_at_string("\u{202A}cmnet\u{202C}").is_ok());
     }
 }
 // ── (history) napi-rs surface for Bun/TS removed 2026-06-02 ──

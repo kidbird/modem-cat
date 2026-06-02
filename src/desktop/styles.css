@@ -1,3 +1,10 @@
+    /* Inter + JetBrains Mono load. MUST be the first rule in the file —
+     * CSS spec requires @import to precede all other rules except @charset
+     * and @layer, and modern browsers silently ignore @import if it appears
+     * after any rule. Without this, the 'Inter' first-choice in the body
+     * font stack never loads and Windows falls back to Segoe UI. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -35,6 +42,10 @@
       --accent: #ea580c;
       --accent-hover: #c2410c;
       --accent-glow: rgba(234, 88, 12, 0.15);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.2);
+      --warning: #f59e0b;
+      --error: #f43f5e;
       --danger: #b91c1c;
       --danger-hover: #dc2626;
       --cyan: #0891b2;
@@ -1035,7 +1046,11 @@
    只重写 tokens + 几何（圆角、阴影、字体）。
    ─────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Note: the original @import that used to live here was moved to the top
+ * of this file (the first rule). CSS spec requires @import to be the
+ * first rule; browsers ignore it if it appears after other rules. The
+ * duplicate is removed to prevent the same URL from being requested
+ * twice by the browser. */
 
 /* ── 1. Tokens · 默认 = 浅色 ─────────────────────────────── */
 :root,
@@ -1063,37 +1078,33 @@
   color-scheme: light;
 }
 
-/* [data-theme="blue-light"] no longer needs !important on every var:
- *   - :root has specificity (0,0,1); [data-theme="blue-light"] has (0,1,0).
- *   - When documentElement has data-theme="blue-light", both selectors match
- *     the :root vars from the light-default block; the blue-light rule wins
- *     by specificity, not by !important.
- *   - Keeping !important here would block future per-component overrides
- *     (e.g. [data-theme="blue-light"] .special-card { --accent: ... }).
- * The light and dark blocks keep !important for now — they share a combined
- * selector (:root, [data-theme="light"]) and removing it there is out of scope
- * for this commit. */
+/* [data-theme="blue-light"] uses !important on every var for the same
+ * reason the light/dark blocks do: it's the active theme when applied,
+ * and we don't want any future per-component override to silently
+ * clobber the palette. Specificity is sufficient without !important in
+ * a clean cascade, but defensive !important is cheap insurance against
+ * the cascade evolving later. */
 [data-theme="blue-light"] {
-  --bg-primary:    #f0f5fa;
-  --bg-secondary:  #ffffff;
-  --bg-tertiary:   #f8fafc;
-  --border-color:  #cbd5e1;
-  --border-hover:  #0f62fe;
-  --text-primary:  #0f2537;
-  --text-secondary:#2c4a63;
-  --text-muted:    #627d98;
-  --accent:        #0f62fe;
-  --accent-hover:  #0043ce;
-  --accent-glow:   rgba(15, 98, 254, 0.18);
-  --success:       #2F8A53;
-  --success-glow:  rgba(47, 138, 83, 0.15);
-  --warning:       #B5870F;
-  --error:         #B5483A;
-  --danger:        #B5483A;
-  --danger-hover:  #8F362B;
-  --cyan:          #4A6F9E;
-  --tab-bar-bg:    #e2ecef;
-  --tab-active-bg: #ffffff;
+  --bg-primary:    #f0f5fa !important;
+  --bg-secondary:  #ffffff !important;
+  --bg-tertiary:   #f8fafc !important;
+  --border-color:  #cbd5e1 !important;
+  --border-hover:  #0f62fe !important;
+  --text-primary:  #0f2537 !important;
+  --text-secondary:#2c4a63 !important;
+  --text-muted:    #627d98 !important;
+  --accent:        #0f62fe !important;
+  --accent-hover:  #0043ce !important;
+  --accent-glow:   rgba(15, 98, 254, 0.18) !important;
+  --success:       #2F8A53 !important;
+  --success-glow:  rgba(47, 138, 83, 0.15) !important;
+  --warning:       #B5870F !important;
+  --error:         #B5483A !important;
+  --danger:        #B5483A !important;
+  --danger-hover:  #8F362B !important;
+  --cyan:          #4A6F9E !important;
+  --tab-bar-bg:    #e2ecef !important;
+  --tab-active-bg: #ffffff !important;
   color-scheme: light;
 }
 

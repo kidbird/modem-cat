@@ -4,9 +4,15 @@
   "description": "5G Modem调试工具 - Desktop mode only",
   "type": "module",
   "scripts": {
-    "build:desktop": "cd src-tauri && cargo build --release"
+    "build:desktop": "cd src-tauri && cargo build --release",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.9.0",
+    "vitest": "^4.1.8"
   }
 }

@@ -47,9 +47,8 @@ impl ModemFactory {
             }
         }
         let qualcomm = [
-            "RG500Q", "RM500Q", "RG520N", "RM520N", "RG525F",
-            "RG530F", "RM530F", "RM530N", "RM551E", "RM501Q",
-            "RG540F", "RM540N",
+            "RG500Q", "RM500Q", "RG520N", "RM520N", "RG525F", "RG530F", "RM530F", "RM530N",
+            "RM551E", "RM501Q", "RG540F", "RM540N",
         ];
         for m in &qualcomm {
             if upper.contains(m) {
@@ -91,11 +90,16 @@ mod tests {
     #[test]
     fn detects_qualcomm_from_model() {
         for model in &[
-            "RM500Q-GL", "RM500Q-CN", "RG500Q-EA",
-            "RM520N-GL", "RG520N-CN",
+            "RM500Q-GL",
+            "RM500Q-CN",
+            "RG500Q-EA",
+            "RM520N-GL",
+            "RG520N-CN",
             "RM551E-GL",
-            "RM530F-CN", "RM530N-EU",
-            "RG530F-EU", "RG525F-CN",
+            "RM530F-CN",
+            "RM530N-EU",
+            "RG530F-EU",
+            "RG525F-CN",
             "RM501Q-AE",
         ] {
             assert_eq!(

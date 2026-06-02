@@ -134,10 +134,15 @@ impl SerialTransport {
 
 impl AtTransport for SerialTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
-        // Quick drain of any stale data (1ms timeout to avoid wasting time)
+        // Quick drain of any stale data (1ms timeout to avoid wasting time).
+        // Capped at MAX_DRAIN_READS iterations: a misbehaving driver that keeps
+        // returning >0 bytes under DRAIN_TIMEOUT (1ms) would otherwise stall
+        // the AT path indefinitely. 64 × 4096 B = 256 KB is far more than any
+        // realistic stale-buffer size from a 5G modem's unsolicited URCs.
+        const MAX_DRAIN_READS: usize = 64;
         let mut drain = [0u8; 4096];
         let _ = self.port.set_timeout(DRAIN_TIMEOUT);
-        loop {
+        for _ in 0..MAX_DRAIN_READS {
             match self.port.read(&mut drain) {
                 Ok(0) | Err(_) => break,
                 Ok(_) => continue,
@@ -171,4 +176,3 @@ impl AtTransport for SerialTransport {
         self.port.bytes_to_read().is_ok()
     }
 }
-

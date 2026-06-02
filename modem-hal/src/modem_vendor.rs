@@ -93,7 +93,12 @@ pub trait ModemVendor: Send {
     fn delete_apn(&mut self, transport: &mut dyn AtTransport, cid: i32) -> Result<(), String>;
 
     /// Activate or deactivate APN context (AT+CGACT=<state>,<cid>)
-    fn set_apn_active(&mut self, transport: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String>;
+    fn set_apn_active(
+        &mut self,
+        transport: &mut dyn AtTransport,
+        cid: i32,
+        active: bool,
+    ) -> Result<(), String>;
 
     /// Query VLAN ID currently active on the LAN port (AT+QMAP="VLAN")
     fn query_vlan(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<i32>, String> {
@@ -101,7 +106,12 @@ pub trait ModemVendor: Send {
     }
 
     /// Enable or disable VLAN tagging on the LAN port (AT+QMAP="VLAN",<state>,<vid>)
-    fn set_vlan(&mut self, _transport: &mut dyn AtTransport, _vlan_id: i32, _enabled: bool) -> Result<(), String> {
+    fn set_vlan(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _vlan_id: i32,
+        _enabled: bool,
+    ) -> Result<(), String> {
         Err("VLAN not supported".to_string())
     }
 
@@ -111,16 +121,27 @@ pub trait ModemVendor: Send {
     }
 
     /// Set 5GLAN state — UniSoc only (AT+QCFG="5glan",<cid>,<state>,<vlan_id>)
-    fn set_5glan(&mut self, _transport: &mut dyn AtTransport, _cid: i32, _enabled: bool, _vlan_id: i32) -> Result<(), String> {
+    fn set_5glan(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _cid: i32,
+        _enabled: bool,
+        _vlan_id: i32,
+    ) -> Result<(), String> {
         Err("5GLAN not supported".to_string())
     }
 
     /// Qualcomm L2 5GLAN — configure eth_cfg + CGDCONT + QWDSCFG (Step 1)
     #[allow(clippy::too_many_arguments)]
     fn configure_qualcomm_5glan(
-        &mut self, _t: &mut dyn AtTransport,
-        _cid: i32, _apn: &str, _snssai: &str,
-        _profile_id: i32, _vlan_start: i32, _vlan_end: i32,
+        &mut self,
+        _t: &mut dyn AtTransport,
+        _cid: i32,
+        _apn: &str,
+        _snssai: &str,
+        _profile_id: i32,
+        _vlan_start: i32,
+        _vlan_end: i32,
     ) -> Result<(), String> {
         Err("Qualcomm 5GLAN L2 not supported".to_string())
     }
@@ -131,12 +152,20 @@ pub trait ModemVendor: Send {
     }
 
     /// Qualcomm L2 5GLAN — set MPDN rule + connect (Step 3, after reboot)
-    fn connect_qualcomm_5glan(&mut self, _t: &mut dyn AtTransport, _rule_id: i32, _cid: i32) -> Result<(), String> {
+    fn connect_qualcomm_5glan(
+        &mut self,
+        _t: &mut dyn AtTransport,
+        _rule_id: i32,
+        _cid: i32,
+    ) -> Result<(), String> {
         Err("Qualcomm 5GLAN L2 not supported".to_string())
     }
 
     /// Qualcomm L2 5GLAN — query ETH PDU + MPDN status
-    fn query_qualcomm_5glan_status(&mut self, _t: &mut dyn AtTransport) -> Result<Qualcomm5GlanStatus, String> {
+    fn query_qualcomm_5glan_status(
+        &mut self,
+        _t: &mut dyn AtTransport,
+    ) -> Result<Qualcomm5GlanStatus, String> {
         Err("Qualcomm 5GLAN status not supported".to_string())
     }
 
@@ -225,30 +254,21 @@ pub trait ModemVendor: Send {
     // ==================== Baseline ====================
 
     /// Query AP/CP baseline version
-    fn query_baseline(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<BaselineInfo, String> {
+    fn query_baseline(&mut self, _transport: &mut dyn AtTransport) -> Result<BaselineInfo, String> {
         Err("Not implemented".to_string())
     }
 
     // ==================== Antenna ====================
 
     /// Query antenna RSSI values (AT+QANTRSSI?)
-    fn query_ant_rssi(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<Vec<String>, String> {
+    fn query_ant_rssi(&mut self, _transport: &mut dyn AtTransport) -> Result<Vec<String>, String> {
         Ok(vec![])
     }
 
     // ==================== Network Mode ====================
 
     /// Query preferred network mode (e.g., AT+QNWPREFCFG="mode_pref")
-    fn query_network_mode(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<String, String> {
+    fn query_network_mode(&mut self, _transport: &mut dyn AtTransport) -> Result<String, String> {
         Err("Not implemented".to_string())
     }
 
@@ -279,20 +299,14 @@ pub trait ModemVendor: Send {
     }
 
     /// Reset all bands to factory defaults
-    fn reset_all_bands(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<(), String> {
+    fn reset_all_bands(&mut self, _transport: &mut dyn AtTransport) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 
     // ==================== USB Configuration ====================
 
     /// Query USB network mode
-    fn query_usbnet_mode(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<i32, String> {
+    fn query_usbnet_mode(&mut self, _transport: &mut dyn AtTransport) -> Result<i32, String> {
         Err("Not implemented".to_string())
     }
 
@@ -306,19 +320,12 @@ pub trait ModemVendor: Send {
     }
 
     /// Query NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
-    fn query_nat_mode(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<i32, String> {
+    fn query_nat_mode(&mut self, _transport: &mut dyn AtTransport) -> Result<i32, String> {
         Err("Not implemented".to_string())
     }
 
     /// Set NAT routing mode (AT+QCFG="nat") — 0=bridge, 2=routing
-    fn set_nat_mode(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-        _mode: i32,
-    ) -> Result<(), String> {
+    fn set_nat_mode(&mut self, _transport: &mut dyn AtTransport, _mode: i32) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 
@@ -343,20 +350,14 @@ pub trait ModemVendor: Send {
     // ==================== Factory Reset ====================
 
     /// Factory reset the modem
-    fn factory_reset(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<(), String> {
+    fn factory_reset(&mut self, _transport: &mut dyn AtTransport) -> Result<(), String> {
         Err("Not implemented".to_string())
     }
 
     // ==================== SIM Slot ====================
 
     /// Query current SIM slot number (1-based)
-    fn query_sim_slot(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<i32, String> {
+    fn query_sim_slot(&mut self, _transport: &mut dyn AtTransport) -> Result<i32, String> {
         Ok(1)
     }
 
@@ -394,10 +395,7 @@ pub trait ModemVendor: Send {
     }
 
     /// Clear all cell and frequency locks
-    fn clear_cell_lock(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-    ) -> Result<(), String> {
+    fn clear_cell_lock(&mut self, _transport: &mut dyn AtTransport) -> Result<(), String> {
         Err("Cell lock not supported".to_string())
     }
 

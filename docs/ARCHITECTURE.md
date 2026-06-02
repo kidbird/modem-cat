@@ -1,6 +1,6 @@
 # 项目架构设计
 
-> 最近更新：2026-06-01（对齐 `main` 分支当前代码）
+> 最近更新：2026-06-02（commands.rs 死代码删除 · heartbeat 改 try_lock · 前端拆分落实 · 蓝 light 主题）
 > 适用于：modem-cat v0.2.x
 
 ## 1. 整体架构
@@ -8,9 +8,14 @@
 ```
 ┌──────────────────────────────────────────────────────┐
 │ 前端 (src/desktop/)                                  │
-│   index.html  ← UI 结构（8 个 page）                 │
-│   styles.css  ← 主题样式（Claude Code 风皮肤）        │
-│   app.js      ← 全部交互逻辑（62KB, ~1500 行）        │
+│   index.html  ← UI 结构（8 个 page，~1500 行）        │
+│   styles.css  ← 主题样式（3 主题：dark/light/blue-light）│
+│   app.js      ← 全部交互逻辑（~3600 行）              │
+│                                                      │
+│  ⚠ Tauri 只加载 index.html 本身；styles.css 和 app.js │
+│  必须通过 <link>/<script src=> 显式引用，否则 0 字节  │
+│  对运行生效（早期 e26df93 split 之后曾长期处于这种   │
+│  孤儿状态，commit 4f2fb83 才真正接上）。              │
 └──────────────────────────────────────────────────────┘
                        │ window.__TAURI__.core.invoke()
                        │ window.__TAURI__.event.listen()
@@ -19,10 +24,12 @@
 │ Tauri 后端 (src-tauri/src/)                          │
 │   main.rs        ← 入口（设置 NO_PROXY）              │
 │   lib.rs         ← Tauri Builder 装配 + AppState      │
-│                     + LoggingTransport + 30 IPC cmd   │
-│   commands.rs    ← 旧 IPC 层（已废弃，见 REVIEW.md#1）│
+│                     + LoggingTransport + 52 IPC cmd   │
+│                     + start_port_monitor (lib.rs:1085) │
 │   ports.rs       ← 串口列表探测 (Windows 注册表)       │
-│   monitor.rs     ← start_port_monitor 后台线程         │
+│                                                      │
+│  (历史) commands.rs (504 行) 2026-06-02 已删除        │
+│   —— 旧 IPC 层，0 caller，.unwrap() 64 处             │
 └──────────────────────────────────────────────────────┘
                        │ Box<dyn ModemVendor>
                        ▼
@@ -108,7 +115,9 @@
 
 ### 3.1 前端 (`src/desktop/`) — 8 个 page 容器
 
-> Tauri 当前实际加载 `index.html`。改前端行为时先确认是否引用外部 `app.js` / `styles.css`；若未引用，运行代码在 `index.html` 的内联块中，详见 [CODING.md](CODING.md)。
+> ✅ **当前状态（2026-06-02 之后）**：`index.html` 通过 `<link rel="stylesheet" href="styles.css">` 和 `<script src="app.js"></script>` 真正加载了两个外部文件（commit `4f2fb83`）。早期版本的"看起来是单文件 + 两个孤儿副本"是 e26df93 split 残留，已修复。
+>
+> ⚠ **编辑约定**：修改前端时优先改外部 `app.js` / `styles.css`，而不是把它们再粘回 `index.html` 内联块。若新增第四个主题或新的 IPC，需在本文档 §3.4 增加条目。
 
 | 行号 | Page | 中文名 | 备注 |
 |---|---|---|---|
@@ -127,11 +136,11 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | 1142 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（**与 monitor.rs 重复**） |
-| `commands.rs` | 504 | **死代码**（REVIEW.md#1）：旧 IPC 层 30 个 `#[tauri::command]`，0 caller，`.unwrap()` **64 处** |
+| `lib.rs` | ~1367 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器（VecDeque 环形 + try_lock + log-after-send）；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor`（lib.rs:1085） |
 | `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
-| `monitor.rs` | 2.6K | `start_port_monitor` 独立线程（2s 轮询） |
 | `main.rs` | 0.3K | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
+
+> 历史：`commands.rs` (504 行死代码) 2026-06-02 已删；`monitor.rs` (2.6K 孤儿，与 lib.rs:1085 重复版) 2026-06-02 已删。
 
 **AppState 字段**（lib.rs:15-25）：
 
@@ -164,6 +173,29 @@ pub struct AppState {
 | `vendors/tdtech/mod.rs` | 429 | `TdTechModem`（AT^ 前缀命令） |
 | `vendors/tdtech/parser.rs` | 7.9K | `parse_monsc` / `parse_hcsq` / `parse_syscfgex` |
 | `vendors/tdtech/dial.rs` | 2.4K | `AT^NDISDUP` / `AT^DHCP` |
+
+### 3.4 前端主题系统（`src/desktop/styles.css`）
+
+3 个主题由 `documentElement[data-theme="…"]` 切换，token 均为 CSS 自定义属性。`app.js::setTheme(theme)` 是唯一写入方（写 `data-theme` 属性 + `localStorage.theme`），`updateThemeToggle(theme)` 接收参数同步设置面板的 `.active` 状态。
+
+| 主题 | data-theme | accent | 字体 | 何时为默认 |
+|---|---|---|---|---|
+| 深色（暖深） | `dark` | `#F97316` 焦糖橙 | `'Inter', ...` | `localStorage.theme` 缺失或不在白名单 |
+| 浅色（暖米白） | `light` | `#EA580C` 焦糖橙 | 同上 | 用户在设置页选"浅色" |
+| 科技蓝 | `blue-light` | `#0f62fe` IBM 蓝 | 同上 | 用户在设置页选"科技蓝"（commit `d182cc7`） |
+
+**实现要点**：
+
+- **三块选择器特异性均为 (0,1,0)**（一个属性选择器）。`:root` 兜底是 (0,0,1)。同一主题内，蓝 light 块不需要 `!important` 即可在 cascade 中胜出（`blue-light` 块已在 2026-06-02 去掉 20 个 `!important`）。`light` / `dark` 块仍保留 `!important` 是因为它们和 `:root` 共享选择器 `(:root, [data-theme="light"])`，去 `!important` 需要拆开选择器，超出本批范围。
+- **持久化**：localStorage key `theme`，值 `dark` / `light` / `blue-light`，三选一。设置页 `app.js::setTheme(theme)` 是唯一写入点。
+- **emoji 字体栈**：`body` 已加入 `'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'`（commit `4f2fb83` 后续补）以避免"🌐"按钮在 Win10 / Linux WebView 上 tofu。
+- **新增主题的步骤**：
+  1. `styles.css` 加 `[data-theme="<name>"]` 块（参考蓝 light 模板）
+  2. `app.js::setTheme` 加 emoji / 图标分支（如有）
+  3. `app.js::updateThemeToggle` 加按钮 ID + `classList.toggle('active', theme === '<name>')`
+  4. `index.html` 设置页加 `<button id="theme<Name>" onclick="setTheme('<name>')">` 按钮
+  5. `app.js` LANG 字典加 `theme_<name>` i18n key（中英）
+  6. 更新本节表格 + [REVIEW.md](REVIEW.md) 状态
 
 ## 4. 厂商检测流程
 
@@ -219,10 +251,12 @@ pub struct AppState {
 
 ## 6. 后台线程
 
-| 线程 | 文件 | 间隔 | 作用 |
-|---|---|---|---|
-| `usb-monitor` | monitor.rs:13 / lib.rs:869（**重复**） | 2s | `serialport::available_ports()` 差集 → emit `port-changed` |
-| `connection-heartbeat` | lib.rs:929 | 4s | `transport.is_alive()` → 拔插 emit `port-changed` |
+| 线程 | 文件 | 间隔 | 锁策略 | 作用 |
+|---|---|---|---|---|
+| `usb-monitor` | lib.rs:1085 | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
+| `connection-heartbeat` | lib.rs:1155 | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
+
+> 2026-06-02 修复：heartbeat 原用 `.lock()` 阻塞等待，与 IPC handler 抢同一把 std Mutex，单条 AT 命令（3-8s）期间会阻塞 4-12s，USB 拔插感知延迟。改为 `.try_lock()` 拿不到直接 `continue`（下一 tick 再试），不再阻塞 IPC。
 
 ## 7. 关键 Trait 一览
 

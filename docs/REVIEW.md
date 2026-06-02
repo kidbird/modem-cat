@@ -10,15 +10,18 @@
 
 ## 0. 与文档的事实偏差（修文档前先看）
 
-| 偏差 | 文档说法 | 代码实情 |
-|---|---|---|
-| 前端结构 | `index.html` 单文件 ~98KB | 已拆为 `index.html` (319KB) + `app.js` (62KB) + `styles.css` (19KB)，`e26df93` "split index.html" 已合入 |
-| `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/{quectel,tdtech}/` |
-| `lib.rs` 行数 | ~1000 行 | **1142 行**（2026-06-01 raw AT / PLMN 安全修复后，拆分后仍是单文件最大者） |
-| `commands.rs` 状态 | （文档未提） | **504 行死代码**：30 个 `#[tauri::command]` 0 caller，`.unwrap()` **64 处**，会编译进二进制 |
-| `start_port_monitor` | 在 `lib.rs` | **重复**：lib.rs:869 与 monitor.rs:13 都有；lib.rs 版本带 `panic::catch_unwind` + 5s 后 sleep 重启（line 919），monitor.rs 版本带 `catch_unwind` 但**无重试 sleep**（catch_unwind 后线程直接退出）|
-| 厂商检测关键字 | 文档未列 | TdTech→Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`） |
-| `serial.rs::is_alive` | 跨平台一致 | **不一致**：Windows 可靠（ClearCommError 4s 内），macOS/Linux 驱动层可能 20s+ 才感知 |
+> 2026-06-02 更新：以下条目已随 commit 4f2fb83 (frontend split) 和 claude/fix-review-batch2 (commands.rs / heartbeat) 落地，剩余条目仍待办。
+
+| 偏差 | 文档说法 | 代码实情 | 状态 |
+|---|---|---|---|
+| 前端结构 | `index.html` 单文件 ~98KB | **2026-06-02**: `index.html` (1494 行) + `app.js` (3621 行) + `styles.css` (1436 行)，拆分已通过 `<link>`/`<script src=>` 真正生效（commit `4f2fb83`） | ✅ FIXED |
+| `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/{quectel,tdtech}/` | ✅ FIXED |
+| `lib.rs` 行数 | ~1000 行 | **~1140 行**（2026-06-02 batch 后仍是单文件最大者） | 维持 |
+| `commands.rs` 状态 | （文档未提） | **2026-06-02**: 文件已删除（claude/fix-review-batch2 commit） | ✅ FIXED |
+| `start_port_monitor` | 在 `lib.rs` | **重复**：lib.rs:869 与 monitor.rs:13 都有；lib.rs 版本带 `panic::catch_unwind` + 5s 后 sleep 重启（line 919），monitor.rs 版本带 `catch_unwind` 但**无重试 sleep**（catch_unwind 后线程直接退出）| 待办 |
+| 厂商检测关键字 | 文档未列 | TdTech→Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`） | 待办 |
+| `serial.rs::is_alive` | 跨平台一致 | **不一致**：Windows 可靠（ClearCommError 4s 内），macOS/Linux 驱动层可能 20s+ 才感知 | 待办 |
+| blue-light 主题 | 文档未列 | 2026-06-02 已加 §3.4 章节说明 3 主题 | ✅ FIXED |
 
 ---
 
@@ -29,6 +32,7 @@
 - **问题**：30 个 `#[tauri::command]` 函数（`get_modem_status` / `connect_data` / ...）0 个 caller（`grep -rn "mod commands" src-tauri/` 无结果）；**64 处** `transport.lock().unwrap()`（`grep -c "\.unwrap()" src-tauri/src/commands.rs`），Mutex 中毒即 panic
 - **影响**：编译进 binary 增体积 ~18KB；未来若有人 `mod commands;` 立即崩溃；`.unwrap()` 64 处意味着 1 次锁污染即 64 处 panic
 - **建议**：删除文件；或在 `lib.rs:1066` 注释 + `#[allow(dead_code)]` + `#[doc(hidden)]` 标记废弃
+- **状态**：✅ **2026-06-02 FIXED** —— 文件已删除（commit `claude/fix-review-batch2`）。`grep -rn "mod commands" src-tauri/src/` 0 命中。lib.rs 顶部 "52 个 IPC" 与 diagram 中的 `commands.rs` 行同步从 [ARCHITECTURE.md](ARCHITECTURE.md) 移除。
 
 ### [HIGH] #2 `send_raw_at` 完全绕过输入校验
 - **文件**：`src-tauri/src/lib.rs:724-734`
@@ -63,6 +67,7 @@
 - **建议**：
   - heartbeat 用 `try_lock()`，拿不到就 skip；或
   - 让 `LoggingTransport` 在 `send_at` 出错时把 `Arc<AtomicBool>` 置 false，heartbeat 只读 atomic
+- **状态**：✅ **2026-06-02 FIXED** —— 3 处 `.lock()` 全改为 `.try_lock()`，拿不到直接 `continue`（下一 tick 再试），不再阻塞 IPC。heartbeat 注释也补了"绝不阻塞 IPC"的红线说明。
 
 ---
 
@@ -163,7 +168,9 @@
 
 | 周期 | 项目 | 工时估算 |
 |---|---|---|
-| **本周** | #1（删 commands.rs）+ #2（send_raw_at 加校验）+ #4（删默认密码） | 2-3h |
-| **下周** | #3（redact 完善）+ #5（heartbeat 不阻塞）+ #6（VecDeque 环形 buffer） | 3-4h |
+| **本周** | ~~#1（删 commands.rs）~~ ✅ + ~~#2（send_raw_at 加校验）~~ ✅ + ~~#4（删默认密码）~~ ✅ | 0h（已完成） |
+| **下周** | ~~#3（redact 完善）~~ ✅ + ~~#5（heartbeat 不阻塞）~~ ✅ + #6（VecDeque 环形 buffer） | 1-2h |
 | **本月** | #7（is_alive 跨平台）+ #8（合并锁）+ #9（白名单 `;`）+ #10（BaselineModem 重构） | 1-2 天 |
 | **后续** | #11 ~ #20 | 持续 |
+
+> 2026-06-02 更新：P0 5 条已修 5 条（#1/#2/#3/#4/#5 全部 `✅ FIXED`），剩余优先级 #6 (VecDeque) 是 P1 中最低门槛的；建议下一批从这里开始。

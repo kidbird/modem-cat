@@ -945,13 +945,19 @@ fn start_connection_heartbeat(
             loop {
                 std::thread::sleep(Duration::from_secs(4));
 
-                let port_name = match connected_port.lock() {
+                // Use try_lock so heartbeat NEVER blocks IPC handlers.
+                // If another thread holds the transport/port lock (long AT command
+                // in flight, IPC handler, reconnect) we simply skip this tick and
+                // retry on the next 4 s cycle. Without try_lock the heartbeat
+                // could block 3-8 s behind a single AT command and miss the
+                // USB-disconnect window.
+                let port_name = match connected_port.try_lock() {
                     Ok(g) => g.clone(),
                     Err(_) => continue,
                 };
                 let Some(port) = port_name else { continue };
 
-                let alive = match transport.lock() {
+                let alive = match transport.try_lock() {
                     Ok(g) => match g.as_deref() {
                         Some(t) => t.is_alive(),
                         None => continue,
@@ -962,7 +968,7 @@ fn start_connection_heartbeat(
                 if !alive {
                     log::warn!("[心跳] 检测到硬件断连，端口: {}", port);
                     // Clear connected_port immediately so subsequent ticks don't re-fire
-                    if let Ok(mut g) = connected_port.lock() {
+                    if let Ok(mut g) = connected_port.try_lock() {
                         *g = None;
                     }
                     if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {

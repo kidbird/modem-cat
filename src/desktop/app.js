@@ -113,17 +113,19 @@
       state.isDark = theme === 'dark';
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
-      updateThemeToggle();
+      updateThemeToggle(theme);
     }
 
-    function updateThemeToggle() {
-      const currentTheme = localStorage.getItem('theme') || 'dark';
+    // Pass theme as a parameter (single source of truth = the argument to setTheme).
+    // Previously this re-read localStorage, which created 3 sources of truth
+    // (setTheme arg / data-theme attribute / localStorage) and could desync.
+    function updateThemeToggle(theme) {
       const darkBtn = document.getElementById('themeDark');
       const lightBtn = document.getElementById('themeLight');
       const blueLightBtn = document.getElementById('themeBlueLight');
-      if (darkBtn) darkBtn.classList.toggle('active', currentTheme === 'dark');
-      if (lightBtn) lightBtn.classList.toggle('active', currentTheme === 'light');
-      if (blueLightBtn) blueLightBtn.classList.toggle('active', currentTheme === 'blue-light');
+      if (darkBtn) darkBtn.classList.toggle('active', theme === 'dark');
+      if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
+      if (blueLightBtn) blueLightBtn.classList.toggle('active', theme === 'blue-light');
     }
 
     const LANG = {

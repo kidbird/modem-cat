@@ -43,7 +43,10 @@
     }
 
     body {
-      font-family: -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      /* Emoji-capable font stack: system UI → emoji → CJK → sans fallback.
+       * Without an emoji font, the blue-light "🌐" button (U+1F310) tofu's on
+       * Windows 10 / headless Linux / stripped WebView. */
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
@@ -1060,27 +1063,37 @@
   color-scheme: light;
 }
 
+/* [data-theme="blue-light"] no longer needs !important on every var:
+ *   - :root has specificity (0,0,1); [data-theme="blue-light"] has (0,1,0).
+ *   - When documentElement has data-theme="blue-light", both selectors match
+ *     the :root vars from the light-default block; the blue-light rule wins
+ *     by specificity, not by !important.
+ *   - Keeping !important here would block future per-component overrides
+ *     (e.g. [data-theme="blue-light"] .special-card { --accent: ... }).
+ * The light and dark blocks keep !important for now — they share a combined
+ * selector (:root, [data-theme="light"]) and removing it there is out of scope
+ * for this commit. */
 [data-theme="blue-light"] {
-  --bg-primary:    #f0f5fa !important;
-  --bg-secondary:  #ffffff !important;
-  --bg-tertiary:   #f8fafc !important;
-  --border-color:  #cbd5e1 !important;
-  --border-hover:  #0f62fe !important;
-  --text-primary:  #0f2537 !important;
-  --text-secondary:#2c4a63 !important;
-  --text-muted:    #627d98 !important;
-  --accent:        #0f62fe !important;
-  --accent-hover:  #0043ce !important;
-  --accent-glow:   rgba(15, 98, 254, 0.18) !important;
-  --success:       #2F8A53 !important;
-  --success-glow:  rgba(47, 138, 83, 0.15) !important;
-  --warning:       #B5870F !important;
-  --error:         #B5483A !important;
-  --danger:        #B5483A !important;
-  --danger-hover:  #8F362B !important;
-  --cyan:          #4A6F9E !important;
-  --tab-bar-bg:    #e2ecef !important;
-  --tab-active-bg: #ffffff !important;
+  --bg-primary:    #f0f5fa;
+  --bg-secondary:  #ffffff;
+  --bg-tertiary:   #f8fafc;
+  --border-color:  #cbd5e1;
+  --border-hover:  #0f62fe;
+  --text-primary:  #0f2537;
+  --text-secondary:#2c4a63;
+  --text-muted:    #627d98;
+  --accent:        #0f62fe;
+  --accent-hover:  #0043ce;
+  --accent-glow:   rgba(15, 98, 254, 0.18);
+  --success:       #2F8A53;
+  --success-glow:  rgba(47, 138, 83, 0.15);
+  --warning:       #B5870F;
+  --error:         #B5483A;
+  --danger:        #B5483A;
+  --danger-hover:  #8F362B;
+  --cyan:          #4A6F9E;
+  --tab-bar-bg:    #e2ecef;
+  --tab-active-bg: #ffffff;
   color-scheme: light;
 }
 
@@ -1110,7 +1123,10 @@
 
 /* ── 2. 字体 ─────────────────────────────────────────────── */
 body {
-  font-family: 'Inter', -apple-system, 'PingFang SC', BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  /* Emoji-capable stack: 'Inter' first (Claude Code 风), then system UI, then
+   * dedicated emoji fonts (Segoe UI Emoji / Apple Color Emoji / Noto Color
+   * Emoji) so the blue-light "🌐" button does not tofu. */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei', Roboto, system-ui, sans-serif;
   font-feature-settings: 'cv11','ss01';
   letter-spacing: -0.005em;
   font-size: 13.5px;

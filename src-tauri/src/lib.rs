@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::future::Future;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -381,6 +382,24 @@ fn is_at_port(
 /// ports (parallel) vs the old ~3-8 s × N (serial) — REVIEW.md #15.
 const AT_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
+async fn run_after_at_probe_timeout<T, U, Probe, Detect, DetectFuture>(
+    probe_timeout: Duration,
+    at_probe: Probe,
+    detect_vendor: Detect,
+) -> Result<U, String>
+where
+    Probe: Future<Output = Result<T, String>>,
+    Detect: FnOnce(T) -> DetectFuture,
+    DetectFuture: Future<Output = Result<U, String>>,
+{
+    let transport = match tokio::time::timeout(probe_timeout, at_probe).await {
+        Ok(result) => result?,
+        Err(_) => return Err(format!("AT probe timed out after {:?}", probe_timeout)),
+    };
+
+    detect_vendor(transport).await
+}
+
 /// Auto-detect and connect to an AT port.
 /// Scans all port types (not just USB) and uses WMI info on Windows for
 /// reliable identification, matching the logic in `list_ports`.
@@ -411,10 +430,10 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
 
     log::info!("AT candidates: {:?}", at_candidates);
 
-    // Parallel probe: spawn one tokio task per candidate. Each task wraps a
-    // blocking serial open + AT handshake in a 2 s timeout. We then await
-    // ALL of them and take the first OK — wall time ≈ 2 s (worst case
-    // slowest port) instead of N × 3-8 s.
+    // Parallel probe: spawn one tokio task per candidate. Each task wraps only
+    // the blocking serial open + AT handshake in a 2 s timeout. Vendor
+    // detection runs after the AT probe succeeds and uses the transport's
+    // normal serial read timeout, so slow AT+CGMM responses can still connect.
     let mut handles = Vec::with_capacity(at_candidates.len());
     for port_name in &at_candidates {
         let pn = port_name.clone();
@@ -423,23 +442,41 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
             // `pn_block` is moved into spawn_blocking; the outer `pn` lives
             // through the async block so we can return it in the tuple below.
             let pn_block = pn.clone();
+            let pn_probe = pn.clone();
+            let pn_detect = pn.clone();
             let probe = tokio::task::spawn_blocking(move || -> Result<
-                (modem_hal::transport::SerialTransport, ModemFactoryProbe),
+                modem_hal::transport::SerialTransport,
                 String,
             > {
                 let mut transport =
                     modem_hal::transport::SerialTransport::new(&pn_block, 115200)?;
                 let response = transport.send_at("AT");
                 match response {
-                    Ok(r) if r.trim().ends_with("OK") => {
-                        let vendor_result = ModemFactory::create(&mut transport);
-                        Ok((transport, vendor_result))
-                    }
+                    Ok(r) if r.trim().ends_with("OK") => Ok(transport),
                     Ok(r) => Err(format!("Port {} responded but not OK: {}", pn_block, r)),
                     Err(e) => Err(format!("Port {} AT probe failed: {}", pn_block, e)),
                 }
             });
-            (pn, tokio::time::timeout(AT_PROBE_TIMEOUT, probe).await)
+            let result = run_after_at_probe_timeout(
+                AT_PROBE_TIMEOUT,
+                async move {
+                    probe
+                        .await
+                        .map_err(|e| format!("Port {} probe task panicked: {}", pn_probe, e))?
+                },
+                move |mut transport| async move {
+                    tokio::task::spawn_blocking(move || {
+                        let vendor_result = ModemFactory::create(&mut transport);
+                        Ok((transport, vendor_result))
+                    })
+                    .await
+                    .map_err(|e| {
+                        format!("Port {} vendor detection task panicked: {}", pn_detect, e)
+                    })?
+                },
+            )
+            .await;
+            (pn, result)
         }));
     }
 
@@ -451,23 +488,10 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
     // Collect every probe's result; pick the first successful (transport +
     // vendor) pair. Losers' transports drop naturally when their tasks end.
     for h in handles {
-        let (pn, timed) = match h.await {
+        let (pn, probe_result) = match h.await {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("Probe task join error: {}", e);
-                continue;
-            }
-        };
-        let probe_result = match timed {
-            Ok(join_res) => match join_res {
-                Ok(r) => r,
-                Err(e) => {
-                    log::warn!("Port {} probe task panicked: {}", pn, e);
-                    continue;
-                }
-            },
-            Err(_) => {
-                log::warn!("Port {} probe timed out after {:?}", pn, AT_PROBE_TIMEOUT);
                 continue;
             }
         };
@@ -509,11 +533,37 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
     Err(format!("所有候选端口均无法打开: {:?}", at_candidates))
 }
 
-/// Alias so the inner probe closure can name its return type.
-type ModemFactoryProbe = Result<
-    Box<dyn modem_hal::ModemVendor>,
-    String,
->;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn vendor_detection_is_not_limited_by_at_probe_timeout() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("tokio runtime");
+        let detection_ran = Arc::new(AtomicBool::new(false));
+        let detection_ran_for_task = detection_ran.clone();
+
+        let result = runtime.block_on(async move {
+            run_after_at_probe_timeout(
+                Duration::from_millis(10),
+                async { Ok::<_, String>("transport") },
+                move |transport| async move {
+                    tokio::time::sleep(Duration::from_millis(30)).await;
+                    detection_ran_for_task.store(true, Ordering::SeqCst);
+                    Ok::<_, String>((transport, "vendor"))
+                },
+            )
+            .await
+        });
+
+        assert_eq!(result.unwrap(), ("transport", "vendor"));
+        assert!(detection_ran.load(Ordering::SeqCst));
+    }
+}
 
 // ── Connection management ──
 

@@ -108,10 +108,7 @@ pub fn validate_raw_at_command(command: &str) -> Result<(), String> {
 /// Validate that a CID (PDP context identifier) is within the valid range (1-16).
 pub fn validate_cid(cid: i32) -> Result<(), String> {
     if cid < 1 || cid > 16 {
-        return Err(format!(
-            "Invalid CID {}: must be between 1 and 16",
-            cid
-        ));
+        return Err(format!("Invalid CID {}: must be between 1 and 16", cid));
     }
     Ok(())
 }
@@ -124,7 +121,10 @@ mod tests {
     fn raw_at_command_allows_quoted_complete_commands() {
         assert!(validate_raw_at_command(r#"AT+QCFG="ims""#).is_ok());
         assert!(validate_raw_at_command(r#"AT+QNWLOCK="common/5g",1,630000,123"#).is_ok());
-        assert!(validate_raw_at_command(r#"AT+QCFG="lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254""#).is_ok());
+        assert!(validate_raw_at_command(
+            r#"AT+QCFG="lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254""#
+        )
+        .is_ok());
     }
 
     #[test]
@@ -149,7 +149,7 @@ mod tests {
         assert!(validate_raw_at_command("ATS0=0").is_err());
         assert!(validate_raw_at_command("ATS3=13").is_err());
         assert!(validate_raw_at_command("ats13=1").is_err()); // case-insensitive
-        // S-registers READS are still allowed (no '=')
+                                                              // S-registers READS are still allowed (no '=')
         assert!(validate_raw_at_command("ATS0?").is_ok());
         assert!(validate_raw_at_command("ATS5").is_ok());
     }

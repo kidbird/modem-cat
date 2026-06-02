@@ -11,7 +11,9 @@ pub trait AtTransport: Send {
     fn close(&mut self);
     /// Returns false when the underlying hardware has been removed (e.g. USB unplug).
     /// Does not send any bytes — safe to call from a background heartbeat.
-    fn is_alive(&self) -> bool { true }
+    fn is_alive(&self) -> bool {
+        true
+    }
 }
 
 pub struct MockTransport {
@@ -189,13 +191,8 @@ fn redact_last_quoted_value(command: &str) -> Option<String> {
             i += 1;
         }
     }
-    last_open.map(|(open, close)| {
-        format!(
-            "{}\"******\"{}",
-            &command[..open],
-            &command[close + 1..]
-        )
-    })
+    last_open
+        .map(|(open, close)| format!("{}\"******\"{}", &command[..open], &command[close + 1..]))
 }
 
 /// QSIMLOCK: keep `"PN"` literal, replace the next quoted value.
@@ -285,4 +282,3 @@ fn redact_quoted_value_after_key(command: &str, keys: &[&str]) -> String {
     }
     out
 }
-

@@ -176,4 +176,3 @@ impl AtTransport for SerialTransport {
         self.port.bytes_to_read().is_ok()
     }
 }
-

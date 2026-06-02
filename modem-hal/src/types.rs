@@ -141,7 +141,6 @@ pub struct BandConfig {
     pub nr_spec: Vec<String>,
 }
 
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureToggles {

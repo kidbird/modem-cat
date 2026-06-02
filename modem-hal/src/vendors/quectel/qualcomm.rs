@@ -1,6 +1,6 @@
+use super::parser::parse_cgact;
 use crate::transport::AtTransport;
 use crate::types::{IpInfo, TrafficInfo};
-use super::parser::parse_cgact;
 
 pub fn connect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
     use super::parser::is_ok;
@@ -32,10 +32,19 @@ pub fn parse_mpdn_ippt_mode(response: &str) -> i32 {
     for line in response.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_rule") && parts[1].trim() == "0" {
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
+            if parts.len() >= 5
+                && parts[0].eq_ignore_ascii_case("MPDN_rule")
+                && parts[1].trim() == "0"
+            {
                 let profile_id: i32 = parts[2].trim().parse().unwrap_or(0);
-                if profile_id == 0 { return 0; }
+                if profile_id == 0 {
+                    return 0;
+                }
                 let ippt_mode: i32 = parts[4].trim().parse().unwrap_or(0);
                 return if ippt_mode == 1 { 2 } else { 1 };
             }
@@ -50,9 +59,14 @@ pub fn parse_mpdn_connect_status(response: &str) -> bool {
     for line in response.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             // parts[0]="MPDN_status", parts[1]=rule_num, parts[2]=profileID, parts[3]=IPPT_status, parts[4]=connect_status
-            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status")
+            if parts.len() >= 5
+                && parts[0].eq_ignore_ascii_case("MPDN_status")
                 && parts[1].trim() == "0"
             {
                 return parts[4].trim() == "1";
@@ -66,9 +80,16 @@ pub fn parse_mpdn_connect_status(response: &str) -> bool {
 pub fn parse_eth_pdu_enabled(response: &str) -> bool {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
             if parts.first().map(|s| s.eq_ignore_ascii_case("ETH_PDU")) == Some(true) {
-                return parts.get(1).map(|s| s.eq_ignore_ascii_case("enable")).unwrap_or(false);
+                return parts
+                    .get(1)
+                    .map(|s| s.eq_ignore_ascii_case("enable"))
+                    .unwrap_or(false);
             }
         }
     }
@@ -79,8 +100,13 @@ pub fn parse_eth_pdu_enabled(response: &str) -> bool {
 pub fn parse_mpdn_rule_cid(response: &str, rule_id: i32) -> Option<i32> {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("MPDN_rule")
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
+            if parts.len() >= 3
+                && parts[0].eq_ignore_ascii_case("MPDN_rule")
                 && parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id
             {
                 return parts[2].trim().parse::<i32>().ok();
@@ -94,8 +120,13 @@ pub fn parse_mpdn_rule_cid(response: &str, rule_id: i32) -> Option<i32> {
 pub fn parse_mpdn_connect_status_by_rule(response: &str, rule_id: i32) -> bool {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 5 && parts[0].eq_ignore_ascii_case("MPDN_status")
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
+            if parts.len() >= 5
+                && parts[0].eq_ignore_ascii_case("MPDN_status")
                 && parts[1].trim().parse::<i32>().unwrap_or(-1) == rule_id
             {
                 return parts[4].trim() == "1";
@@ -261,9 +292,16 @@ pub fn query_ip_info(t: &mut dyn AtTransport, data_cid: i32) -> Result<IpInfo, S
 /// Set auto-connect for a QMAP data call rule.
 /// `AT+QMAP="auto_connect",<rule_num>,<auto_connect>`
 /// auto_connect: 0=disabled, 1=enabled
-pub fn set_auto_connect(t: &mut dyn AtTransport, rule_num: i32, auto_connect: i32) -> Result<(), String> {
+pub fn set_auto_connect(
+    t: &mut dyn AtTransport,
+    rule_num: i32,
+    auto_connect: i32,
+) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!("AT+QMAP=\"auto_connect\",{},{}", rule_num, auto_connect))?;
+    let resp = t.send_at(&format!(
+        "AT+QMAP=\"auto_connect\",{},{}",
+        rule_num, auto_connect
+    ))?;
     if !is_ok(&resp) {
         return Err(format!("QMAP auto_connect set failed: {}", resp.trim()));
     }
@@ -275,8 +313,15 @@ pub fn set_auto_connect(t: &mut dyn AtTransport, rule_num: i32, auto_connect: i3
 pub fn parse_auto_connect(response: &str) -> i32 {
     for line in response.lines() {
         if let Some(rest) = line.trim().strip_prefix("+QMAP:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|s| s.trim().trim_matches('"')).collect();
-            if parts.len() >= 3 && parts[0].eq_ignore_ascii_case("auto_connect") && parts[1].trim() == "0" {
+            let parts: Vec<&str> = rest
+                .trim()
+                .split(',')
+                .map(|s| s.trim().trim_matches('"'))
+                .collect();
+            if parts.len() >= 3
+                && parts[0].eq_ignore_ascii_case("auto_connect")
+                && parts[1].trim() == "0"
+            {
                 return parts[2].trim().parse().unwrap_or(0);
             }
         }

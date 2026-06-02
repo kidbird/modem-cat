@@ -91,7 +91,9 @@ macro_rules! with_vendor {
         let transport = $state.transport.clone();
         let vendor = $state.vendor.clone();
         tokio::task::spawn_blocking(move || {
-            let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let mut tguard = transport
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
@@ -112,7 +114,9 @@ macro_rules! with_vendor_cid {
         let vendor = $state.vendor.clone();
         let data_cid = $state.data_cid.clone();
         tokio::task::spawn_blocking(move || {
-            let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+            let mut tguard = transport
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))?;
             let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
             let $t = tguard.as_deref_mut().ok_or("Not connected")?;
             let $v = vguard.as_deref_mut().ok_or("No vendor detected")?;
@@ -444,19 +448,18 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
             let pn_block = pn.clone();
             let pn_probe = pn.clone();
             let pn_detect = pn.clone();
-            let probe = tokio::task::spawn_blocking(move || -> Result<
-                modem_hal::transport::SerialTransport,
-                String,
-            > {
-                let mut transport =
-                    modem_hal::transport::SerialTransport::new(&pn_block, 115200)?;
-                let response = transport.send_at("AT");
-                match response {
-                    Ok(r) if r.trim().ends_with("OK") => Ok(transport),
-                    Ok(r) => Err(format!("Port {} responded but not OK: {}", pn_block, r)),
-                    Err(e) => Err(format!("Port {} AT probe failed: {}", pn_block, e)),
-                }
-            });
+            let probe = tokio::task::spawn_blocking(
+                move || -> Result<modem_hal::transport::SerialTransport, String> {
+                    let mut transport =
+                        modem_hal::transport::SerialTransport::new(&pn_block, 115200)?;
+                    let response = transport.send_at("AT");
+                    match response {
+                        Ok(r) if r.trim().ends_with("OK") => Ok(transport),
+                        Ok(r) => Err(format!("Port {} responded but not OK: {}", pn_block, r)),
+                        Err(e) => Err(format!("Port {} AT probe failed: {}", pn_block, e)),
+                    }
+                },
+            );
             let result = run_after_at_probe_timeout(
                 AT_PROBE_TIMEOUT,
                 async move {
@@ -511,10 +514,8 @@ async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, St
                 );
                 *transport_arc
                     .lock()
-                    .map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-                    Box::new(transport),
-                    at_log.clone(),
-                ));
+                    .map_err(|e| format!("Lock poisoned: {}", e))? =
+                    Some(wrap_transport(Box::new(transport), at_log.clone()));
                 *vendor_arc
                     .lock()
                     .map_err(|e| format!("Lock poisoned: {}", e))? = Some(vendor);
@@ -577,27 +578,32 @@ async fn connect_serial(
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
     let at_log_state = state.at_command_log.clone();
-    
+
     let port_name_clone = port_name.clone();
     tokio::task::spawn_blocking(move || {
-        let mut transport = modem_hal::transport::SerialTransport::new(&port_name_clone, baud_rate)?;
+        let mut transport =
+            modem_hal::transport::SerialTransport::new(&port_name_clone, baud_rate)?;
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("serial_{}", port_name_clone);
-        
+
         let v = match vendor {
             Ok(v) => v,
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-            Box::new(transport),
-            at_log_state,
-        ));
-        
-        log::info!("Detected vendor: {:?}", v.vendor());
-        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+        *transport_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? =
+            Some(wrap_transport(Box::new(transport), at_log_state));
 
-        *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
+        log::info!("Detected vendor: {:?}", v.vendor());
+        *vendor_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
         log::info!(
             "Connected to serial port {} at {} baud",
             port_name_clone,
@@ -619,26 +625,30 @@ async fn connect_tcp(
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
     let at_log_state = state.at_command_log.clone();
-    
+
     let host_clone = host.clone();
     tokio::task::spawn_blocking(move || {
         let mut transport = modem_hal::transport::TcpTransport::new(&host_clone, port)?;
         let vendor = ModemFactory::create(&mut transport);
         let id = format!("tcp_{}:{}", host_clone, port);
-        
+
         let v = match vendor {
             Ok(v) => v,
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *conn_port_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *transport_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(wrap_transport(
-            Box::new(transport),
-            at_log_state,
-        ));
-        
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *transport_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? =
+            Some(wrap_transport(Box::new(transport), at_log_state));
+
         log::info!("Detected vendor: {:?}", v.vendor());
-        *vendor_state.lock().map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+        *vendor_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -653,15 +663,19 @@ async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String>
     let vendor = state.vendor.clone();
     let connected_port = state.connected_port.clone();
     let data_cid = state.data_cid.clone();
-    
+
     tokio::task::spawn_blocking(move || {
-        let mut t = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut t = transport
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
         if let Some(ref mut transport) = *t {
             transport.close();
         }
         *t = None;
         *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *connected_port.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *connected_port
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         data_cid.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
@@ -683,7 +697,8 @@ async fn get_hardware_info(state: tauri::State<'_, AppState>) -> Result<Hardware
 
 #[tauri::command]
 async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v.query_ip_info(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .query_ip_info(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -698,7 +713,8 @@ async fn get_neighbor_cells(state: tauri::State<'_, AppState>) -> Result<Neighbo
 
 #[tauri::command]
 async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v.query_qos(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .query_qos(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -722,7 +738,15 @@ async fn set_apn_config(
     validate_at_string(&apn)?;
     validate_at_string(&username)?;
     validate_at_string(&password)?;
-    with_vendor!(state, |t, v| v.set_apn(t, cid, context_type, &apn, &username, &password, auth_type))
+    with_vendor!(state, |t, v| v.set_apn(
+        t,
+        cid,
+        context_type,
+        &apn,
+        &username,
+        &password,
+        auth_type
+    ))
 }
 
 #[tauri::command]
@@ -732,7 +756,11 @@ async fn delete_apn_config(cid: i32, state: tauri::State<'_, AppState>) -> Resul
 }
 
 #[tauri::command]
-async fn set_apn_active(cid: i32, active: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_apn_active(
+    cid: i32,
+    active: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_apn_active(t, cid, active))
 }
@@ -743,7 +771,9 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut tguard = transport
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
         let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
@@ -751,7 +781,11 @@ async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
         // pick 1; otherwise use the stored CID.
         let cid = {
             let cur = data_cid.load(Ordering::Relaxed);
-            if cur > 0 { cur } else { 1 }
+            if cur > 0 {
+                cur
+            } else {
+                1
+            }
         };
         v.connect_data(t, cid)?;
         // Lock-free write of the same CID back so subsequent calls
@@ -769,7 +803,12 @@ async fn get_5glan(state: tauri::State<'_, AppState>) -> Result<Vec<L5GanEntry>,
 }
 
 #[tauri::command]
-async fn set_5glan(cid: i32, enabled: bool, vlan_id: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_5glan(
+    cid: i32,
+    enabled: bool,
+    vlan_id: i32,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_cid(cid)?;
     with_vendor!(state, |t, v| v.set_5glan(t, cid, enabled, vlan_id))
 }
@@ -781,14 +820,20 @@ fn get_app_version() -> String {
 
 #[tauri::command]
 async fn configure_qualcomm_5glan(
-    cid: i32, apn: String, snssai: String,
-    profile_id: i32, vlan_start: i32, vlan_end: i32,
+    cid: i32,
+    apn: String,
+    snssai: String,
+    profile_id: i32,
+    vlan_start: i32,
+    vlan_end: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     validate_cid(cid)?;
     validate_at_string(&apn)?;
     validate_at_string(&snssai)?;
-    with_vendor!(state, |t, v| v.configure_qualcomm_5glan(t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end))
+    with_vendor!(state, |t, v| v.configure_qualcomm_5glan(
+        t, cid, &apn, &snssai, profile_id, vlan_start, vlan_end
+    ))
 }
 
 #[tauri::command]
@@ -798,14 +843,17 @@ async fn enable_eth_pdu(state: tauri::State<'_, AppState>) -> Result<(), String>
 
 #[tauri::command]
 async fn connect_qualcomm_5glan(
-    rule_id: i32, cid: i32,
+    rule_id: i32,
+    cid: i32,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     with_vendor!(state, |t, v| v.connect_qualcomm_5glan(t, rule_id, cid))
 }
 
 #[tauri::command]
-async fn query_qualcomm_5glan_status(state: tauri::State<'_, AppState>) -> Result<Qualcomm5GlanStatus, String> {
+async fn query_qualcomm_5glan_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<Qualcomm5GlanStatus, String> {
     with_vendor!(state, |t, v| v.query_qualcomm_5glan_status(t))
 }
 
@@ -815,13 +863,18 @@ async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String>
 }
 
 #[tauri::command]
-async fn set_vlan(vlan_id: i32, enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_vlan(
+    vlan_id: i32,
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     with_vendor!(state, |t, v| v.set_vlan(t, vlan_id, enabled))
 }
 
 #[tauri::command]
 async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
-    with_vendor_cid!(state, |t, v, cid| v.disconnect_data(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| v
+        .disconnect_data(t, if cid > 0 { cid } else { 1 }))
 }
 
 #[tauri::command]
@@ -873,7 +926,9 @@ async fn send_raw_at(command: String, state: tauri::State<'_, AppState>) -> Resu
     validate_raw_at_command(&command)?;
     let transport = state.transport.clone();
     tokio::task::spawn_blocking(move || {
-        let mut tguard = transport.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut tguard = transport
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         t.send_at(&command)
     })
@@ -907,7 +962,11 @@ async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String
 }
 
 #[tauri::command]
-async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn set_plmn_lock(
+    plmn: String,
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     validate_at_string(&plmn)?;
     let pw = password.ok_or_else(|| "PLMN lock requires a password (the device-specific unlock code, NOT the public default)".to_string())?;
     validate_at_string(&pw)?;
@@ -915,7 +974,10 @@ async fn set_plmn_lock(plmn: String, password: Option<String>, state: tauri::Sta
 }
 
 #[tauri::command]
-async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn clear_plmn_lock(
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
     let pw = password.ok_or_else(|| "PLMN unlock requires a password".to_string())?;
     validate_at_string(&pw)?;
     with_vendor!(state, |t, v| v.clear_plmn_lock(t, &pw))
@@ -924,7 +986,10 @@ async fn clear_plmn_lock(password: Option<String>, state: tauri::State<'_, AppSt
 /// Return all AT commands logged by internal operations since last call, then clear the log.
 #[tauri::command]
 fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
-    let mut log = state.at_command_log.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    let mut log = state
+        .at_command_log
+        .lock()
+        .map_err(|e| format!("Lock poisoned: {}", e))?;
     // drain(..) empties the VecDeque in place and yields owned elements.
     Ok(log.drain(..).collect())
 }
@@ -1038,22 +1103,32 @@ fn start_port_monitor(app_handle: tauri::AppHandle) {
                             }
                         };
 
-                        let current_names: HashSet<String> = ports.iter().map(|p| p.port_name.clone()).collect();
+                        let current_names: HashSet<String> =
+                            ports.iter().map(|p| p.port_name.clone()).collect();
 
-                        let added: Vec<String> = current_names.difference(&previous_ports).cloned().collect();
-                        let removed: Vec<String> = previous_ports.difference(&current_names).cloned().collect();
+                        let added: Vec<String> =
+                            current_names.difference(&previous_ports).cloned().collect();
+                        let removed: Vec<String> =
+                            previous_ports.difference(&current_names).cloned().collect();
                         previous_ports = current_names;
 
                         if added.is_empty() && removed.is_empty() {
                             continue;
                         }
 
-                        log::info!("[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}", added, removed);
+                        log::info!(
+                            "[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}",
+                            added,
+                            removed
+                        );
 
-                        if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
-                            added: added.clone(),
-                            removed: removed.clone(),
-                        }) {
+                        if let Err(e) = app_handle.emit(
+                            "port-changed",
+                            PortChangeEvent {
+                                added: added.clone(),
+                                removed: removed.clone(),
+                            },
+                        ) {
                             log::warn!("[USB监控] 发送事件失败: {}", e);
                         }
                     }
@@ -1114,10 +1189,13 @@ fn start_connection_heartbeat(
                     if let Ok(mut g) = connected_port.try_lock() {
                         *g = None;
                     }
-                    if let Err(e) = app_handle.emit("port-changed", PortChangeEvent {
-                        added: vec![],
-                        removed: vec![port],
-                    }) {
+                    if let Err(e) = app_handle.emit(
+                        "port-changed",
+                        PortChangeEvent {
+                            added: vec![],
+                            removed: vec![port],
+                        },
+                    ) {
                         log::warn!("[心跳] 发送断连事件失败: {}", e);
                     }
                 }
@@ -1151,14 +1229,9 @@ pub fn run() {
         })
         .setup(|app| {
             // ── Build menu bar ──
-            let about = MenuItemBuilder::with_id("about", "关于 Modem Cat")
-                .build(app)?;
-            let help_menu = SubmenuBuilder::new(app, "帮助")
-                .item(&about)
-                .build()?;
-            let menu = MenuBuilder::new(app)
-                .item(&help_menu)
-                .build()?;
+            let about = MenuItemBuilder::with_id("about", "关于 Modem Cat").build(app)?;
+            let help_menu = SubmenuBuilder::new(app, "帮助").item(&about).build()?;
+            let menu = MenuBuilder::new(app).item(&help_menu).build()?;
             app.set_menu(menu)?;
             app.on_menu_event(|handle, event| {
                 if event.id() == "about" {
@@ -1175,7 +1248,8 @@ pub fn run() {
                 state.connected_port.clone(),
             );
 
-            let show_item = tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
+            let show_item =
+                tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
             let quit_item = tauri::menu::MenuItemBuilder::with_id("quit", "退出").build(app)?;
             let menu = tauri::menu::MenuBuilder::new(app)
                 .item(&show_item)
@@ -1193,23 +1267,25 @@ pub fn run() {
                 log::error!("Failed to set tray menu: {}", e);
             }
 
-            tray_icon.on_menu_event(|app, event| {
-                match event.id.as_ref() {
-                    "show_window" => {
-                        if let Some(window) = app.webview_windows().get("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
+            tray_icon.on_menu_event(|app, event| match event.id.as_ref() {
+                "show_window" => {
+                    if let Some(window) = app.webview_windows().get("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
                     }
-                    "quit" => {
-                        app.exit(0);
-                    }
-                    _ => {}
                 }
+                "quit" => {
+                    app.exit(0);
+                }
+                _ => {}
             });
 
             tray_icon.on_tray_icon_event(|tray, event| {
-                if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                if let tauri::tray::TrayIconEvent::Click {
+                    button: tauri::tray::MouseButton::Left,
+                    ..
+                } = event
+                {
                     let app = tray.app_handle();
                     if let Some(window) = app.webview_windows().get("main") {
                         let _ = window.show();

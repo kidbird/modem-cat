@@ -166,7 +166,7 @@ impl ModemVendor for TdTechModem {
 
     fn query_apn_list(&mut self, t: &mut dyn AtTransport) -> Result<Vec<ApnEntry>, String> {
         let resp = t.send_at("AT+CGDCONT?")?;
-        
+
         let mut active_cids = std::collections::HashSet::new();
         if let Ok(dconn_resp) = t.send_at("AT^DCONNSTAT?") {
             for line in dconn_resp.lines() {
@@ -190,7 +190,10 @@ impl ModemVendor for TdTechModem {
         let mut auth_map = std::collections::HashMap::new();
         for line in cgauth_resp.lines() {
             if let Some(rest) = line.trim().strip_prefix("+CGAUTH:") {
-                let parts: Vec<&str> = rest.split(',').map(|s| s.trim().trim_matches('"')).collect();
+                let parts: Vec<&str> = rest
+                    .split(',')
+                    .map(|s| s.trim().trim_matches('"'))
+                    .collect();
                 if parts.len() >= 3 {
                     if let Ok(cid) = parts[0].parse::<i32>() {
                         let auth_proto = parts[1].parse::<i32>().unwrap_or(0);
@@ -210,9 +213,8 @@ impl ModemVendor for TdTechModem {
                     .collect();
                 if parts.len() >= 3 {
                     if let Ok(cid) = parts[0].parse::<i32>() {
-                        let (auth_type, username) = auth_map.get(&cid)
-                            .cloned()
-                            .unwrap_or((0, String::new()));
+                        let (auth_type, username) =
+                            auth_map.get(&cid).cloned().unwrap_or((0, String::new()));
                         let active = active_cids.contains(&cid);
                         entries.push(ApnEntry {
                             cid,
@@ -246,7 +248,10 @@ impl ModemVendor for TdTechModem {
         };
         send_and_check(t, &format!("AT+CGDCONT={},\"{}\",\"{}\"", cid, pdp, apn))?;
         if !user.is_empty() || !pass.is_empty() || auth > 0 {
-            let _ = t.send_at(&format!("AT+CGAUTH={},{},\"{}\",\"{}\"", cid, auth, user, pass));
+            let _ = t.send_at(&format!(
+                "AT+CGAUTH={},{},\"{}\",\"{}\"",
+                cid, auth, user, pass
+            ));
         }
         Ok(())
     }
@@ -256,13 +261,22 @@ impl ModemVendor for TdTechModem {
         Ok(())
     }
 
-    fn set_apn_active(&mut self, t: &mut dyn AtTransport, cid: i32, active: bool) -> Result<(), String> {
+    fn set_apn_active(
+        &mut self,
+        t: &mut dyn AtTransport,
+        cid: i32,
+        active: bool,
+    ) -> Result<(), String> {
         let state = if active { 1 } else { 0 };
         let resp = t.send_at(&format!("AT+CGACT={},{}", state, cid))?;
         if resp.contains("OK") {
             Ok(())
         } else {
-            Err(format!("Failed to {} APN: {}", if active { "activate" } else { "deactivate" }, resp))
+            Err(format!(
+                "Failed to {} APN: {}",
+                if active { "activate" } else { "deactivate" },
+                resp
+            ))
         }
     }
 
@@ -293,7 +307,10 @@ impl ModemVendor for TdTechModem {
     fn set_lte_bands(&mut self, t: &mut dyn AtTransport, bands: &str) -> Result<(), String> {
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (acqorder, _) = parse_syscfgex(&resp);
-        let resp2 = t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, bands))?;
+        let resp2 = t.send_at(&format!(
+            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
+            acqorder, bands
+        ))?;
         if resp2.contains("ERROR") {
             return Err(format!("Failed to set LTE bands: {}", resp2.trim()));
         }
@@ -315,7 +332,10 @@ impl ModemVendor for TdTechModem {
         };
         let resp = t.send_at("AT^SYSCFGEX?")?;
         let (_, lteband) = parse_syscfgex(&resp);
-        let resp2 = t.send_at(&format!("AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,", acqorder, lteband))?;
+        let resp2 = t.send_at(&format!(
+            "AT^SYSCFGEX=\"{}\",3FFFFFFF,1,2,{},,",
+            acqorder, lteband
+        ))?;
         if resp2.contains("ERROR") {
             return Err(format!("Failed to set network mode: {}", resp2.trim()));
         }

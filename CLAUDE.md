@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> 最近更新：2026-06-02（删 monitor.rs 孤儿 / commands.rs 早删 / heartbeat try_lock / 6 项 review 修复 / blue-light 主题 / 并行 probe）
+> 最近更新：2026-06-02（加 vitest + happy-dom 前端测试 / safeStorage 包装 / 删 monitor.rs / commands.rs 早删 / heartbeat try_lock / 6 项 review 修复 / blue-light 主题 / 并行 probe）
 > 详细文档见 [docs/](docs/)，尤其是 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)、[docs/CODE_MAP.md](docs/CODE_MAP.md)、[docs/CALL_FLOW.md](docs/CALL_FLOW.md)、[docs/REVIEW.md](docs/REVIEW.md)。
 
 ## Project Overview
@@ -26,6 +26,10 @@ cargo test -p modem-cat
 
 # Run a specific test
 cargo test -p modem-hal parse_qeng_serving_cell
+
+# Frontend tests (vitest + happy-dom)
+npm test              # 一次性跑
+npm run test:watch    # watch 模式
 ```
 
 ## Windows Build Note

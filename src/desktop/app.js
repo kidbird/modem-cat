@@ -7,6 +7,29 @@
       return _rawInvoke(cmd, args);
     };
 
+    // Safe localStorage wrapper. WebView2 can throw SecurityError when
+    // localStorage is disabled (private mode, sandboxed origin, locked-down
+    // enterprise policy). A throw from a top-level `localStorage.getItem()`
+    // during state-init would abort the entire <script> block — no IPC, no
+    // event listeners, no theme bootstrap. Swallow and return null/no-op.
+    const safeStorage = {
+      get(key) {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          console.warn(`localStorage.getItem('${key}') failed:`, e);
+          return null;
+        }
+      },
+      set(key, val) {
+        try {
+          localStorage.setItem(key, val);
+        } catch (e) {
+          console.warn(`localStorage.setItem('${key}') failed:`, e);
+        }
+      },
+    };
+
     // ── State ──
     const state = {
       connected: false,
@@ -18,7 +41,7 @@
       bandConfig: null,
       connectedPort: '',
       idle: false,
-      lang: localStorage.getItem('lang') || 'zh',
+      lang: safeStorage.get('lang') || 'zh',
       model: '',
       chipVendor: '',
       currentBand: '',
@@ -96,14 +119,14 @@
 
     // ── Theme ──
     (function () {
-      const saved = localStorage.getItem('theme');
+      const saved = safeStorage.get('theme');
       if (saved === 'light') setTheme('light');
       else if (saved === 'blue-light') setTheme('blue-light');
       else setTheme('dark');
     })();
 
     function toggleTheme() {
-      const current = localStorage.getItem('theme') || 'dark';
+      const current = safeStorage.get('theme') || 'dark';
       if (current === 'dark') setTheme('light');
       else if (current === 'light') setTheme('blue-light');
       else setTheme('dark');
@@ -115,7 +138,7 @@
       // localStorage directly. Drop the dead-write; the `isDark: true` field
       // in the state literal above is harmless initial seed.
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('theme', theme);
+      safeStorage.set('theme', theme);
       updateThemeToggle(theme);
     }
 
@@ -328,14 +351,14 @@
 
     function toggleLang() {
       state.lang = state.lang === 'zh' ? 'en' : 'zh';
-      localStorage.setItem('lang', state.lang);
+      safeStorage.set('lang', state.lang);
       applyI18n();
     }
 
     function setLang(lang) {
       if (state.lang === lang) return;
       state.lang = lang;
-      localStorage.setItem('lang', state.lang);
+      safeStorage.set('lang', state.lang);
       applyI18n();
     }
 

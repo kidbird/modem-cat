@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modem Cat</title>
   <link rel="stylesheet" href="styles.css">
+  <script>
+    (function() {
+      const saved = localStorage.getItem('theme');
+      const theme = saved === 'light' || saved === 'blue-light' ? saved : 'dark';
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
 
@@ -230,10 +237,9 @@
           </svg>
         </span>
         <span class="status-key">射频</span>
-        <label style="position:relative;display:inline-block;width:36px;height:20px;cursor:pointer;margin-left:auto;">
-          <input type="checkbox" id="rfToggle" checked onchange="toggleRf(this.checked)" style="opacity:0;width:0;height:0;">
-          <span id="rfSlider" style="position:absolute;inset:0;background:var(--accent);border-radius:10px;transition:background 0.2s;"></span>
-          <span id="rfDot" style="position:absolute;left:18px;top:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left 0.2s;"></span>
+        <label class="toggle-switch" style="margin-left:auto;">
+          <input type="checkbox" id="rfToggle" checked onchange="toggleRf(this.checked)">
+          <span class="toggle-track"></span>
         </label>
       </div>
       <div class="status-row">
@@ -1254,13 +1260,13 @@
                   <line x1="15" y1="15" x2="21" y2="21"/>
                 </svg>
                 <span>IP 直通模式 (IPPT)</span>
+                <div id="qcAutoConnectBadge" class="status-badge" style="display:none;font-size:11px;padding:2px 8px;border-radius:4px;background:#1a3a1a;color:#4ade80;font-weight:normal;line-height:1.2;margin-left:4px;">自动拨号已启用</div>
               </div>
               <div class="toggle-group">
                 <button class="toggle-btn" id="qcIppt_0" onclick="setQcIpptMode(0)">关闭</button>
                 <button class="toggle-btn" id="qcIppt_1" onclick="setQcIpptMode(1)">IPPT 路由</button>
                 <button class="toggle-btn" id="qcIppt_2" onclick="setQcIpptMode(2)">IPPT 桥接</button>
               </div>
-              <div id="qcAutoConnectBadge" class="status-badge" style="display:none;font-size:11px;margin-top:4px;padding:2px 8px;border-radius:4px;background:#1a3a1a;color:#4ade80;">自动拨号已启用</div>
             </div>
 
           </div>

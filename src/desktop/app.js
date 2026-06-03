@@ -388,6 +388,14 @@
       item.classList.add('active');
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('page-' + item.dataset.page).classList.add('active');
+      if (item.dataset.page === 'status' && state.connected) {
+        const activeTabBtn = document.querySelector('#page-status .tab-btn.active');
+        if (activeTabBtn) activeTabBtn.click();
+      }
+      if (item.dataset.page === 'cellular' && state.connected) {
+        const activeTabBtn = document.querySelector('#page-cellular .tab-btn.active');
+        if (activeTabBtn) activeTabBtn.click();
+      }
       if (item.dataset.page === 'hardware' && state.connected) {
         loadHardwarePage();
       }
@@ -1767,7 +1775,7 @@
         // Qualcomm QMAP order: start,end,gw  (no mask field)
         // UniSoc QCFG order:  gw,mask,start,end
         const cmd = isQualcomm
-          ? `AT+QMAP="LANIP","${start}","${end}","${gw}"`
+          ? `AT+QMAP="LANIP",${start},${end},${gw}`
           : (mask
               ? `AT+QCFG="lanip_ex","${gw}","${mask}","${start}","${end}"`
               : `AT+QCFG="lanip_ex","${gw}","${start}","${end}"`);
@@ -2760,19 +2768,15 @@
           params:[
             {name:'slot',desc:'目标卡槽',values:'1=卡槽 1, 2=卡槽 2'}],
           example:'AT+QUIMSLOT=2\nOK', note:'切换后需等待 10 秒再查询状态。' },
-        { cmd:'AT+QNWLOCK', category:'系统控制', desc:'锁定到指定 NR5G 小区（ARFCN + PCI）',
-          syntax:'AT+QNWLOCK="common/5g",1,<arfcn>,<pci>\nAT+QNWLOCK="common/5g",0（解锁）',
+        { cmd:'AT+QNWLOCK', category:'系统控制', desc:'锁定到指定 NR5G 小区（ARFCN + PCI 精确锁定）',
+          syntax:'AT+QNWLOCK="common/5g",<pci>,<arfcn>,<scs>,<band>\nAT+QNWLOCK="common/5g",0（解锁）',
           response:'OK',
           params:[
-            {name:'arfcn',desc:'NR ARFCN 频点号',values:'整数'},
-            {name:'pci',desc:'物理小区 ID',values:'0-1007'}],
-          example:'AT+QNWLOCK="common/5g",1,630000,123\nOK', note:'锁定后仅驻留指定小区。设为 0 解除。' },
-        { cmd:'AT+QNWLOCKFREQ', category:'系统控制', desc:'仅锁定到指定频点（不限 PCI）',
-          syntax:'AT+QNWLOCKFREQ="common/5g",1,<arfcn>\nAT+QNWLOCKFREQ="common/5g",0（解锁）',
-          response:'OK',
-          params:[
-            {name:'arfcn',desc:'NR ARFCN 频点号',values:'整数'}],
-          example:'AT+QNWLOCKFREQ="common/5g",1,630000\nOK', note:'不限定 PCI，允许驻留该频点上任意小区。' },
+            {name:'pci',desc:'物理小区 ID',values:'0-1007'},
+            {name:'arfcn',desc:'NR ARFCN 频点号',values:'整数，如 630000（n78 频段）'},
+            {name:'scs',desc:'子载波间隔 (kHz)',values:'15, 30, 60, 120, 240'},
+            {name:'band',desc:'NR 频段号',values:'整数，如 78'}],
+          example:'AT+QNWLOCK="common/5g",123,630000,30,78\nOK', note:'锁定后模组仅驻留指定小区。设为 0 解除。' },
         { cmd:'AT+QSIMLOCK', category:'系统控制', desc:'PLMN（运营商）锁定/解锁（需密码）',
           syntax:'AT+QSIMLOCK="PN","<password>",2,"<plmn>"（锁定）\nAT+QSIMLOCK="PN","<password>"（解锁）',
           response:'OK',
@@ -2951,6 +2955,14 @@
       btn.classList.add('active');
       const panel = document.getElementById('stab-' + tab);
       if (panel) panel.classList.add('active');
+
+      if (state.connected) {
+        if (tab === 'network') {
+          refreshModemStatus();
+        } else if (tab === 'ip') {
+          refreshIpInfo();
+        }
+      }
     }
 
     function switchHardwareTab(tab, btn) {
@@ -3274,23 +3286,13 @@
       }
     }
 
-    function setRfVisual(enabled) {
-      const slider = document.getElementById('rfSlider');
-      const dot = document.getElementById('rfDot');
-      if (!slider || !dot) return;
-      slider.style.background = enabled ? 'var(--accent)' : 'var(--bg-primary)';
-      dot.style.left = enabled ? '18px' : '2px';
-    }
-
     async function toggleRf(enabled) {
       if (!state.connected) {
         const cb = document.getElementById('rfToggle');
         cb.checked = !enabled;
-        setRfVisual(!enabled);
         showToast('请先连接模组', 'err');
         return;
       }
-      setRfVisual(enabled);
       try {
         await invoke('set_cfun', { mode: enabled ? 1 : 0 });
         await flushAtLog();
@@ -3314,7 +3316,6 @@
       } catch (e) {
         const cb = document.getElementById('rfToggle');
         cb.checked = !enabled;
-        setRfVisual(!enabled);
         addTerminalLine(`[射频] 设置失败: ${e}`, 'err');
         showToast('射频设置失败', 'err');
       }
@@ -3329,7 +3330,6 @@
           const on = m[1] === '1';
           const cb = document.getElementById('rfToggle');
           if (cb) cb.checked = on;
-          setRfVisual(on);
         }
       } catch (e) {
         console.warn('[CFUN] query failed:', e);

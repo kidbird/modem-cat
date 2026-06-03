@@ -1,3 +1,21 @@
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/inter-latin-wght-normal.woff2') format('woff2-variations'),
+       url('fonts/inter-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations'),
+       url('fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
@@ -46,7 +64,7 @@
       /* Emoji-capable font stack: system UI → emoji → CJK → sans fallback.
        * Without an emoji font, the blue-light "🌐" button (U+1F310) tofu's on
        * Windows 10 / headless Linux / stripped WebView. */
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Roboto, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
       height: 100vh;
@@ -429,7 +447,7 @@
       margin-top: 2px;
       color: var(--text-primary);
       text-align: center;
-      font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif;
+      font-family: 'Inter', -apple-system, 'PingFang SC', 'Segoe UI', sans-serif;
       letter-spacing: 0.2px;
     }
     .info-row {
@@ -609,7 +627,7 @@
       padding: 14px;
       overflow-y: auto;
       font-size: 13px;
-      font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'SF Mono', monospace;
+      font-family: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'SF Mono', monospace;
       height: 520px;
       min-height: 120px;
       resize: vertical;
@@ -642,7 +660,7 @@
       border: 1px solid var(--border-color);
       border-radius: 6px;
       color: var(--text-primary);
-      font-family: 'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace;
+      font-family: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Consolas', monospace;
       font-size: 13px;
       transition: all 0.15s ease;
     }
@@ -891,8 +909,8 @@
       font-size: 10.5px;
       font-weight: 700;
       color: var(--accent);
-      background: rgba(249,115,22,0.12);
-      border: 1px solid rgba(249,115,22,0.3);
+      background: var(--accent-glow);
+      border: 1px solid var(--accent);
       padding: 2.5px 8px;
       border-radius: 4px;
       flex-shrink: 0;
@@ -969,7 +987,7 @@
       transition: border-color 0.2s;
       min-height: 152px;
     }
-    .scene-card.scene-active { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(249,115,22,0.12); }
+    .scene-card.scene-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
     .scene-badge {
       display: inline-flex;
       align-items: center;
@@ -980,9 +998,9 @@
       white-space: nowrap;
       align-self: flex-start;
     }
-    .scene-badge.active { background: rgba(249,115,22,0.14); color: var(--accent); }
+    .scene-badge.active { background: var(--accent-glow); color: var(--accent); }
     .scene-badge.inactive { background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border-color); cursor: pointer; }
-    .scene-badge.inactive:hover { border-color: var(--accent); color: var(--accent); background: rgba(249,115,22,0.08); }
+    .scene-badge.inactive:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
     .scene-name { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
     .scene-at-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; flex: 1; }
     .scene-at-list li { font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: flex-start; gap: 5px; line-height: 1.4; }
@@ -1006,26 +1024,26 @@
     .atdb-cat-header:hover { color: var(--text-secondary); }
     .atdb-cat-header .atdb-count { font-weight: 400; font-size: 10.5px; }
     .atdb-cmd-list { display: flex; flex-direction: column; }
-    .atdb-cmd-item { padding: 4px 20px; font-size: 11.5px; font-family: 'Consolas', 'JetBrains Mono', monospace; color: var(--text-secondary); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 0; }
+    .atdb-cmd-item { padding: 4px 20px; font-size: 11.5px; font-family: 'JetBrains Mono', 'Consolas', monospace; color: var(--text-secondary); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 0; }
     .atdb-cmd-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-    .atdb-cmd-item.active { background: rgba(249,115,22,0.1); color: var(--accent); font-weight: 600; }
-    .atdb-cmd-item mark { background: rgba(249,115,22,0.25); color: var(--accent); border-radius: 2px; padding: 0 1px; font-style: normal; }
+    .atdb-cmd-item.active { background: var(--accent-glow); color: var(--accent); font-weight: 600; }
+    .atdb-cmd-item mark { background: var(--accent-glow); color: var(--accent); border-radius: 2px; padding: 0 1px; font-style: normal; }
     .atdb-content { flex: 1; overflow-y: auto; padding: 20px 24px; }
     .atdb-welcome { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
     .atdb-detail-header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-    .atdb-detail-title { font-size: 17px; font-weight: 700; color: var(--accent); font-family: 'Consolas', 'JetBrains Mono', monospace; }
+    .atdb-detail-title { font-size: 17px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', 'Consolas', monospace; }
     .atdb-platform-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
     .atdb-platform-badge.unisoc { background: rgba(16,185,129,0.15); color: #10b981; }
     .atdb-platform-badge.qualcomm { background: rgba(249,115,22,0.15); color: #f97316; }
     .atdb-detail-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; }
     .atdb-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin: 16px 0 6px; }
-    .atdb-code { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); white-space: pre-wrap; position: relative; padding-right: 70px; }
+    .atdb-code { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 12.5px; color: var(--text-primary); white-space: pre-wrap; position: relative; padding-right: 70px; }
     .atdb-copy-btn { position: absolute; top: 6px; right: 8px; font-size: 10.5px; padding: 2px 8px; cursor: pointer; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-secondary); transition: color 0.15s; }
     .atdb-copy-btn:hover { color: var(--text-primary); border-color: var(--accent); }
     .atdb-param-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 2px; }
     .atdb-param-table th { text-align: left; padding: 5px 10px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
     .atdb-param-table td { padding: 6px 10px; border-top: 1px solid var(--border-color); color: var(--text-secondary); vertical-align: top; }
-    .atdb-param-table td:first-child { font-family: 'Consolas', 'JetBrains Mono', monospace; color: var(--accent); font-size: 12px; white-space: nowrap; }
+    .atdb-param-table td:first-child { font-family: 'JetBrains Mono', 'Consolas', monospace; color: var(--accent); font-size: 12px; white-space: nowrap; }
     .atdb-param-table td:last-child { color: var(--text-muted); font-size: 12px; }
     .atdb-note { font-size: 12px; color: var(--text-muted); background: var(--bg-tertiary); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 0 6px 6px 0; margin-top: 12px; line-height: 1.6; }
 
@@ -1034,8 +1052,6 @@
    作为补丁追加在原 <style> 之后，保留所有原 class，
    只重写 tokens + 几何（圆角、阴影、字体）。
    ─────────────────────────────────────────────────────────── */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── 1. Tokens · 默认 = 浅色 ─────────────────────────────── */
 :root,
@@ -1074,26 +1090,26 @@
  * selector (:root, [data-theme="light"]) and removing it there is out of scope
  * for this commit. */
 [data-theme="blue-light"] {
-  --bg-primary:    #f0f5fa;
-  --bg-secondary:  #ffffff;
-  --bg-tertiary:   #f8fafc;
-  --border-color:  #cbd5e1;
-  --border-hover:  #0f62fe;
-  --text-primary:  #0f2537;
-  --text-secondary:#2c4a63;
-  --text-muted:    #627d98;
-  --accent:        #0f62fe;
-  --accent-hover:  #0043ce;
-  --accent-glow:   rgba(15, 98, 254, 0.18);
-  --success:       #2F8A53;
-  --success-glow:  rgba(47, 138, 83, 0.15);
-  --warning:       #B5870F;
-  --error:         #B5483A;
-  --danger:        #B5483A;
-  --danger-hover:  #8F362B;
-  --cyan:          #4A6F9E;
-  --tab-bar-bg:    #e2ecef;
-  --tab-active-bg: #ffffff;
+  --bg-primary:    #f3f7fc !important; /* Clean ice-blue primary background */
+  --bg-secondary:  #ffffff !important; /* Pure white card/panel background */
+  --bg-tertiary:   #edf4fc !important; /* Cool light ice-blue background for fields/tabs */
+  --border-color:  #cbdcf0 !important; /* Soft steel-blue border */
+  --border-hover:  #0066ff !important; /* Vibrant tech-blue hover border */
+  --text-primary:  #091e42 !important; /* Crisp slate navy primary text */
+  --text-secondary:#344563 !important; /* Cool slate-blue secondary text */
+  --text-muted:    #627d98 !important; /* Soft blue-gray muted text */
+  --accent:        #0066ff !important; /* Electric tech blue accent */
+  --accent-hover:  #0052cc !important;
+  --accent-glow:   rgba(0, 102, 255, 0.12) !important;
+  --success:       #0d9488 !important; /* Clean high-tech emerald green */
+  --success-glow:  rgba(13, 148, 136, 0.12) !important;
+  --warning:       #d97706 !important;
+  --error:         #ef4444 !important;
+  --danger:        #ef4444 !important;
+  --danger-hover:  #dc2626 !important;
+  --cyan:          #0ea5e9 !important; /* Cyber cyan */
+  --tab-bar-bg:    #e2edf9 !important; /* Light-blue tab bar background */
+  --tab-active-bg: #ffffff !important;
   color-scheme: light;
 }
 
@@ -1126,10 +1142,11 @@ body {
   /* Emoji-capable stack: 'Inter' first (Claude Code 风), then system UI, then
    * dedicated emoji fonts (Segoe UI Emoji / Apple Color Emoji / Noto Color
    * Emoji) so the blue-light "🌐" button does not tofu. */
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei', Roboto, system-ui, sans-serif;
-  font-feature-settings: 'cv11','ss01';
-  letter-spacing: -0.005em;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Roboto, system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'tnum', 'zero' !important;
+  letter-spacing: -0.012em !important;
   font-size: 13.5px;
+  line-height: 1.45 !important;
 }
 
 /* ── 3. 侧边栏 ───────────────────────────────────────────── */
@@ -1137,9 +1154,14 @@ body {
 [data-theme="light"] .sidebar,
 :root .sidebar { background: #EFEAE0; }
 [data-theme="dark"] .sidebar { background: #221E1A; }
-[data-theme="blue-light"] .sidebar { background: #e2ecf5; }
+[data-theme="blue-light"] .sidebar { background: #edf4fc; } /* Fresh, cool ice-blue background */
 .logo { border-color: var(--border-color); }
 .logo-icon { filter: none !important; }
+
+/* Logo icon glow in blue-light theme */
+[data-theme="blue-light"] .logo-icon svg {
+  filter: drop-shadow(0 0 5px rgba(0, 102, 255, 0.45)) !important;
+}
 
 .nav-item { border-radius: 8px; transition: background .12s, color .12s; }
 .nav-item.active {
@@ -1148,13 +1170,52 @@ body {
   box-shadow: 0 1px 2px rgba(60,45,20,0.05);
 }
 [data-theme="dark"] .nav-item.active { box-shadow: 0 1px 2px rgba(0,0,0,0.30); }
+
+/* Nav active override in blue-light */
+[data-theme="blue-light"] .nav-item.active {
+  color: var(--accent) !important;
+  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.06), 0 1px 3px rgba(0, 102, 255, 0.04) !important;
+  border-left: 3px solid var(--accent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 .nav-item.active .nav-icon {
   color: var(--accent) !important;
   filter: none !important;
 }
 
+/* Inactive nav icon color in blue-light theme */
+[data-theme="blue-light"] .nav-icon {
+  color: #708fa8;
+}
+[data-theme="blue-light"] .nav-item:hover {
+  background: #e1edf9 !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="blue-light"] .nav-item:hover .nav-icon {
+  color: var(--accent) !important;
+}
+
 .status-icon.connected,
 .status-icon.data-on { filter: none !important; }
+
+/* Status bar & connected state custom styling in blue-light theme */
+[data-theme="blue-light"] .status-bar {
+  background: rgba(0, 102, 255, 0.03) !important;
+  border-top-color: #cbdcf0 !important;
+}
+[data-theme="blue-light"] .status-icon {
+  color: #708fa8 !important;
+}
+[data-theme="blue-light"] .status-icon.connected {
+  color: var(--success) !important;
+  filter: drop-shadow(0 0 4px rgba(13, 148, 136, 0.45)) !important;
+}
+[data-theme="blue-light"] .status-icon.data-on {
+  color: var(--accent) !important;
+  filter: drop-shadow(0 0 5px rgba(0, 102, 255, 0.5)) !important;
+}
 
 .data-connect-btn { border-radius: 6px; }
 .data-connect-btn:hover {
@@ -1268,21 +1329,25 @@ body {
   letter-spacing: 0.06em !important;
   color: var(--text-muted) !important;
   text-transform: uppercase !important;
+  line-height: 1.25 !important;
+  margin-bottom: 2px !important;
 }
 .info-value {
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
-  font-feature-settings: 'tnum' !important;
-  font-size: 14.5px !important;
+  font-feature-settings: 'tnum', 'zero' !important;
+  font-size: 13.5px !important;
   font-weight: 500 !important;
   text-align: center !important;
   letter-spacing: -0.01em !important;
   color: var(--text-primary) !important;
+  line-height: 1.2 !important;
 }
 .info-value.muted {
   color: var(--text-muted) !important;
   opacity: 1 !important;
   font-family: 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
 }
 .info-value.good { color: var(--success) !important; }
 .info-value.warn { color: var(--warning) !important; }
@@ -1304,9 +1369,10 @@ body {
   font-weight: 500 !important;
 }
 .info-row .info-value {
-  font-size: 13px !important;
+  font-size: 12.5px !important;
   text-align: right !important;
   font-weight: 600 !important;
+  line-height: 1.2 !important;
 }
 
 /* sim-slot pill */
@@ -1417,6 +1483,8 @@ body {
 .data-table td {
   font-family: 'JetBrains Mono', monospace !important;
   font-feature-settings: 'tnum' !important;
+  font-size: 12.5px !important;
+  line-height: 1.25 !important;
 }
 
 /* ── 15. Scrollbar ───────────────────────────────────────── */
@@ -1442,7 +1510,7 @@ body {
     .spinner{width:36px;height:36px;position:relative;flex-shrink:0;}
     .spinner::before{
       content:'';position:absolute;inset:0;border-radius:50%;
-      border:3.5px solid rgba(249,115,22,0.12);
+      border:3.5px solid var(--accent-glow);
     }
     .spinner::after{
       content:'';position:absolute;inset:0;border-radius:50%;
@@ -1450,3 +1518,39 @@ body {
       animation:spin .65s linear infinite;
       filter:drop-shadow(0 0 3px var(--accent));
     }
+
+/* ── 17. 科技蓝专属细节润色 ── */
+[data-theme="blue-light"] .panel {
+  border-color: #cbdcf0 !important;
+  box-shadow: 0 4px 16px rgba(0, 102, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+}
+[data-theme="blue-light"] .panel:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 8px 24px rgba(0, 102, 255, 0.08), 0 2px 4px rgba(0, 102, 255, 0.04) !important;
+}
+[data-theme="blue-light"] .info-item {
+  border-color: #cbdcf0 !important;
+  background: var(--bg-secondary) !important;
+}
+[data-theme="blue-light"] .info-item:hover {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.08) !important;
+}
+[data-theme="blue-light"] input,
+[data-theme="blue-light"] select,
+[data-theme="blue-light"] .conn-select,
+[data-theme="blue-light"] .terminal-input {
+  border-color: #cbdcf0 !important;
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="blue-light"] input:focus,
+[data-theme="blue-light"] select:focus,
+[data-theme="blue-light"] .conn-select:focus,
+[data-theme="blue-light"] .terminal-input:focus-within {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12) !important;
+}
+[data-theme="blue-light"] .tab-indicator {
+  box-shadow: 0 1px 3px rgba(0, 102, 255, 0.08) !important;
+}

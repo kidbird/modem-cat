@@ -901,19 +901,19 @@ impl ModemVendor for QuectelModem {
                     .map_err(|_| format!("Invalid IPPT mode: {}", value))?;
                 match mode {
                     0 => {
-                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0"#)?;
+                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0"#)?;
                         let _ = qualcomm::set_auto_connect(t, 0, 0);
                     }
                     1 => {
                         // Routing: always disable first, then configure
-                        let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
-                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
+                        let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
+                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
                         qualcomm::set_auto_connect(t, 0, 1)?;
                     }
                     2 => {
                         // Bridging (IPPT): always disable first, then configure
-                        let _ = t.send_at(r#"AT+QMAP="mPDN_rule",0"#);
-                        send_and_check(t, r#"AT+QMAP="mPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
+                        let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
+                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
                         qualcomm::set_auto_connect(t, 0, 1)?;
                     }
                     _ => return Err(format!("Invalid IPPT mode: {}", value)),
@@ -1190,7 +1190,7 @@ impl ModemVendor for QuectelModem {
         }
         let resp = send_and_delay(
             t,
-            &format!("AT+QMAP=\"mpdn_rule\",{},{},0,0,0", rule_id, cid),
+            &format!("AT+QMAP=\"MPDN_rule\",{},{},0,0,0", rule_id, cid),
         )?;
         if !is_ok(&resp) {
             return Err(format!("mpdn_rule failed: {}", resp.trim()));
@@ -1212,7 +1212,7 @@ impl ModemVendor for QuectelModem {
         }
         let eth_resp = t.send_at(r#"AT+QMAP="ETH_PDU""#).unwrap_or_default();
         let eth_pdu_enabled = qualcomm::parse_eth_pdu_enabled(&eth_resp);
-        let mpdn_resp = t.send_at(r#"AT+QMAP="mpdn_rule""#).unwrap_or_default();
+        let mpdn_resp = t.send_at(r#"AT+QMAP="MPDN_rule""#).unwrap_or_default();
         let mpdn_cid = qualcomm::parse_mpdn_rule_cid(&mpdn_resp, 1);
         let status_resp = t.send_at(r#"AT+QMAP="MPDN_status""#).unwrap_or_default();
         let connected = qualcomm::parse_mpdn_connect_status_by_rule(&status_resp, 1);

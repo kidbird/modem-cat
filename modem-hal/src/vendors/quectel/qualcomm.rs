@@ -290,18 +290,21 @@ pub fn query_ip_info(t: &mut dyn AtTransport, data_cid: i32) -> Result<IpInfo, S
 }
 
 /// Set auto-connect for a QMAP data call rule.
-/// `AT+QMAP="auto_connect",<rule_num>,<auto_connect>`
+/// `AT+QMAP="auto_connect",<rule_num>,<auto_connect>[,<profile_id>]`
 /// auto_connect: 0=disabled, 1=enabled
 pub fn set_auto_connect(
     t: &mut dyn AtTransport,
     rule_num: i32,
     auto_connect: i32,
+    profile_id: Option<i32>,
 ) -> Result<(), String> {
     use super::parser::is_ok;
-    let resp = t.send_at(&format!(
-        "AT+QMAP=\"auto_connect\",{},{}",
-        rule_num, auto_connect
-    ))?;
+    let cmd = if let Some(pid) = profile_id {
+        format!("AT+QMAP=\"auto_connect\",{},{},{}", rule_num, auto_connect, pid)
+    } else {
+        format!("AT+QMAP=\"auto_connect\",{},{}", rule_num, auto_connect)
+    };
+    let resp = t.send_at(&cmd)?;
     if !is_ok(&resp) {
         return Err(format!("QMAP auto_connect set failed: {}", resp.trim()));
     }

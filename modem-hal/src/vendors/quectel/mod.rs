@@ -902,19 +902,19 @@ impl ModemVendor for QuectelModem {
                 match mode {
                     0 => {
                         send_and_check(t, r#"AT+QMAP="MPDN_rule",0"#)?;
-                        let _ = qualcomm::set_auto_connect(t, 0, 0);
+                        let _ = qualcomm::set_auto_connect(t, 0, 0, None);
                     }
                     1 => {
                         // Routing: always disable first, then configure
                         let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
                         send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
-                        qualcomm::set_auto_connect(t, 0, 1)?;
+                        qualcomm::set_auto_connect(t, 0, 1, Some(1))?;
                     }
                     2 => {
                         // Bridging (IPPT): always disable first, then configure
                         let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
                         send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
-                        qualcomm::set_auto_connect(t, 0, 1)?;
+                        qualcomm::set_auto_connect(t, 0, 1, Some(1))?;
                     }
                     _ => return Err(format!("Invalid IPPT mode: {}", value)),
                 }

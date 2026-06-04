@@ -346,6 +346,7 @@ fn is_at_port(
 
     // Known modem manufacturers — their ports are likely AT capable
     let is_modem_manufacturer = mfg_upper.contains("QUECTEL")
+        || mfg_upper.contains("QUALCOMM")
         || mfg_upper.contains("SIERRA")
         || mfg_upper.contains("FIBOCOM")
         || mfg_upper.contains("ZTE")
@@ -359,10 +360,13 @@ fn is_at_port(
 
     if is_modem_manufacturer {
         // For modem manufacturers, check if description suggests this is the AT port
-        // (not NMEA, not DM, not Diag)
+        // (not NMEA, not DM, not Diag, not Debug, not QDLoader)
+        let desc_words: Vec<&str> = desc_upper.split(|c: char| !c.is_alphabetic()).collect();
         if desc_upper.contains("NMEA")
             || desc_upper.contains("DIAG")
             || desc_upper.contains("DEBUG")
+            || desc_upper.contains("QDLOADER")
+            || desc_words.contains(&"DM")
         {
             return false;
         }
@@ -563,6 +567,21 @@ mod tests {
 
         assert_eq!(result.unwrap(), ("transport", "vendor"));
         assert!(detection_ran.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_is_at_port() {
+        // Test AT ports (should be true)
+        assert!(is_at_port("COM5", &Some(&"Qualcomm HS-USB Android Modem".to_string()), &Some(&"Qualcomm".to_string())));
+        assert!(is_at_port("COM5", &Some(&"Qualcomm HS-USB Modem".to_string()), &Some(&"Qualcomm Incorporated".to_string())));
+        assert!(is_at_port("COM5", &Some(&"Quectel USB AT Port".to_string()), &Some(&"Quectel".to_string())));
+
+        // Test DM/Diag/QDLoader/NMEA ports (should be false)
+        assert!(!is_at_port("COM4", &Some(&"Qualcomm HS-USB Diagnostics 9008".to_string()), &Some(&"Qualcomm".to_string())));
+        assert!(!is_at_port("COM4", &Some(&"Qualcomm HS-USB DM Port".to_string()), &Some(&"Qualcomm".to_string())));
+        assert!(!is_at_port("COM4", &Some(&"Quectel USB DM Port".to_string()), &Some(&"Quectel".to_string())));
+        assert!(!is_at_port("COM3", &Some(&"Quectel USB NMEA Port".to_string()), &Some(&"Quectel".to_string())));
+        assert!(!is_at_port("COM3", &Some(&"Qualcomm HS-USB QDLoader 9008".to_string()), &Some(&"Qualcomm".to_string())));
     }
 }
 

@@ -277,9 +277,9 @@ fn build_display_name(
             // Remove trailing (COMx) from caption if present, since the port_name is already known
             let cleaned = regex_remove_com_suffix(desc);
             if is_at_port {
-                return format!("{} [AT]", cleaned);
+                return format!("{} ({}) [AT]", cleaned, port_name);
             }
-            return cleaned;
+            return format!("{} ({})", cleaned, port_name);
         }
     }
 
@@ -295,13 +295,13 @@ fn build_display_name(
         if parts.is_empty() {
             format!("{} - AT端口", port_name)
         } else {
-            format!("{} - AT端口", parts.join(" - "))
+            format!("{} ({}) - AT端口", parts.join(" - "), port_name)
         }
     } else {
         if parts.is_empty() {
             port_name.to_string()
         } else {
-            parts.join(" - ")
+            format!("{} ({})", parts.join(" - "), port_name)
         }
     }
 }

@@ -32,8 +32,8 @@ impl ModemFactory {
                 Ok(Box::new(TdTechModem::new(model)))
             }
             ChipsetVendor::Unknown => {
-                log::error!("Unknown vendor for '{}'", model);
-                Err(format!("Unknown modem vendor for model '{}'", model))
+                log::warn!("Unknown vendor for '{}', falling back to Qualcomm adapter", model);
+                Ok(Box::new(QuectelModem::qualcomm(model)))
             }
         }
     }

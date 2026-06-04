@@ -421,7 +421,7 @@
     }
 
     // ── Connection ──
-    async function toggleConnection() {
+    async function toggleConnection(isAuto = false) {
       if (state.connected) {
         // 断开：先挂断拨号，再断开串口
         if (state.dataConnected) {
@@ -452,38 +452,74 @@
         addTerminalLine('[连接] 已断开', 'cmd');
       } else {
         // 连接
+        const selectedPort = isAuto ? "" : $.connectionParams.value;
+        const connType = document.getElementById('connectionType')?.value || 'serial';
+
         $.connectBtn.textContent = '连接中...';
         $.connectBtn.disabled = true;
-        $.statusLabel.textContent = '正在检测AT端口...';
-        showLoading('正在连接模组...', '检测 AT 端口');
-        addTerminalLine('[连接] 正在检测AT端口...', 'info');
-        try {
-          const portName = await invoke('auto_connect_at');
-          state.connected = true;
-          state.idle = false;
-          state.connectedPort = portName;
-          $.connectionParams.value = portName;
-          updateConnectionUI(true);
-          addTerminalLine(`[连接] 已连接到 ${portName}`, 'ok');
-          $.statusLabel.textContent = portName;
+
+        if (connType === 'serial' && selectedPort) {
+          $.statusLabel.textContent = `正在连接 ${selectedPort}...`;
+          showLoading(`正在连接 ${selectedPort}...`, '打开串口');
+          addTerminalLine(`[连接] 正在连接串口 ${selectedPort}...`, 'info');
           try {
-            setLoadingText('正在获取模组数据...', '查询状态、硬件、频段信息');
-            await refreshAll();
+            await invoke('connect_serial', { portName: selectedPort, baudRate: 115200 });
+            state.connected = true;
+            state.idle = false;
+            state.connectedPort = selectedPort;
+            updateConnectionUI(true);
+            addTerminalLine(`[连接] 已连接到 ${selectedPort}`, 'ok');
+            $.statusLabel.textContent = selectedPort;
+            try {
+              setLoadingText('正在获取模组数据...', '查询状态、硬件、频段信息');
+              await refreshAll();
+            } catch (e) {
+              addTerminalLine('[刷新] 数据刷新异常: ' + e, 'err');
+            }
+            hideLoading();
           } catch (e) {
-            addTerminalLine('[刷新] 数据刷新异常: ' + e, 'err');
+            hideLoading();
+            const errMsg = String(e);
+            console.error('[连接] 连接失败:', errMsg);
+            addTerminalLine('[连接] ' + errMsg, 'err');
+            state.connected = false;
+            state.idle = true;
+            updateConnectionUI(false);
+            $.statusLabel.textContent = '待机中';
+            $.statusLabel.style.color = 'var(--text-muted)';
           }
-          hideLoading();
-        } catch (e) {
-          hideLoading();
-          const errMsg = String(e);
-          console.error('[连接] auto_connect_at 失败:', errMsg);
-          addTerminalLine('[连接] ' + errMsg, 'err');
-          // No AT port — go idle gracefully
-          state.connected = false;
-          state.idle = true;
-          updateConnectionUI(false);
-          $.statusLabel.textContent = '待机中';
-          $.statusLabel.style.color = 'var(--text-muted)';
+        } else {
+          // 自动连接
+          $.statusLabel.textContent = '正在检测AT端口...';
+          showLoading('正在连接模组...', '检测 AT 端口');
+          addTerminalLine('[连接] 正在检测AT端口...', 'info');
+          try {
+            const portName = await invoke('auto_connect_at');
+            state.connected = true;
+            state.idle = false;
+            state.connectedPort = portName;
+            $.connectionParams.value = portName;
+            updateConnectionUI(true);
+            addTerminalLine(`[连接] 已连接到 ${portName}`, 'ok');
+            $.statusLabel.textContent = portName;
+            try {
+              setLoadingText('正在获取模组数据...', '查询状态、硬件、频段信息');
+              await refreshAll();
+            } catch (e) {
+              addTerminalLine('[刷新] 数据刷新异常: ' + e, 'err');
+            }
+            hideLoading();
+          } catch (e) {
+            hideLoading();
+            const errMsg = String(e);
+            console.error('[连接] auto_connect_at 失败:', errMsg);
+            addTerminalLine('[连接] ' + errMsg, 'err');
+            state.connected = false;
+            state.idle = true;
+            updateConnectionUI(false);
+            $.statusLabel.textContent = '待机中';
+            $.statusLabel.style.color = 'var(--text-muted)';
+          }
         }
       }
     }
@@ -3431,7 +3467,7 @@
           console.log('[USB] New port detected, trying auto-connect');
           addTerminalLine('[USB] 检测到新端口，等待设备就绪后连接...', 'info');
           setTimeout(() => {
-            if (!state.connected && state.idle) toggleConnection();
+            if (!state.connected && state.idle) toggleConnection(true);
           }, 5000);
         }
       });
@@ -3480,7 +3516,7 @@
       }
       // 自动连接（USB 模式）
       try {
-        await toggleConnection();
+        await toggleConnection(true);
       } catch (e) {
         hideLoading();
         addTerminalLine('[初始化] 连接失败: ' + e, 'err');

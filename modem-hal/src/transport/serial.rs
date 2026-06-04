@@ -20,23 +20,27 @@ const TRAILING_DRAIN_TIMEOUT: Duration = Duration::from_millis(5);
 
 impl SerialTransport {
     pub fn new(port_name: &str, baud_rate: u32) -> Result<Self, String> {
-        let port = serialport::new(port_name, baud_rate)
+        let mut port = serialport::new(port_name, baud_rate)
             .timeout(OPEN_TIMEOUT)
             .open()
             .map_err(|e| format!("Failed to open {}: {}", port_name, e))?;
+        let _ = port.write_data_terminal_ready(true);
+        let _ = port.write_request_to_send(true);
         Ok(Self { port })
     }
 
     /// Quick probe: send AT and check for OK within a short timeout.
     /// Used for port detection. Returns true if the port responded with OK.
     pub fn probe_at(port_name: &str, baud_rate: u32) -> bool {
-        let port = match serialport::new(port_name, baud_rate)
+        let mut port = match serialport::new(port_name, baud_rate)
             .timeout(PROBE_TIMEOUT)
             .open()
         {
             Ok(p) => p,
             Err(_) => return false,
         };
+        let _ = port.write_data_terminal_ready(true);
+        let _ = port.write_request_to_send(true);
         let mut transport = Self { port };
 
         // Send AT command

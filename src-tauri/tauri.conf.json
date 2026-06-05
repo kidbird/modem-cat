@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Modem Cat",
-        "width": 1257,
-        "height": 978,
+        "width": 1200,
+        "height": 780,
         "resizable": true,
         "fullscreen": false,
         "minWidth": 900,

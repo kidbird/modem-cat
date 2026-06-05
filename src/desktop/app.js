@@ -215,6 +215,7 @@
         ph_plmn_password: '供应商提供',
         label_language: '语言 / Language', label_theme: '外观主题',
         theme_dark: '深色', theme_light: '浅色', theme_blue_light: '科技蓝', label_app_version: '当前版本',
+        label_ui_scale: '界面缩放',
       },
       en: {
         nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
@@ -301,6 +302,7 @@
         ph_plmn_password: 'Provided by vendor',
         label_language: 'Language / 语言', label_theme: 'Theme',
         theme_dark: 'Dark', theme_light: 'Light', theme_blue_light: 'Tech Blue', label_app_version: 'Version',
+        label_ui_scale: 'UI Scale',
       },
     };
 
@@ -340,6 +342,28 @@
     }
 
     applyI18n();
+
+    // ── UI Scale ──
+    (function () {
+      const savedScale = localStorage.getItem('ui-scale');
+      if (savedScale) {
+        document.body.style.zoom = savedScale;
+      }
+    })();
+
+    function setUiScale(scale) {
+      document.body.style.zoom = scale;
+      localStorage.setItem('ui-scale', scale);
+      updateUiScaleToggle(scale);
+    }
+
+    function updateUiScaleToggle(scale) {
+      const scales = [0.8, 0.9, 1.0, 1.1, 1.2];
+      scales.forEach(s => {
+        const btn = document.getElementById('scale' + Math.round(s * 100));
+        if (btn) btn.classList.toggle('active', Math.abs(s - scale) < 0.01);
+      });
+    }
 
     // ── Loading overlay ──
     function showLoading(text, sub) {
@@ -3502,6 +3526,10 @@
 
     async function doInit() {
       cacheDom();
+      try {
+        const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
+        updateUiScaleToggle(savedScale);
+      } catch (_) {}
       $.statusLabel.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');
       try {

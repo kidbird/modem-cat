@@ -349,7 +349,7 @@
       if (!isAuto) return;
 
       const targetWidth = 1200;
-      const targetHeight = 780;
+      const targetHeight = 940;
       const w = window.innerWidth;
       const h = window.innerHeight;
 

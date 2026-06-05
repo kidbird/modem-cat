@@ -130,13 +130,17 @@ pub fn is_at_port(
     let desc_upper = description.map_or_else(String::new, |s| s.to_uppercase());
     let mfg_upper = manufacturer.map_or_else(String::new, |s| s.to_uppercase());
 
-    if desc_upper
-        .split(|c: char| !c.is_alphabetic())
-        .any(|word| word == "AT")
+    // 1. 全局排除绝对不能用作 AT 的端口
+    if desc_upper.contains("NMEA")
+        || desc_upper.contains("DIAG")
+        || desc_upper.contains("DEBUG")
+        || desc_upper.contains("GNSS")
+        || desc_upper.contains("LOG")
     {
-        return true;
+        return false;
     }
 
+    // 2. 检查是否属于知名调制解调器厂商（加入 QUALCOMM / QCOM）
     let is_modem_manufacturer = mfg_upper.contains("QUECTEL")
         || mfg_upper.contains("SIERRA")
         || mfg_upper.contains("FIBOCOM")
@@ -147,21 +151,32 @@ pub fn is_at_port(
         || mfg_upper.contains("U-BLOX")
         || mfg_upper.contains("THALES")
         || mfg_upper.contains("MOBILE")
-        || mfg_upper.contains("BROADMOBI");
+        || mfg_upper.contains("BROADMOBI")
+        || mfg_upper.contains("QUALCOMM")
+        || mfg_upper.contains("QCOM");
 
+    // 3. 如果属于调制解调器厂商，优先判定其是否为 AT/Modem 端口
     if is_modem_manufacturer {
-        if desc_upper.contains("NMEA")
-            || desc_upper.contains("DIAG")
-            || desc_upper.contains("DEBUG")
+        if desc_upper.contains("MODEM")
+            || desc_upper.contains("COMMAND")
+            || desc_upper.contains("AT")
         {
-            return false;
-        }
-        if desc_upper.contains("MODEM") || desc_upper.contains("COMMAND") {
             return true;
         }
+        // 对于调制解调器厂商，若描述为空，通常也是候选 AT 端口
         if desc_upper.is_empty() {
             return true;
         }
+    }
+
+    // 4. 兜底判定：如果描述中显式包含 "AT"、"MODEM" 或 "COMMAND" 字样，也认为是 AT 候选
+    if desc_upper
+        .split(|c: char| !c.is_alphabetic())
+        .any(|word| word == "AT")
+        || desc_upper.contains("MODEM")
+        || desc_upper.contains("COMMAND")
+    {
+        return true;
     }
 
     false

@@ -344,6 +344,17 @@
     applyI18n();
 
     // ── UI Scale ──
+    function applyUiScale(scale) {
+      const numericScale = parseFloat(scale) || 1.0;
+      document.body.style.zoom = ''; // 清除 body 上的 zoom 避免 Chromium 的 100% 高度缩水 bug
+      const appWrap = document.getElementById('appWrap');
+      if (appWrap) {
+        appWrap.style.zoom = numericScale;
+        appWrap.style.width = (100 / numericScale) + '%';
+        appWrap.style.height = (100 / numericScale) + '%';
+      }
+    }
+
     function autoScaleUI() {
       const isAuto = localStorage.getItem('ui-scale-auto') !== 'false';
       if (!isAuto) return;
@@ -358,7 +369,7 @@
       let scale = Math.min(scaleX, scaleY);
 
       scale = Math.max(0.65, Math.min(1.5, scale));
-      document.body.style.zoom = scale;
+      applyUiScale(scale);
     }
 
     (function () {
@@ -368,7 +379,7 @@
       } else {
         const savedScale = localStorage.getItem('ui-scale');
         if (savedScale) {
-          document.body.style.zoom = savedScale;
+          applyUiScale(savedScale);
         }
       }
     })();
@@ -402,7 +413,7 @@
     }
 
     function setUiScale(scale) {
-      document.body.style.zoom = scale;
+      applyUiScale(scale);
       localStorage.setItem('ui-scale', scale);
       updateUiScaleToggle(scale);
     }

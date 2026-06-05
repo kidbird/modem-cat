@@ -346,12 +346,16 @@
     // ── UI Scale ──
     function applyUiScale(scale) {
       const numericScale = parseFloat(scale) || 1.0;
-      document.body.style.zoom = ''; // 清除 body 上的 zoom 避免 Chromium 的 100% 高度缩水 bug
+      // 直接应用缩放至根元素 html，消除物理边距空白和百分比对齐舍入问题
+      document.documentElement.style.zoom = numericScale;
+
+      // 清除 body 和 app-wrap 的行内样式，让其完全依靠 CSS 的 height: 100% 充满视口
+      document.body.style.zoom = '';
       const appWrap = document.getElementById('appWrap');
       if (appWrap) {
-        appWrap.style.zoom = numericScale;
-        appWrap.style.width = (100 / numericScale) + '%';
-        appWrap.style.height = (100 / numericScale) + '%';
+        appWrap.style.zoom = '';
+        appWrap.style.width = '';
+        appWrap.style.height = '';
       }
     }
 
@@ -368,7 +372,8 @@
       const scaleY = h / targetHeight;
       let scale = Math.min(scaleX, scaleY);
 
-      scale = Math.max(0.65, Math.min(1.5, scale));
+      // 将上限放宽到 3.0，允许 2K / 4K 超大分辨率全屏时，界面能被等比放大以填满视口，彻底消除侧边和底部的空白
+      scale = Math.max(0.6, Math.min(3.0, scale));
       applyUiScale(scale);
     }
 

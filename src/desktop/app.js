@@ -215,7 +215,7 @@
         ph_plmn_password: '供应商提供',
         label_language: '语言 / Language', label_theme: '外观主题',
         theme_dark: '深色', theme_light: '浅色', theme_blue_light: '科技蓝', label_app_version: '当前版本',
-        label_ui_scale: '界面缩放',
+        label_ui_scale: '界面缩放', label_ui_scale_mode: '缩放模式', scale_auto: '等比自适应', scale_manual: '固定比例',
       },
       en: {
         nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
@@ -302,7 +302,7 @@
         ph_plmn_password: 'Provided by vendor',
         label_language: 'Language / 语言', label_theme: 'Theme',
         theme_dark: 'Dark', theme_light: 'Light', theme_blue_light: 'Tech Blue', label_app_version: 'Version',
-        label_ui_scale: 'UI Scale',
+        label_ui_scale: 'UI Scale', label_ui_scale_mode: 'Scale Mode', scale_auto: 'Auto Fit', scale_manual: 'Manual Scale',
       },
     };
 
@@ -344,12 +344,62 @@
     applyI18n();
 
     // ── UI Scale ──
+    function autoScaleUI() {
+      const isAuto = localStorage.getItem('ui-scale-auto') !== 'false';
+      if (!isAuto) return;
+
+      const targetWidth = 1200;
+      const targetHeight = 780;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      const scaleX = w / targetWidth;
+      const scaleY = h / targetHeight;
+      let scale = Math.min(scaleX, scaleY);
+
+      scale = Math.max(0.65, Math.min(1.5, scale));
+      document.body.style.zoom = scale;
+    }
+
     (function () {
-      const savedScale = localStorage.getItem('ui-scale');
-      if (savedScale) {
-        document.body.style.zoom = savedScale;
+      const isAuto = localStorage.getItem('ui-scale-auto') !== 'false';
+      if (isAuto) {
+        autoScaleUI();
+      } else {
+        const savedScale = localStorage.getItem('ui-scale');
+        if (savedScale) {
+          document.body.style.zoom = savedScale;
+        }
       }
     })();
+
+    window.addEventListener('resize', () => {
+      requestAnimationFrame(autoScaleUI);
+    });
+
+    function setUiScaleMode(mode) {
+      const isAuto = mode === 'auto';
+      localStorage.setItem('ui-scale-auto', isAuto ? 'true' : 'false');
+      updateUiScaleModeUI(mode);
+
+      if (isAuto) {
+        const manualGroup = document.getElementById('manualScaleRow');
+        if (manualGroup) manualGroup.style.opacity = '0.4';
+        autoScaleUI();
+      } else {
+        const manualGroup = document.getElementById('manualScaleRow');
+        if (manualGroup) manualGroup.style.opacity = '1.0';
+        const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
+        setUiScale(savedScale);
+      }
+    }
+
+    function updateUiScaleModeUI(mode) {
+      const autoBtn = document.getElementById('scaleModeAuto');
+      const manualBtn = document.getElementById('scaleModeManual');
+      if (autoBtn) autoBtn.classList.toggle('active', mode === 'auto');
+      if (manualBtn) manualBtn.classList.toggle('active', mode === 'manual');
+    }
 
     function setUiScale(scale) {
       document.body.style.zoom = scale;
@@ -3527,8 +3577,12 @@
     async function doInit() {
       cacheDom();
       try {
+        const isAuto = localStorage.getItem('ui-scale-auto') !== 'false';
+        updateUiScaleModeUI(isAuto ? 'auto' : 'manual');
         const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
         updateUiScaleToggle(savedScale);
+        const manualGroup = document.getElementById('manualScaleRow');
+        if (manualGroup) manualGroup.style.opacity = isAuto ? '0.4' : '1.0';
       } catch (_) {}
       $.statusLabel.textContent = '正在初始化...';
       showLoading('正在初始化...', '扫描串口端口');

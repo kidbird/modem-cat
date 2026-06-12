@@ -226,8 +226,8 @@
       line-height: 1.5;
       user-select: none;
     }
-    .company-info-cn { font-size: 12px; color: var(--text-secondary); }
-    .company-info-en { font-size: 11px; color: var(--text-muted); }
+    .company-info-cn { font-size: 12px; color: var(--accent); font-weight: 700; letter-spacing: 0.03em; }
+    .company-info-en { font-size: 11px; color: var(--text-secondary); }
 
     /* ── Main content ── */
     .main {

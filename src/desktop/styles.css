@@ -218,6 +218,17 @@
       box-shadow: 0 0 8px var(--success-glow);
     }
 
+    .company-info {
+      border-top: 1px solid var(--border-color);
+      padding: 10px 12px;
+      text-align: center;
+      flex-shrink: 0;
+      line-height: 1.5;
+      user-select: none;
+    }
+    .company-info-cn { font-size: 12px; color: var(--text-secondary); }
+    .company-info-en { font-size: 11px; color: var(--text-muted); }
+
     /* ── Main content ── */
     .main {
       flex: 1;

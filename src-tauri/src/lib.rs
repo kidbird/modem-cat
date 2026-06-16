@@ -15,6 +15,8 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
 use tauri::Manager;
 
+mod mqtt;
+
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
@@ -29,6 +31,8 @@ pub struct AppState {
     /// Log of AT commands sent internally (not from raw AT terminal).
     /// Populated by LoggingTransport, consumed by pop_at_commands.
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,
+    /// Handle of the active background MQTT connection loop task.
+    pub mqtt_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
@@ -702,6 +706,175 @@ async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String>
     .map_err(|e| format!("Task error: {}", e))?
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct NetworkAdapter {
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "ip_address")]
+    pub ip_address: Option<String>,
+    pub gateway: Option<String>,
+}
+
+#[tauri::command]
+async fn list_network_adapters() -> Result<Vec<NetworkAdapter>, String> {
+    tokio::task::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
+        {
+            let output = std::process::Command::new("powershell")
+                .args(&[
+                    "-NoProfile",
+                    "-Command",
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+                     Get-NetAdapter | Where-Object { \
+                         $_.Status -eq 'Up' -and \
+                         $_.Virtual -eq $false -and \
+                         $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|WLAN|802\\.11|Bluetooth|Loopback|TAP|VPN|Virtual|VMware|VirtualBox|Hyper-V|Wintun|Tunnel' \
+                     } | ForEach-Object { \
+                         $config = Get-NetIPConfiguration -InterfaceIndex $_.InterfaceIndex; \
+                         [PSCustomObject]@{ \
+                             Name = $_.Name; \
+                             InterfaceDescription = $_.InterfaceDescription; \
+                             IPv4Address = $config.IPv4Address.IPAddress; \
+                             IPv4DefaultGateway = $config.IPv4DefaultGateway.NextHop \
+                         } \
+                     } | Where-Object { $_.IPv4Address -and $_.IPv4DefaultGateway } | ConvertTo-Json",
+                ])
+                .output()
+                .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+
+            if !output.status.success() {
+                let err_msg = String::from_utf8_lossy(&output.stderr);
+                log::error!("PowerShell network adapter query failed: {}", err_msg);
+                return Err(format!("Query failed: {}", err_msg));
+            }
+
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            let trimmed = stdout_str.trim();
+            if trimmed.is_empty() {
+                return Ok(vec![]);
+            }
+
+            #[derive(serde::Deserialize, Debug, Clone)]
+            #[serde(untagged)]
+            enum PowerShellOutput {
+                Single(NetworkAdapterRaw),
+                Array(Vec<NetworkAdapterRaw>),
+            }
+
+            #[derive(serde::Deserialize, Debug, Clone)]
+            struct NetworkAdapterRaw {
+                #[serde(rename = "Name")]
+                name: String,
+                #[serde(rename = "InterfaceDescription")]
+                description: String,
+                #[serde(rename = "IPv4Address")]
+                ip_address: Option<String>,
+                #[serde(rename = "IPv4DefaultGateway")]
+                gateway: Option<String>,
+            }
+
+            match serde_json::from_str::<PowerShellOutput>(trimmed) {
+                Ok(PowerShellOutput::Array(list)) => {
+                    let adapters = list.into_iter().map(|item| NetworkAdapter {
+                        name: item.name,
+                        description: item.description,
+                        ip_address: item.ip_address,
+                        gateway: item.gateway,
+                    }).collect();
+                    Ok(adapters)
+                }
+                Ok(PowerShellOutput::Single(item)) => {
+                    Ok(vec![NetworkAdapter {
+                        name: item.name,
+                        description: item.description,
+                        ip_address: item.ip_address,
+                        gateway: item.gateway,
+                    }])
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse PowerShell JSON: {}, raw: {}", e, trimmed);
+                    Ok(vec![])
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Ok(vec![
+                NetworkAdapter {
+                    name: "Mock Ethernet 1".to_string(),
+                    description: "Mock Realtek PCIe GBE Controller".to_string(),
+                    ip_address: Some("192.168.1.100".to_string()),
+                    gateway: Some("192.168.1.1".to_string()),
+                },
+                NetworkAdapter {
+                    name: "Mock USB NDIS".to_string(),
+                    description: "Mock Remote NDIS Internet Sharing Device".to_string(),
+                    ip_address: Some("192.168.8.100".to_string()),
+                    gateway: Some("192.168.8.1".to_string()),
+                }
+            ])
+        }
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+async fn connect_websocket(
+    host: String,
+    port: u16,
+    username: Option<String>,
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let transport_state = state.transport.clone();
+    let vendor_state = state.vendor.clone();
+    let conn_port_state = state.connected_port.clone();
+    let at_log_state = state.at_command_log.clone();
+
+    let host_clone = host.clone();
+    let user_clone = username.clone();
+    let pass_clone = password.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let user = user_clone.as_deref().unwrap_or("admin");
+        let pass = pass_clone.as_deref().unwrap_or("admin");
+
+        let mut transport = modem_hal::transport::WebSocketTransport::new(
+            &host_clone,
+            port,
+            Some(user),
+            Some(pass),
+        )?;
+
+        let vendor = ModemFactory::create(&mut transport);
+        let id = format!("ws_{}:{}", host_clone, port);
+
+        let v = match vendor {
+            Ok(v) => v,
+            Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
+        };
+
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *transport_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? =
+            Some(wrap_transport(Box::new(transport), at_log_state));
+
+        log::info!("Detected vendor over WebSocket: {:?}", v.vendor());
+        *vendor_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+
+        log::info!("Connected to WebSocket {}:{} as {}", host_clone, port, user);
+        Ok(id)
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
 // ── High-level modem queries (all async to avoid blocking UI) ──
 
 #[tauri::command]
@@ -1090,6 +1263,34 @@ async fn set_nat_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result<()
     with_vendor!(state, |t, v| v.set_nat_mode(t, mode))
 }
 
+#[tauri::command]
+async fn set_mqtt_enabled(enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    let mut task_guard = state.mqtt_task.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    if enabled {
+        if task_guard.is_none() {
+            log::info!("MQTT: Enabling remote connection...");
+            let transport = state.transport.clone();
+            let vendor = state.vendor.clone();
+            let handle = tokio::spawn(async move {
+                mqtt::run_mqtt_loop(transport, vendor).await;
+            });
+            *task_guard = Some(handle);
+        }
+    } else {
+        if let Some(handle) = task_guard.take() {
+            log::info!("MQTT: Disabling remote connection...");
+            handle.abort();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_mqtt_enabled(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    let task_guard = state.mqtt_task.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    Ok(task_guard.is_some())
+}
+
 // ── USB hotplug monitor ──
 
 #[derive(Clone, serde::Serialize)]
@@ -1245,6 +1446,7 @@ pub fn run() {
             data_cid: Arc::new(AtomicI32::new(1)),
             connected_port: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
+            mqtt_task: Arc::new(Mutex::new(None)),
         })
         .setup(|app| {
             // ── Build menu bar ──
@@ -1322,6 +1524,8 @@ pub fn run() {
             connect_serial,
             connect_tcp,
             disconnect,
+            list_network_adapters,
+            connect_websocket,
             // High-level queries
             get_modem_status,
             get_hardware_info,
@@ -1372,6 +1576,8 @@ pub fn run() {
             clear_cell_lock,
             set_plmn_lock,
             clear_plmn_lock,
+            set_mqtt_enabled,
+            get_mqtt_enabled,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

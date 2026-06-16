@@ -389,3 +389,150 @@ pub fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
     *state.connected_port.lock().unwrap() = None;
     Ok("Disconnected".to_string())
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct NetworkAdapter {
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "ip_address")]
+    pub ip_address: Option<String>,
+    pub gateway: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_network_adapters() -> Result<Vec<NetworkAdapter>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("powershell")
+            .args(&[
+                "-NoProfile",
+                "-Command",
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+                 Get-NetAdapter | Where-Object { \
+                     $_.Status -eq 'Up' -and \
+                     $_.Virtual -eq $false -and \
+                     $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|WLAN|802\\.11|Bluetooth|Loopback|TAP|VPN|Virtual|VMware|VirtualBox|Hyper-V|Wintun|Tunnel' \
+                 } | ForEach-Object { \
+                     $config = Get-NetIPConfiguration -InterfaceIndex $_.InterfaceIndex; \
+                     [PSCustomObject]@{ \
+                         Name = $_.Name; \
+                         InterfaceDescription = $_.InterfaceDescription; \
+                         IPv4Address = $config.IPv4Address.IPAddress; \
+                         IPv4DefaultGateway = $config.IPv4DefaultGateway.NextHop \
+                     } \
+                 } | Where-Object { $_.IPv4Address -and $_.IPv4DefaultGateway } | ConvertTo-Json",
+            ])
+            .output()
+            .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
+
+        if !output.status.success() {
+            let err_msg = String::from_utf8_lossy(&output.stderr);
+            log::error!("PowerShell network adapter query failed: {}", err_msg);
+            return Err(format!("Query failed: {}", err_msg));
+        }
+
+        let stdout_str = String::from_utf8_lossy(&output.stdout);
+        let trimmed = stdout_str.trim();
+        if trimmed.is_empty() {
+            return Ok(vec![]);
+        }
+
+        #[derive(serde::Deserialize, Debug, Clone)]
+        #[serde(untagged)]
+        enum PowerShellOutput {
+            Single(NetworkAdapterRaw),
+            Array(Vec<NetworkAdapterRaw>),
+        }
+
+        #[derive(serde::Deserialize, Debug, Clone)]
+        struct NetworkAdapterRaw {
+            #[serde(rename = "Name")]
+            name: String,
+            #[serde(rename = "InterfaceDescription")]
+            description: String,
+            #[serde(rename = "IPv4Address")]
+            ip_address: Option<String>,
+            #[serde(rename = "IPv4DefaultGateway")]
+            gateway: Option<String>,
+        }
+
+        match serde_json::from_str::<PowerShellOutput>(trimmed) {
+            Ok(PowerShellOutput::Array(list)) => {
+                let adapters = list.into_iter().map(|item| NetworkAdapter {
+                    name: item.name,
+                    description: item.description,
+                    ip_address: item.ip_address,
+                    gateway: item.gateway,
+                }).collect();
+                Ok(adapters)
+            }
+            Ok(PowerShellOutput::Single(item)) => {
+                Ok(vec![NetworkAdapter {
+                    name: item.name,
+                    description: item.description,
+                    ip_address: item.ip_address,
+                    gateway: item.gateway,
+                }])
+            }
+            Err(e) => {
+                log::warn!("Failed to parse PowerShell JSON: {}, raw: {}", e, trimmed);
+                Ok(vec![])
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(vec![
+            NetworkAdapter {
+                name: "Mock Ethernet 1".to_string(),
+                description: "Mock Realtek PCIe GBE Controller".to_string(),
+                ip_address: Some("192.168.1.100".to_string()),
+                gateway: Some("192.168.1.1".to_string()),
+            },
+            NetworkAdapter {
+                name: "Mock USB NDIS".to_string(),
+                description: "Mock Remote NDIS Internet Sharing Device".to_string(),
+                ip_address: Some("192.168.8.100".to_string()),
+                gateway: Some("192.168.8.1".to_string()),
+            }
+        ])
+    }
+}
+
+#[tauri::command]
+pub fn connect_websocket(
+    host: String,
+    port: u16,
+    username: Option<String>,
+    password: Option<String>,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let user = username.unwrap_or_else(|| "admin".to_string());
+    let pass = password.unwrap_or_else(|| "admin".to_string());
+
+    let mut transport = modem_hal::transport::WebSocketTransport::new(
+        &host,
+        port,
+        Some(&user),
+        Some(&pass),
+    )?;
+
+    let vendor = ModemFactory::create(&mut transport);
+    let id = format!("ws_{}:{}", host, port);
+    *state.connected_port.lock().unwrap() = None;
+    *state.transport.lock().unwrap() = Some(wrap_transport(
+        Box::new(transport),
+        state.at_command_log.clone(),
+    ));
+
+    if let Ok(v) = vendor {
+        log::info!("Detected vendor over WebSocket: {:?}", v.vendor());
+        *state.vendor.lock().unwrap() = Some(v);
+    } else if let Err(e) = vendor {
+        log::warn!("Vendor detection failed over WebSocket: {}", e);
+    }
+
+    log::info!("Connected to WebSocket {}:{} as {}", host, port, user);
+    Ok(id)
+}
+

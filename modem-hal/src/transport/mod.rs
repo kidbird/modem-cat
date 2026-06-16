@@ -1,10 +1,13 @@
 #[cfg(feature = "serial")]
 pub mod serial;
 pub mod tcp;
+pub mod websocket;
 
 #[cfg(feature = "serial")]
 pub use serial::SerialTransport;
 pub use tcp::TcpTransport;
+pub use websocket::WebSocketTransport;
+
 
 pub trait AtTransport: Send {
     fn send_at(&mut self, command: &str) -> Result<String, String>;

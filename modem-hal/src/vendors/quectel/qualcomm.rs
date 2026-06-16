@@ -27,7 +27,7 @@ pub fn disconnect_data(t: &mut dyn AtTransport, cid: i32) -> Result<(), String> 
 
 /// Parse `AT+QMAP="MPDN_rule"` query response — return IPPT mode for rule 0.
 /// Response: +QMAP: "MPDN_rule",<rule_num>,<profileID>,<p3>,<IPPT_mode>,<auto_connect>
-/// Returns: 0=关闭 (profileID=0), 1=IPPT路由 (IPPT_mode=0), 2=IPPT桥接 (IPPT_mode=1, ETH)
+/// Returns: raw IPPT mode (e.g. 0=关闭/Disabled, 1=ETH, 3=USB)
 pub fn parse_mpdn_ippt_mode(response: &str) -> i32 {
     for line in response.lines() {
         let line = line.trim();
@@ -46,7 +46,7 @@ pub fn parse_mpdn_ippt_mode(response: &str) -> i32 {
                     return 0;
                 }
                 let ippt_mode: i32 = parts[4].trim().parse().unwrap_or(0);
-                return if ippt_mode == 1 { 2 } else { 1 };
+                return ippt_mode;
             }
         }
     }
@@ -386,5 +386,17 @@ mod tests {
         let info = parse_qmap_wwan(resp);
         assert!(info.ipv4_addr.is_empty());
         assert!(info.ipv6_addr.is_empty());
+    }
+
+    #[test]
+    fn test_parse_mpdn_ippt_mode() {
+        let resp_disabled = "+QMAP: \"MPDN_rule\",0,0,0,0,0,\"00:00:00:00:00:00\"\r\nOK";
+        assert_eq!(parse_mpdn_ippt_mode(resp_disabled), 0);
+
+        let resp_eth = "+QMAP: \"MPDN_rule\",0,1,0,1,1,\"FF:FF:FF:FF:FF:FF\"\r\nOK";
+        assert_eq!(parse_mpdn_ippt_mode(resp_eth), 1);
+
+        let resp_usb = "+QMAP: \"MPDN_rule\",0,1,0,3,1,\"FF:FF:FF:FF:FF:FF\"\r\nOK";
+        assert_eq!(parse_mpdn_ippt_mode(resp_usb), 3);
     }
 }

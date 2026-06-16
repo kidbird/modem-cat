@@ -1440,6 +1440,21 @@ body {
   line-height: 1.65 !important;
   background: var(--bg-tertiary) !important;
   font-feature-settings: 'zero', 'ss02' !important;
+  color: var(--text-primary) !important;
+}
+[data-theme="light"] .terminal-line.resp {
+  color: var(--text-primary) !important;
+}
+[data-theme="light"] .terminal-line.info {
+  color: var(--text-secondary) !important;
+  opacity: 0.8 !important;
+}
+[data-theme="blue-light"] .terminal-line.resp {
+  color: var(--text-primary) !important;
+}
+[data-theme="blue-light"] .terminal-line.info {
+  color: var(--text-secondary) !important;
+  opacity: 0.8 !important;
 }
 .shortcut-bar .btn {
   font-family: 'JetBrains Mono', monospace !important;

@@ -899,21 +899,23 @@ impl ModemVendor for QuectelModem {
                 let mode: i32 = value
                     .parse()
                     .map_err(|_| format!("Invalid IPPT mode: {}", value))?;
+
+                // Clear rule 0 first. We ignore the output and sleep 20ms as it might not respond.
+                let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+
                 match mode {
                     0 => {
-                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0"#)?;
-                        let _ = qualcomm::set_auto_connect(t, 0, 0, None);
+                        qualcomm::set_auto_connect(t, 0, 0, None)?;
                     }
                     1 => {
-                        // Routing: always disable first, then configure
-                        let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
-                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,0,1,"FF:FF:FF:FF:FF:FF""#)?;
+                        // IPPT ETH (IPPT Mode = 1)
+                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
                         qualcomm::set_auto_connect(t, 0, 1, Some(1))?;
                     }
-                    2 => {
-                        // Bridging (IPPT): always disable first, then configure
-                        let _ = t.send_at(r#"AT+QMAP="MPDN_rule",0"#);
-                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,1,1,"FF:FF:FF:FF:FF:FF""#)?;
+                    3 => {
+                        // IPPT USB (IPPT Mode = 3)
+                        send_and_check(t, r#"AT+QMAP="MPDN_rule",0,1,0,3,1,"FF:FF:FF:FF:FF:FF""#)?;
                         qualcomm::set_auto_connect(t, 0, 1, Some(1))?;
                     }
                     _ => return Err(format!("Invalid IPPT mode: {}", value)),

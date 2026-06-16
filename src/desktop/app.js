@@ -216,6 +216,7 @@
         label_language: '语言 / Language', label_theme: '外观主题',
         theme_dark: '深色', theme_light: '浅色', theme_blue_light: '科技蓝', label_app_version: '当前版本',
         label_ui_scale: '界面缩放', label_ui_scale_mode: '缩放模式', scale_auto: '等比自适应', scale_manual: '固定比例',
+        label_remote_conn: '远程连接 (MQTT)', mqtt_on: '开启', mqtt_off: '关闭',
       },
       en: {
         nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
@@ -303,6 +304,7 @@
         label_language: 'Language / 语言', label_theme: 'Theme',
         theme_dark: 'Dark', theme_light: 'Light', theme_blue_light: 'Tech Blue', label_app_version: 'Version',
         label_ui_scale: 'UI Scale', label_ui_scale_mode: 'Scale Mode', scale_auto: 'Auto Fit', scale_manual: 'Manual Scale',
+        label_remote_conn: 'Remote Connection (MQTT)', mqtt_on: 'On', mqtt_off: 'Off',
       },
     };
 
@@ -429,6 +431,33 @@
         const btn = document.getElementById('scale' + Math.round(s * 100));
         if (btn) btn.classList.toggle('active', Math.abs(s - scale) < 0.01);
       });
+    }
+
+    function setMqttEnabled(enabled) {
+      invoke('set_mqtt_enabled', { enabled })
+        .then(() => {
+          localStorage.setItem('mqtt_enabled', enabled ? 'true' : 'false');
+          updateMqttUI(enabled);
+        })
+        .catch(e => {
+          console.error('Failed to set MQTT enabled:', e);
+          showToast('设置失败: ' + (e.message || String(e)), 'err');
+        });
+    }
+    window.setMqttEnabled = setMqttEnabled;
+
+    function updateMqttUI(enabled) {
+      const onBtn = document.getElementById('mqttEnabledOn');
+      const offBtn = document.getElementById('mqttEnabledOff');
+      if (onBtn) onBtn.classList.toggle('active', enabled);
+      if (offBtn) offBtn.classList.toggle('active', !enabled);
+    }
+
+    function initMqttSetting() {
+      const enabled = localStorage.getItem('mqtt_enabled') === 'true';
+      updateMqttUI(enabled);
+      invoke('set_mqtt_enabled', { enabled })
+        .catch(e => console.error('Failed to sync MQTT on startup:', e));
     }
 
     // ── Loading overlay ──
@@ -571,6 +600,36 @@
             hideLoading();
             const errMsg = String(e);
             console.error('[连接] 连接失败:', errMsg);
+            addTerminalLine('[连接] ' + errMsg, 'err');
+            state.connected = false;
+            state.idle = true;
+            updateConnectionUI(false);
+            $.statusLabel.textContent = '待机中';
+            $.statusLabel.style.color = 'var(--text-muted)';
+          }
+        } else if (connType === 'ethernet' && selectedPort) {
+          $.statusLabel.textContent = `正在连接 ${selectedPort}...`;
+          showLoading(`正在连接 ${selectedPort}...`, '建立 WebSocket 连接');
+          addTerminalLine(`[连接] 正在通过网关 ${selectedPort}:8888 连接模组...`, 'info');
+          try {
+            await invoke('connect_websocket', { host: selectedPort, port: 8888 });
+            state.connected = true;
+            state.idle = false;
+            state.connectedPort = selectedPort;
+            updateConnectionUI(true);
+            addTerminalLine(`[连接] 已成功连接到网关 ${selectedPort}:8888`, 'ok');
+            $.statusLabel.textContent = selectedPort;
+            try {
+              setLoadingText('正在获取模组数据...', '查询状态、硬件、频段信息');
+              await refreshAll();
+            } catch (e) {
+              addTerminalLine('[刷新] 数据刷新异常: ' + e, 'err');
+            }
+            hideLoading();
+          } catch (e) {
+            hideLoading();
+            const errMsg = String(e);
+            console.error('[连接] WebSocket连接失败:', errMsg);
             addTerminalLine('[连接] ' + errMsg, 'err');
             state.connected = false;
             state.idle = true;
@@ -1352,10 +1411,12 @@
       try {
         showLoading('正在设置 IMS...');
         const isQualcomm = state.chipVendor === 'qualcomm';
-        // Qualcomm: AT+QCFG="ims",<mode>,<enable>
+        // Qualcomm: AT+QCFG="ims",<ims_conf>,<volte_cap>
+        //   Enable:  AT+QCFG="ims",1,1
+        //   Disable: AT+QCFG="ims",2,0
         // UniSoc:  AT+QCFG="ims",<enable>
         const cmd = isQualcomm
-          ? `AT+QCFG="ims",0,${val}`
+          ? `AT+QCFG="ims",${val === 1 ? '1,1' : '2,0'}`
           : `AT+QCFG="ims",${val}`;
         await invoke('send_raw_at', { command: cmd });
         await flushAtLog();
@@ -3173,7 +3234,7 @@
         document.getElementById('qcUsbspeed_20').classList.toggle('active', config.usbspeed === '20');
         document.getElementById('qcUsbspeed_311').classList.toggle('active', config.usbspeed === '311');
         document.getElementById('qcUsbspeed_312').classList.toggle('active', config.usbspeed === '312');
-        [0, 1, 2].forEach(i => {
+        [0, 1, 3].forEach(i => {
           document.getElementById('qcIppt_' + i).classList.toggle('active', config.ipptMode === i);
         });
         const acBadge = document.getElementById('qcAutoConnectBadge');
@@ -3274,8 +3335,8 @@
       if (!state.connected) return;
       const prev = state.qualcommConfig?.ipptMode ?? 0;
       if (prev === mode) return;
-      [0, 1, 2].forEach(i => document.getElementById('qcIppt_' + i).classList.toggle('active', i === mode));
-      const labels = { 0: 'IPPT 已关闭', 1: 'IPPT 路由已设置', 2: 'IPPT 桥接已设置' };
+      [0, 1, 3].forEach(i => document.getElementById('qcIppt_' + i).classList.toggle('active', i === mode));
+      const labels = { 0: 'IPPT 已关闭', 1: 'IPPT ETH 已设置', 3: 'IPPT USB 已设置' };
       try {
         showLoading(mode === 0 ? '正在关闭 IPPT...' : (prev !== 0 ? '正在切换 IPPT 模式...' : '正在配置 IPPT...'));
         await invoke('set_qualcomm_config', { param: 'ippt', value: String(mode) });
@@ -3286,7 +3347,7 @@
         hideLoading();
         showToast((labels[mode] || 'IPPT 已设置') + '，重启后生效', 'ok');
       } catch (e) {
-        [0, 1, 2].forEach(i => document.getElementById('qcIppt_' + i).classList.toggle('active', i === prev));
+        [0, 1, 3].forEach(i => document.getElementById('qcIppt_' + i).classList.toggle('active', i === prev));
         hideLoading();
         showToast('设置失败: ' + e, 'err');
       }
@@ -3594,6 +3655,7 @@
 
     async function doInit() {
       cacheDom();
+      initMqttSetting();
       try {
         const isAuto = localStorage.getItem('ui-scale-auto') !== 'false';
         updateUiScaleModeUI(isAuto ? 'auto' : 'manual');
@@ -3603,16 +3665,16 @@
         if (manualGroup) manualGroup.style.opacity = isAuto ? '0.4' : '1.0';
       } catch (_) {}
       $.statusLabel.textContent = '正在初始化...';
-      showLoading('正在初始化...', '扫描串口端口');
+      showLoading('正在初始化...', '加载连接参数');
       try {
         const ver = await invoke('get_app_version');
         if ($.appVersion) $.appVersion.textContent = 'v' + ver;
         if ($.aboutVersion) $.aboutVersion.textContent = 'v' + ver;
       } catch (_) {}
       try {
-        await refreshPortList();
+        await refreshConnectionParams();
       } catch (e) {
-        addTerminalLine('[初始化] 端口列表失败: ' + e, 'err');
+        addTerminalLine('[初始化] 端口/网卡列表获取失败: ' + e, 'err');
       }
       // 自动连接（USB 模式）
       try {
@@ -3651,6 +3713,40 @@
         safeDoInit();
       }
     }, 3000);
+
+    async function refreshNetworkAdapters() {
+      const select = document.getElementById('connectionParams');
+      try {
+        const adapters = await invoke('list_network_adapters');
+        select.innerHTML = '<option value="">-- 选择网卡 --</option>';
+        if (adapters.length === 0) {
+          select.innerHTML += '<option value="" disabled>未找到可用网卡</option>';
+        } else {
+          adapters.forEach(adapter => {
+            const option = document.createElement('option');
+            option.value = adapter.gateway;
+            option.textContent = `${adapter.name} (${adapter.ip_address}) -> 网关: ${adapter.gateway} [${adapter.description}]`;
+            select.appendChild(option);
+          });
+          if (adapters.length > 0) {
+            select.value = adapters[0].gateway;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to list network adapters:', e);
+        select.innerHTML = '<option value="">刷新网卡失败: ' + escapeHtml(String(e).slice(0, 60)) + '</option>';
+      }
+    }
+
+    async function refreshConnectionParams() {
+      const connType = document.getElementById('connectionType')?.value || 'serial';
+      if (connType === 'serial') {
+        await refreshPortList();
+      } else if (connType === 'ethernet') {
+        await refreshNetworkAdapters();
+      }
+    }
+    window.refreshConnectionParams = refreshConnectionParams;
 
     // ── 刷新串口列表 ──
     async function refreshPortList() {

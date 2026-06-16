@@ -14,6 +14,8 @@ serial = ["dep:serialport"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+
 
 [target.'cfg(not(target_env = "musl"))'.dependencies]
 serialport = { version = "4", optional = true }

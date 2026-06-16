@@ -135,7 +135,19 @@ async function generate() {
       showToast(result.message, 'info');
     }
   } catch (e) {
-    showToast('生成失败: ' + e, 'error');
+    // Check for private key missing error and show helpful message
+    const errMsg = String(e);
+    if (errMsg.includes('未找到私钥文件')) {
+      showToast(
+        '❌ 私钥文件缺失\n\n请将 modem-cat.sk 放到以下位置之一：\n' +
+        '1. keys/modem-cat.sk（开发模式）\n' +
+        '2. <exe_dir>/keys/modem-cat.sk（生产模式）\n' +
+        '3. 或设置环境变量 MODEM_CAT_SK_PATH 指向私钥文件',
+        'error'
+      );
+    } else {
+      showToast('生成失败: ' + e, 'error');
+    }
   } finally {
     $.generateBtn.disabled = false;
     $.generateBtn.textContent = '生成 License 文件';

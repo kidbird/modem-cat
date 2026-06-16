@@ -56,6 +56,8 @@ release/
 *.rlib
 *.prof*
 tools/*/target/
+keys/*.sk
+tools/license-gen/keys/*.sk
 
 # AtomCode
 .atomcode/

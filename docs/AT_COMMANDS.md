@@ -7,10 +7,9 @@
 
 | 优先级 | 厂商 | 关键字（CGMM 大写后子串匹配） | 代表型号 |
 |---|---|---|---|
-| 1 | **TdTech（鼎桥）** | `MT5700` | MT5700M-CN |
-| 2 | **Qualcomm（高通）** | `RG500Q`, `RM500Q`, `RG520N`, `RM520N`, `RG525F`, `RG530F`, `RM530F`, `RM530N`, `RM551E`, `RM501Q`, `RG540F`, `RM540N` | RM520N, RM500Q, RG525F, RM530N, RM551E… |
-| 3 | **UniSoc（展锐）** | `RG200U`, `RM500U`, `RG500U`, `RG501U`, `RM501U` | RM500U, RG200U, RG500U… |
-| 4 | **Unknown** | （兜底，未识别直接 `Err`） | — |
+| 1 | **Qualcomm（高通）** | `RG500Q`, `RM500Q`, `RG520N`, `RM520N`, `RG525F`, `RG530F`, `RM530F`, `RM530N`, `RM551E`, `RM501Q`, `RG540F`, `RM540N` | RM520N, RM500Q, RG525F, RM530N, RM551E… |
+| 2 | **UniSoc（展锐）** | `RG200U`, `RM500U`, `RG500U`, `RG501U`, `RM501U` | RM500U, RG200U, RG500U… |
+| 3 | **Unknown** | （兜底，未识别直接 `Err`） | — |
 
 ⚠️ **无默认 adapter**：`Unknown` 直接返回错误，业务侧需重试 / 提示 UI。
 ⚠️ **关键字冲突**：`RM500Q`（Qualcomm） vs `RM500U`（UniSoc）靠末尾字母区分；若未来加 `RG500UA` 之类型号需补测试。
@@ -127,26 +126,21 @@
 | USB 速度 | `AT+QCFG="usbspeed"` | |
 | 以太网驱动 | `AT+QETH="eth_driver"` | |
 
-## 7.5 TdTech 专用指令（仅 MT5700M-CN，AT^ 前缀）
+## 7.6 QMAP 扩展指令（仅 Qualcomm 平台）
 
-> 见 `modem-hal/src/vendors/tdtech/`。**Quectel 适配器不识别这些命令**。
-
-| 域 | AT 指令 | 解析函数 | 备注 |
-|---|---|---|---|
-| SIM 状态 | `AT^CARDMODE` | 内联 | 0=NO SIM, 1=SIM, 2=USIM |
-| IMEI | `AT+CGSN` | 内联 | 反向匹配纯数字行（REVIEW.md#11 待修） |
-| ICCID | `AT^ICCID?` | 内联 | |
-| 服务小区 | `AT^MONSC` | `parse_monsc` | TdTech parser |
-| 信号强度 | `AT^HCSQ?` | `parse_hcsq` | TdTech parser |
-| 连接状态 | `AT^DCONNSTAT?` | `parse_dconnstat` | TdTech parser |
-| 拨号 | `AT^NDISDUP=1,<cid>` | tdtech/dial.rs:5 | |
-| 断网 | `AT^NDISDUP=<cid>,0` | tdtech/dial.rs:34 | |
-| IP 查询 | `AT^DHCP=<cid>` | `hex_ip_to_string` | **IP 是 hex**（区别于点分十进制） |
-| 频段 | `AT^SYSCFGEX?` | `parse_syscfgex` + `decode_syscfgex_lteband` | |
-| 邻区 | （未实现） | — | `NeighborCells { lte: vec![], nr: vec![] }` |
-| 温度 | （未实现） | — | `TemperatureInfo::default()` |
-| NR5G 频段设置 | （硬编码 Err） | — | UI 必须把按钮禁用 |
-| 5GLAN / IPPT | （未实现） | — | 走 `ModemVendor` 默认 Err |
+| 功能 | AT 指令 | 备注 |
+|------|---------|------|
+| VLAN 查询 | `AT+QMAP="VLAN"` | 返回已启用的 VLAN ID 列表 |
+| VLAN 启用 | `AT+QMAP="VLAN",<vid>,"enable",1` | 1=ETH 类型 |
+| VLAN 禁用 | `AT+QMAP="VLAN",<vid>,"disable"` | |
+| LAN IP 查询 | `AT+QMAP="LANIP"` | 前端快捷 AT，HAL 命令层未实现 |
+| LAN IP 设置 | `AT+QMAP="LANIP",<ip>,<mask>` | 前端快捷 AT |
+| DMZ 查询 (Qualcomm) | `AT+QMAP="DMZ"` | 前端快捷 AT，HAL 命令层未实现 |
+| DMZ 设置 (Qualcomm) | `AT+QMAP="DMZ",<ip>` | 前端快捷 AT |
+| DMZ 查询 (UniSoc) | `AT+QDMZ?` | 前端快捷 AT |
+| DMZ 设置 (UniSoc) | `AT+QDMZ=<ip>` | 前端快捷 AT |
+| MTU 查询 | `AT+QCFG="mtu"` | 前端快捷 AT，HAL 命令层未实现 |
+| MTU 设置 | `AT+QCFG="mtu",<value>` | 前端快捷 AT |
 
 ---
 

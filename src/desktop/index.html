@@ -815,7 +815,6 @@
           <div class="sub-tab-bar" id="glanSubBar">
             <button class="sub-tab-btn active" id="glanTabUnisoc" onclick="switch5GlanTab('unisoc', this)">展锐 UniSoc</button>
             <button class="sub-tab-btn" id="glanTabQualcomm" onclick="switch5GlanTab('qualcomm', this)">高通 Qualcomm</button>
-            <button class="sub-tab-btn" id="glanTabTdtech" onclick="switch5GlanTab('tdtech', this)">TD Tech</button>
           </div>
 
           <!-- UniSoc: AT+QCFG="5glan" -->
@@ -913,9 +912,6 @@
             </div>
           </div>
 
-          <!-- TdTech -->
-          <div class="tab-panel" id="glan-tdtech">
-            <div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:13px;">TD Tech 模组暂不支持 5GLAN 功能</div>
           </div>
         </div>
 
@@ -1550,6 +1546,11 @@
   </div><!-- /main -->
   </div><!-- /app-wrap -->
 
+  <script src="js/core.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="data/atdb.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

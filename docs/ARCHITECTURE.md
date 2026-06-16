@@ -26,12 +26,14 @@
 │   lib.rs         ← Tauri Builder 装配 + AppState      │
 │                     + LoggingTransport + 52 IPC cmd   │
 │                     + start_port_monitor              │
-│   ports.rs       ← 串口列表探测 (Windows 注册表)       │
 │                                                      │
 │  (历史) commands.rs (504 行) 2026-06-02 已删除        │
 │   —— 旧 IPC 层，0 caller，.unwrap() 64 处             │
 │  (历史) monitor.rs 2026-06-02 已删除                  │
 │   —— start_port_monitor 重复孤儿文件                  │
+│  (历史) ports.rs 2026-06-16 已删除                    │
+│   —— 串口列表函数已内联到 lib.rs，ports.rs 从未被     │
+│   mod 引用，纯死代码（12 处 .unwrap()）                │
 └──────────────────────────────────────────────────────┘
                        │ Box<dyn ModemVendor>
                        ▼
@@ -52,10 +54,6 @@
 │       qualcomm.rs  ← 高通数据连接/IP/5GLAN            │
 │       unisoc.rs    ← 展锐数据连接/IP                  │
 │       band_db.rs   ← 硬件频段表                       │
-│     tdtech/                                           │
-│       mod.rs       ← TdTechModem (AT^ 前缀)           │
-│       parser.rs    ← parse_monsc/hcsq/syscfgex        │
-│       dial.rs      ← AT^NDISDUP/AT^DHCP               │
 └──────────────────────────────────────────────────────┘
                        │ 串口 / TCP
                        ▼
@@ -138,9 +136,8 @@
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | ~1140 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor` |
-| `ports.rs` | 11.9K | 串口列表探测；Windows 注册表读取友好名；`is_at_port()` 关键字判断 |
-| `main.rs` | 0.3K | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
+| `lib.rs` | ~1386 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor` |
+| `main.rs` | ~10 | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
 
 > 历史：`commands.rs` (504 行死代码) 与 `monitor.rs` (重复孤儿版 `start_port_monitor`) 已删除。
 
@@ -160,21 +157,18 @@ pub struct AppState {
 
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `lib.rs` | 3.7K | `validate_at_string` / `validate_raw_at_command` / `validate_cid` 校验；napi-rs 暴露（feature gate） |
-| `modem_vendor.rs` | 481 | `ModemVendor` trait 定义（**62 个方法**） |
-| `modem_factory.rs` | 4.3K | `ModemFactory::create()` —— AT+CGMM → ChipsetVendor → ModemVendor |
-| `types.rs` | 6.5K / 252 行 | 所有共享结构体（`spec_bands_for_model()` 已在重构中删除，见 [MODEM_BAND_SPECS.md](MODEM_BAND_SPECS.md)） |
-| `transport/mod.rs` | 2.6K | `AtTransport` trait + `redact_at_command` + `MockTransport` |
-| `transport/serial.rs` | 6.3K | `SerialTransport`（serialport v4） |
-| `transport/tcp.rs` | 3K | `TcpTransport`（BufReader） |
-| `vendors/quectel/mod.rs` | 1063 | `QuectelModem`（含 `QuectelChip` 二态字段） |
-| `vendors/quectel/parser.rs` | 1260 | 80+ pure 解析函数（基础 / 网络 / QENG / 流量 / QNWPREFCFG / QMAP） |
-| `vendors/quectel/qualcomm.rs` | 12.6K | 高通数据连接 / IP / 5GLAN |
-| `vendors/quectel/unisoc.rs` | 4.2K | 展锐数据连接 / IP |
-| `vendors/quectel/band_db.rs` | - | 硬件频段表 |
-| `vendors/tdtech/mod.rs` | 429 | `TdTechModem`（AT^ 前缀命令） |
-| `vendors/tdtech/parser.rs` | 7.9K | `parse_monsc` / `parse_hcsq` / `parse_syscfgex` |
-| `vendors/tdtech/dial.rs` | 2.4K | `AT^NDISDUP` / `AT^DHCP` |
+| `lib.rs` | ~176 | `validate_at_string` / `validate_raw_at_command` / `validate_cid` 校验 |
+| `modem_vendor.rs` | ~480 | `ModemVendor` trait 定义（**62 个方法**） |
+| `modem_factory.rs` | ~130 | `ModemFactory::create()` —— AT+CGMM → ChipsetVendor → ModemVendor |
+| `types.rs` | ~250 | 所有共享结构体 |
+| `transport/mod.rs` | ~285 | `AtTransport` trait + `redact_at_command` + `MockTransport` |
+| `transport/serial.rs` | ~200 | `SerialTransport`（serialport v4） |
+| `transport/tcp.rs` | ~100 | `TcpTransport`（BufReader） |
+| `vendors/quectel/mod.rs` | ~1247 | `QuectelModem`（含 `QuectelChip` 二态字段） |
+| `vendors/quectel/parser.rs` | ~1325 | 80+ pure 解析函数 |
+| `vendors/quectel/qualcomm.rs` | ~390 | 高通数据连接 / IP / 5GLAN |
+| `vendors/quectel/unisoc.rs` | ~115 | 展锐数据连接 / IP |
+| `vendors/quectel/band_db.rs` | ~132 | UniSoc 硬件频段静态表 |
 
 ### 3.4 前端主题系统（`src/desktop/styles.css`）
 
@@ -213,14 +207,12 @@ pub struct AppState {
   ├─ query_model(transport)  → AT+CGMM → parse_cgmm → model: String
   │
   ├─ detect_vendor_from_model(model)  ← 大写子串匹配，**优先级**：
-  │    1. "MT5700"        → TdTech
-  │    2. RG500Q/RM500Q/RG520N/RM520N/RG525F/RG530F/
+  │    1. RG500Q/RM500Q/RG520N/RM520N/RG525F/RG530F/
   │       RM530F/RM530N/RM551E/RM501Q/RG540F/RM540N → Qualcomm
-  │    3. RG200U/RM500U/RG500U/RG501U/RM501U        → UniSoc
-  │    4. Unknown → **返回 Err**，无默认兜底
+  │    2. RG200U/RM500U/RG500U/RG501U/RM501U        → UniSoc
+  │    3. Unknown → **返回 Err**，无默认兜底
   │
   └─ create_from_vendor(model, vendor)
-       ├─ TdTech    → TdTechModem { model }
        ├─ Qualcomm  → QuectelModem::qualcomm(model)
        └─ UniSoc    → QuectelModem::unisoc(model)
 ```
@@ -235,7 +227,6 @@ pub struct AppState {
 |---|---|---|---|---|---|
 | **Qualcomm** | `AT+QMAP="connect",<cid>,1` | `AT+QMAP="connect",<cid>,0` | `AT+QMAP="MPPDN_status"` + `CGPADDR` | `AT+QGDNRCNT?` | `AT+QGDNRCNT=0` |
 | **UniSoc** | `AT+CGACT=1,<cid>` | `AT+CGACT=0,<cid>` | `AT+QNETDEVSTATUS=<cid>` | `AT+QGDCNT?` | `AT+QGDCNT=0` |
-| **TdTech** | `AT^NDISDUP=1,<cid>` | `AT^NDISDUP=<cid>,0` | `AT^DHCP=<cid>` (IP 是 hex) | （未实现） | （未实现） |
 
 ### 5.2 频段锁
 
@@ -244,7 +235,6 @@ pub struct AppState {
 | **Qualcomm** | `AT+QNWLOCK="common/5g",<pci>,<arfcn>,<scs>,<band>` | **5 参数**，pci 在前 |
 | **UniSoc** | `AT+QNWLOCK="common/5g",1,<arfcn>,<pci>` | **4 参数**，arfcn 在前 |
 | | `AT+QNWLOCKFREQ="common/5g",1,<arfcn>` | UniSoc 额外支持纯频点锁 |
-| **TdTech** | `AT^SYSCFGEX?` + `parse_syscfgex` | 频段编码差异大 |
 
 ### 5.3 流量命令字符级差异
 
@@ -295,6 +285,6 @@ pub trait AtTransport: Send {
 
 1. `modem-hal/src/vendors/<name>/mod.rs` 实现 `ModemVendor` trait
 2. `modem-hal/src/modem_factory.rs::detect_vendor_from_model` 加关键字 + `create_from_vendor` 加分支
-3. 复制 `tdtech/dial.rs` 和 `tdtech/parser.rs` 模板，填好 AT 命令
+3. 复制 `quectel/` 目录结构，填好 AT 命令和 parser
 4. 在前端 `app.js` 厂商判断处加新分支（用 `state.chipVendor`）
 5. 至少加 3 个 unit test（model detection / connect / parse）

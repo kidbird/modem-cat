@@ -15,11 +15,11 @@
 | 偏差 | 文档说法 | 代码实情 | 状态 |
 |---|---|---|---|
 | 前端结构 | `index.html` 单文件 ~98KB | **2026-06-02**: `index.html` (1494 行) + `app.js` (3621 行) + `styles.css` (1436 行)，拆分已通过 `<link>`/`<script src=>` 真正生效（commit `4f2fb83`） | ✅ FIXED |
-| `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/{quectel,tdtech}/` | ✅ FIXED |
+| `at_adapter.rs` / `at_parser.rs` | 仍在 `src-tauri/src/` | **已删除**（commit `35d7053` "unify AT layer through ModemVendor trait"），AT 业务下沉到 `modem-hal/src/vendors/quectel/` | ✅ FIXED |
 | `lib.rs` 行数 | ~1000 行 | **~1140 行**（2026-06-02 batch 后仍是单文件最大者） | 维持 |
 | `commands.rs` 状态 | （文档未提） | **2026-06-02**: 文件已删除（claude/fix-review-batch2 commit） | ✅ FIXED |
 | `start_port_monitor` | 在 `lib.rs` | **重复**：已物理删除孤儿文件 `monitor.rs`，仅在 `lib.rs` 保留并调用健壮实现 | ✅ FIXED |
-| 厂商检测关键字 | 文档未列 | TdTech→Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`） | 待办 |
+| 厂商检测关键字 | 文档未列 | Qualcomm→UniSoc→Unknown（无默认兜底，未识别直接 `Err`）。**2026-06-16: TdTech 已移除** | ✅ FIXED |
 | `serial.rs::is_alive` | 跨平台一致 | **已优化**：Windows 走 `ClearCommError`；Linux 引入设备路径 `exists` 存在性检验，瞬间识别物理拔除 | ✅ FIXED |
 | blue-light 主题 | 文档未列 | 2026-06-02 已加 §3.4 章节说明 3 主题 | ✅ FIXED |
 
@@ -100,17 +100,17 @@
 - **建议**：拒绝 `;` `&` `S` 开头；或强制 `format!("AT+CMD=\"{}\"", escape(arg))`
 - **状态**：✅ **2026-06-02 FIXED** —— `validate_at_string` 中增加了对分号 `;` 的校验和拦截，并编写了单测进行覆盖。
 
-### [MEDIUM] #10 `tdtech/mod.rs` 与 `quectel/mod.rs` 90% 重复
-- **文件**：`modem-hal/src/vendors/tdtech/mod.rs:40-419`（429 行总计）
-- **问题**：`ModemVendor` trait 共 62 个方法（实际），TdTech 实现了其中约 50 个签名/逻辑一致（`query_sim_status` / `query_imei` / `query_iccid` / `set_apn` / `reboot` ...），每个 TdTech 方法基本只改 AT 命令名
-- **影响**：再加 vendor 时维护地狱；bugfix 需改 3 处
-- **建议**：抽 `BaselineModem` 结构体 + `at_cmd(&mut t, &str)` 模板方法，新 vendor 只覆盖 5-6 个特殊方法
+### [MEDIUM] #10 BaselineModem 重构以消除 vendor 重复代码
+- **问题**：`ModemVendor` trait 共 62 个方法，Qualcomm 与 UniSoc 实现大量重复（每个方法基本只改 AT 命令名）
+- **影响**：再加新芯片时维护成本高；bugfix 需改多处
+- **建议**：抽 `BaselineModem` 结构体 + `at_cmd(&mut t, &str)` 模板方法，新 vendor 只覆盖差异方法
+- **状态**：⚠ 2026-06-16 TdTech 已移除，Qualcomm/UniSoc 共享 QuectelModem，重复度降低但仍可优化
 
-### [MEDIUM] #11 `tdtech::query_imei` 反向匹配
-- **文件**：`modem-hal/src/vendors/tdtech/mod.rs:55-64`
-- **问题**：`ln.chars().all(|c| c.is_ascii_digit()) && ln.len() >= 14` —— 若响应里任何一行恰好 14+ 位纯数字（CRC、版本号），误判
-- **影响**：偶发返回错误 IMEI
-- **建议**：优先匹配 `+CGSN:` / `^IMEI:` 前缀，再 fallback
+### [MEDIUM] #11 ModemVendor trait 方法过多
+- **文件**：`modem-hal/src/modem_vendor.rs`
+- **问题**：trait 含 62 个方法，部分有默认实现返回 `Err`
+- **建议**：按功能域拆为多个子 trait（`ModemInfo` / `ModemData` / `ModemConfig` / `ModemLock`），减少单 trait 复杂度
+- **状态**：待办
 
 ---
 

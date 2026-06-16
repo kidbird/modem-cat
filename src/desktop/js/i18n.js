@@ -1,0 +1,212 @@
+// i18n module — extracted from app.js
+    const LANG = {
+      zh: {
+        nav_status: '模组状态', nav_cellular: '蜂窝网络', nav_ip: 'IP 配置',
+        nav_at: 'AT 调试', nav_hardware: '模组配置', nav_settings: '系统设置',
+        nav_scene: '情景模式', nav_atmanual: 'AT手册',
+        atdb_search_ph: '搜索 AT 命令...', atdb_welcome: '从左侧选择命令查看详情',
+        atdb_copy_btn: '复制', atdb_copy_done: '已复制',
+        scene_active_badge: '已激活', scene_inactive_badge: '未激活',
+        scene_activate_btn: '激活此模式',
+        scene_reboot_notice: '配置已应用，请手动重启模组使设置生效',
+        scene_qualcomm_placeholder: '高通情景模式即将推出',
+        btn_reboot: '重启模组', btn_factory: '恢复出厂',
+        status_modem: '模组', status_init: '初始化中...', status_data: '数据',
+        status_disconnected: '未连接', btn_data_connect: '连接',
+        panel_interface: '接口配置', label_conn_type: '连接类型',
+        opt_usb_serial: 'USB / TTL Serial', opt_eth_tcp: 'Ethernet TCP',
+        label_port_addr: '端口 / 地址', opt_select_port: '-- 选择端口 --',
+        btn_connect: '连接', panel_net_status: '网络状态',
+        label_sim: 'SIM 状态', label_reg: '注册状态', label_conn_status: '连接状态',
+        label_imei: 'IMEI', label_iccid: 'ICCID', label_operator: '运营商',
+        label_net_type: '网络类型', label_band: 'Band', label_pci: 'PCI', label_cell_id: 'Cell ID',
+        label_arfcn: 'ARFCN（频点）', label_bandwidth: '频宽',
+        label_rsrp: 'RSRP', label_rsrq: 'RSRQ', label_sinr: 'SINR',
+        label_tx_power: 'TX Power', label_rx_level: 'RX Level',
+        label_cqi: 'CQI', label_scs: 'SCS',
+        panel_antenna: '天线信号', label_ant0: 'ANT 0', label_ant1: 'ANT 1',
+        label_ant2: 'ANT 2', label_ant3: 'ANT 3',
+        panel_traffic: '流量统计', label_ul_bw: '签约上行带宽',
+        label_dl_bw: '签约下行带宽', label_ul_traffic: '上行流量',
+        label_dl_traffic: '下行流量',
+        tab_apn: 'APN 配置', tab_network: '网络配置',
+        tab_lock: '小区 / 频点锁定', tab_neighbor: '邻区信息', tab_5glan: '5GLAN',
+        label_5glan_cid: 'CID', label_5glan_vlan: 'VLAN ID', btn_add_5glan: '添加 / 应用',
+        btn_add_apn: '新增 APN', panel_pref_net: '首选网络', btn_save: '保存',
+        opt_auto: '自动', opt_nr5g_only: '仅 5G', opt_lte_only: '仅 LTE', opt_wcdma: '仅 WCDMA',
+        panel_band: '频段设置', btn_reset: '重置', panel_plmn: 'PLMN 锁定',
+        btn_lock: '锁定', btn_unlock: '解锁', label_mcc: 'MCC', label_mnc: 'MNC',
+        label_plmn_password: '锁定密码',
+        lock_none: '当前锁定：无',
+        label_arfcn_input: '频点（EARFCN / NR-ARFCN）',
+        label_pci_optional: 'PCI（可选，不填则只锁频点）',
+        label_pci_required: 'PCI（必填）',
+        label_scs: 'SCS (kHz)', label_band_nr: 'Band',
+        btn_save_lock: '保存', btn_clear_lock: '清除锁定',
+        btn_neighbor_refresh: '刷新',
+        subtab_lte: 'LTE 邻区', subtab_nr: 'NR 邻区', no_data: '暂无数据',
+        panel_at: 'AT 命令终端', btn_send: '发送', btn_clear_at: '清除',
+        panel_hw_info: '模组信息', btn_hw_refresh: '刷新',
+        label_model: '模组型号', label_manufacturer: '生产厂家',
+        label_firmware: '固件版本', label_ap_baseline: 'AP 基线版本',
+        label_cp_baseline: 'CP 基线版本', label_soc_temp: 'SOC 温度',
+        label_pa_temp: 'PA 温度', panel_toggles: '功能开关',
+        toggle_pcie: 'PCIe ↔ 以太网', toggle_ethernet: 'Ethernet',
+        toggle_eth_at: 'ETH AT', toggle_uart_at: 'UART AT', toggle_adb: 'ADB',
+        toggle_proxy_arp: 'Proxy ARP', toggle_napt: 'NAPT 端口转换',
+        toggle_netmask: '动态子网掩码', toggle_arm_log: 'ARM LOG',
+        toggle_arm_log_desc: 'ARM 侧日志输出', toggle_cp_log: 'CP LOG',
+        toggle_cp_log_desc: 'CP 侧日志输出',
+        panel_usb_mode: 'USB 网卡模式', label_usb_proto: 'USB 网卡协议',
+        opt_ecm: 'ECM 网卡', opt_mbim: 'MBIM 移动宽带',
+        opt_rndis: 'RNDIS 网卡', opt_ncm: 'NCM 网卡',
+        btn_save_reboot: '保存并重启', panel_ip: 'IP 地址', btn_ip_refresh: '刷新',
+        label_ipv4: 'IPv4 地址', label_ipv4_mask: 'IPv4 子网掩码',
+        label_ipv4_gw: 'IPv4 网关', label_ipv4_dns: 'IPv4 DNS',
+        label_ipv6: 'IPv6 地址', label_ipv6_dns: 'IPv6 DNS',
+        panel_mtu: 'MTU 配置', label_mtu: 'MTU 值（字节）', btn_apply: '应用',
+        mtu_hint: '推荐值：1500（以太网）/ 1480（PPPoE）/ 1400（VPN）',
+        label_dmz: 'DMZ 主机 IP 地址', btn_apply_dmz: '应用', btn_clear_dmz: '清除',
+        dmz_warn: 'DMZ 主机将接收所有未映射的入站流量，请确保主机具备必要的安全防护。',
+        panel_vlan: 'VLAN 配置', label_vlan_off: '已关闭', label_vlan_on: '已启用',
+        vlan_not_supported: '仅 Qualcomm 模组支持 VLAN 配置',
+        label_vlan_id: 'VLAN ID', btn_vlan_apply: '应用', btn_vlan_disable: '禁用当前',
+        label_apn_name: 'APN 名称', label_apn_user: '用户名', label_apn_pass: '密码',
+        label_auth_type: '鉴权类型', label_ip_type: 'IP 类型',
+        opt_ipv4v6: 'IPv4v6（双栈）', btn_cancel: '取消', btn_confirm_save: '确认保存',
+        about_desc: '5G Modem 调试桌面工具，支持远程/本地 AT 串口连接、实时信号监控、频段配置、网络状态查询等功能。',
+        about_os: '支持的操作系统',
+        os_linux_note: 'Linux 需预装：libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 等运行库。',
+        btn_ok: '确定',
+        ph_apn_name: 'cmnet', ph_arfcn: '如 500300', ph_at_cmd: '输入 AT 命令...',
+        ph_dmz: '如 192.168.1.100', ph_optional: '（可选）', ph_pci: '如 123',
+        ph_plmn_password: '供应商提供',
+        label_language: '语言 / Language', label_theme: '外观主题',
+        theme_dark: '深色', theme_light: '浅色', theme_blue_light: '科技蓝', label_app_version: '当前版本',
+        label_ui_scale: '界面缩放', label_ui_scale_mode: '缩放模式', scale_auto: '等比自适应', scale_manual: '固定比例',
+      },
+      en: {
+        nav_status: 'Modem Status', nav_cellular: 'Cellular', nav_ip: 'IP Config',
+        nav_at: 'AT Debug', nav_hardware: 'Module Config', nav_settings: 'Settings',
+        nav_scene: 'Scene Mode', nav_atmanual: 'AT Reference',
+        atdb_search_ph: 'Search AT commands...', atdb_welcome: 'Select a command from the left',
+        atdb_copy_btn: 'Copy', atdb_copy_done: 'Copied',
+        scene_active_badge: 'Active', scene_inactive_badge: 'Inactive',
+        scene_activate_btn: 'Activate',
+        scene_reboot_notice: 'Settings applied. Please reboot the modem manually to take effect.',
+        scene_qualcomm_placeholder: 'Qualcomm scene mode coming soon',
+        btn_reboot: 'Reboot', btn_factory: 'Factory Reset',
+        status_modem: 'Modem', status_init: 'Initializing...', status_data: 'Data',
+        status_disconnected: 'Disconnected', btn_data_connect: 'Connect',
+        panel_interface: 'Interface', label_conn_type: 'Connection Type',
+        opt_usb_serial: 'USB / TTL Serial', opt_eth_tcp: 'Ethernet TCP',
+        label_port_addr: 'Port / Address', opt_select_port: '-- Select Port --',
+        btn_connect: 'Connect', panel_net_status: 'Network Status',
+        label_sim: 'SIM Status', label_reg: 'Registration',
+        label_conn_status: 'Conn. Status', label_imei: 'IMEI', label_iccid: 'ICCID',
+        label_operator: 'Operator', label_net_type: 'Network Type', label_band: 'Band',
+        label_pci: 'PCI', label_cell_id: 'Cell ID', label_arfcn: 'ARFCN',
+        label_bandwidth: 'Bandwidth', label_rsrp: 'RSRP', label_rsrq: 'RSRQ',
+        label_sinr: 'SINR', label_tx_power: 'TX Power', label_rx_level: 'RX Level',
+        label_cqi: 'CQI', label_scs: 'SCS',
+        panel_antenna: 'Antenna Signal', label_ant0: 'ANT 0', label_ant1: 'ANT 1',
+        label_ant2: 'ANT 2', label_ant3: 'ANT 3',
+        panel_traffic: 'Traffic Stats', label_ul_bw: 'UL Bandwidth',
+        label_dl_bw: 'DL Bandwidth', label_ul_traffic: 'Upload',
+        label_dl_traffic: 'Download',
+        tab_apn: 'APN Config', tab_network: 'Network Config',
+        tab_lock: 'Cell / Freq Lock', tab_neighbor: 'Neighbor Cells', tab_5glan: '5GLAN',
+        label_5glan_cid: 'CID', label_5glan_vlan: 'VLAN ID', btn_add_5glan: 'Add / Apply',
+        btn_add_apn: 'Add APN', panel_pref_net: 'Preferred Network', btn_save: 'Save',
+        opt_auto: 'Auto', opt_nr5g_only: '5G Only', opt_lte_only: 'LTE Only', opt_wcdma: 'WCDMA Only',
+        panel_band: 'Band Settings', btn_reset: 'Reset', panel_plmn: 'PLMN Lock',
+        btn_lock: 'Lock', btn_unlock: 'Unlock', label_mcc: 'MCC', label_mnc: 'MNC',
+        label_plmn_password: 'Lock Password',
+        lock_none: 'Current Lock: None',
+        label_arfcn_input: 'Frequency (EARFCN / NR-ARFCN)',
+        label_pci_optional: 'PCI (optional, freq-only if blank)',
+        label_pci_required: 'PCI (required)',
+        label_scs: 'SCS (kHz)', label_band_nr: 'Band',
+        btn_save_lock: 'Save', btn_clear_lock: 'Clear Lock',
+        btn_neighbor_refresh: 'Refresh',
+        subtab_lte: 'LTE Neighbors', subtab_nr: 'NR Neighbors', no_data: 'No Data',
+        panel_at: 'AT Terminal', btn_send: 'Send', btn_clear_at: 'Clear',
+        panel_hw_info: 'Module Info', btn_hw_refresh: 'Refresh',
+        label_model: 'Model', label_manufacturer: 'Manufacturer',
+        label_firmware: 'Firmware', label_ap_baseline: 'AP Baseline',
+        label_cp_baseline: 'CP Baseline', label_soc_temp: 'SOC Temp',
+        label_pa_temp: 'PA Temp', panel_toggles: 'Feature Toggles',
+        toggle_pcie: 'PCIe ↔ Ethernet', toggle_ethernet: 'Ethernet',
+        toggle_eth_at: 'ETH AT', toggle_uart_at: 'UART AT', toggle_adb: 'ADB',
+        toggle_proxy_arp: 'Proxy ARP', toggle_napt: 'NAPT',
+        toggle_netmask: 'Dynamic Netmask', toggle_arm_log: 'ARM LOG',
+        toggle_arm_log_desc: 'ARM side log output', toggle_cp_log: 'CP LOG',
+        toggle_cp_log_desc: 'CP side log output',
+        panel_usb_mode: 'USB Mode', label_usb_proto: 'USB Protocol',
+        opt_ecm: 'ECM', opt_mbim: 'MBIM', opt_rndis: 'RNDIS', opt_ncm: 'NCM',
+        btn_save_reboot: 'Save & Reboot', panel_ip: 'IP Address',
+        btn_ip_refresh: 'Refresh', label_ipv4: 'IPv4 Address',
+        label_ipv4_mask: 'IPv4 Netmask', label_ipv4_gw: 'IPv4 Gateway',
+        label_ipv4_dns: 'IPv4 DNS', label_ipv6: 'IPv6 Address',
+        label_ipv6_dns: 'IPv6 DNS', panel_mtu: 'MTU Config',
+        label_mtu: 'MTU (bytes)', btn_apply: 'Apply',
+        mtu_hint: 'Recommended: 1500 (Ethernet) / 1480 (PPPoE) / 1400 (VPN)',
+        label_dmz: 'DMZ Host IP', btn_apply_dmz: 'Apply', btn_clear_dmz: 'Clear',
+        dmz_warn: 'DMZ host receives all unmapped inbound traffic. Ensure it is properly secured.',
+        panel_vlan: 'VLAN Config', label_vlan_off: 'Disabled', label_vlan_on: 'Enabled',
+        vlan_not_supported: 'VLAN configuration is only supported on Qualcomm modems',
+        label_vlan_id: 'VLAN ID', btn_vlan_apply: 'Apply', btn_vlan_disable: 'Disable Current',
+        label_apn_name: 'APN Name', label_apn_user: 'Username',
+        label_apn_pass: 'Password', label_auth_type: 'Auth Type',
+        label_ip_type: 'IP Type', opt_ipv4v6: 'IPv4v6 (Dual Stack)',
+        btn_cancel: 'Cancel', btn_confirm_save: 'Save',
+        about_desc: '5G Modem debugging desktop app. Supports AT serial/TCP, real-time signal monitoring, band configuration, and network diagnostics.',
+        about_os: 'Supported OS',
+        os_linux_note: 'Linux requires: libgtk-3, libwebkit2gtk-4.1, libudev1, libappindicator3 and other runtime libraries.',
+        btn_ok: 'OK',
+        ph_apn_name: 'e.g. internet', ph_arfcn: 'e.g. 500300',
+        ph_at_cmd: 'Enter AT command...', ph_dmz: 'e.g. 192.168.1.100',
+        ph_optional: '(optional)', ph_pci: 'e.g. 123',
+        ph_plmn_password: 'Provided by vendor',
+        label_language: 'Language / 语言', label_theme: 'Theme',
+        theme_dark: 'Dark', theme_light: 'Light', theme_blue_light: 'Tech Blue', label_app_version: 'Version',
+        label_ui_scale: 'UI Scale', label_ui_scale_mode: 'Scale Mode', scale_auto: 'Auto Fit', scale_manual: 'Manual Scale',
+      },
+    };
+
+    function t(key) {
+      return (LANG[state.lang] || LANG.zh)[key] || key;
+    }
+
+    function applyI18n() {
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const text = t(el.getAttribute('data-i18n'));
+        if (text) el.textContent = text;
+      });
+      document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+        const text = t(el.getAttribute('data-i18n-ph'));
+        if (text) el.placeholder = text;
+      });
+      const btn = document.getElementById('langBtn');
+      if (btn) btn.textContent = state.lang === 'zh' ? 'EN' : '中';
+      document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
+      const zhBtn = document.getElementById('langZh');
+      const enBtn = document.getElementById('langEn');
+      if (zhBtn) zhBtn.classList.toggle('active', state.lang === 'zh');
+      if (enBtn) enBtn.classList.toggle('active', state.lang === 'en');
+    }
+
+    function toggleLang() {
+      state.lang = state.lang === 'zh' ? 'en' : 'zh';
+      localStorage.setItem('lang', state.lang);
+      applyI18n();
+    }
+
+    function setLang(lang) {
+      if (state.lang === lang) return;
+      state.lang = lang;
+      localStorage.setItem('lang', state.lang);
+      applyI18n();
+    }
+
+    applyI18n();

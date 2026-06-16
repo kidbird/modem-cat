@@ -34,7 +34,6 @@
 - `modem-hal/src/modem_vendor.rs` — ModemVendor trait（**62 个方法**）
 - `modem-hal/src/modem_factory.rs` — `AT+CGMM` → 厂商识别
 - `modem-hal/src/vendors/quectel/` — Quectel 全家（Qualcomm / UniSoc 二态）
-- `modem-hal/src/vendors/tdtech/` — 鼎桥 MT5700（AT^ 前缀命令）
 
 ## 2. 依赖关系
 

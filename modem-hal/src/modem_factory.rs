@@ -2,7 +2,6 @@ use crate::modem_vendor::ModemVendor;
 use crate::transport::AtTransport;
 use crate::types::ChipsetVendor;
 use crate::vendors::quectel::QuectelModem;
-use crate::vendors::tdtech::TdTechModem;
 
 pub struct ModemFactory;
 
@@ -27,10 +26,6 @@ impl ModemFactory {
                 log::info!("Creating UniSoc adapter for {}", model);
                 Ok(Box::new(QuectelModem::unisoc(model)))
             }
-            ChipsetVendor::TdTech => {
-                log::info!("Creating TdTech adapter for {}", model);
-                Ok(Box::new(TdTechModem::new(model)))
-            }
             ChipsetVendor::Unknown => {
                 log::warn!("Unknown vendor for '{}', falling back to Qualcomm adapter", model);
                 Ok(Box::new(QuectelModem::qualcomm(model)))
@@ -40,12 +35,6 @@ impl ModemFactory {
 
     pub fn detect_vendor_from_model(model: &str) -> ChipsetVendor {
         let upper = model.to_uppercase();
-        let tdtech = ["MT5700"];
-        for m in &tdtech {
-            if upper.contains(m) {
-                return ChipsetVendor::TdTech;
-            }
-        }
         let qualcomm = [
             "RG500Q", "RM500Q", "RG520N", "RM520N", "RG525F", "RG530F", "RM530F", "RM530N",
             "RM551E", "RM501Q", "RG540F", "RM540N",
@@ -120,18 +109,6 @@ mod tests {
         assert_eq!(
             ModemFactory::detect_vendor_from_model("RM500U-GL"),
             ChipsetVendor::UniSoc
-        );
-    }
-
-    #[test]
-    fn detects_tdtech_from_model() {
-        assert_eq!(
-            ModemFactory::detect_vendor_from_model("MT5700M-CN"),
-            ChipsetVendor::TdTech
-        );
-        assert_eq!(
-            ModemFactory::detect_vendor_from_model("MT5700"),
-            ChipsetVendor::TdTech
         );
     }
 

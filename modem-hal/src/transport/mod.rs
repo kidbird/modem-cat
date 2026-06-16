@@ -132,8 +132,7 @@ const SENSITIVE_KEYS: &[&str] = &["password", "passwd", "pwd", "token", "auth", 
 /// AT commands whose LAST quoted value is a credential, used positionally
 /// (no `key="value"` form). The generic key-matcher cannot see these.
 ///
-/// Driven by the commands the codebase actually issues — see
-/// `modem-hal/src/vendors/tdtech/mod.rs:247,249`.
+/// Driven by the commands the codebase actually issues.
 const POSITIONAL_PASSWORD_CMDS: &[&str] = &["CGAUTH", "CGDCONT"];
 
 /// Replace credentials in an AT command with `******` before logging.

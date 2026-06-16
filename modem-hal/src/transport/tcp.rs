@@ -6,6 +6,12 @@ use std::time::Duration;
 /// Maximum response size to prevent OOM from a misbehaving TCP server.
 const MAX_RESPONSE_SIZE: usize = 1024 * 1024; // 1 MB
 
+// ── Timeout constants (named per AGENTS.md §4) ──
+const TCP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const TCP_READ_TIMEOUT: Duration = Duration::from_millis(500);
+const TCP_WRITE_TIMEOUT: Duration = Duration::from_secs(3);
+const TCP_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// TCP transport
 pub struct TcpTransport {
     reader: BufReader<TcpStream>,
@@ -19,14 +25,14 @@ impl TcpTransport {
             &addr
                 .parse()
                 .map_err(|e| format!("Invalid address: {}", e))?,
-            Duration::from_secs(5),
+            TCP_CONNECT_TIMEOUT,
         )
         .map_err(|e| format!("Failed to connect to {}: {}", addr, e))?;
 
         stream
-            .set_read_timeout(Some(Duration::from_millis(500)))
+            .set_read_timeout(Some(TCP_READ_TIMEOUT))
             .ok();
-        stream.set_write_timeout(Some(Duration::from_secs(3))).ok();
+        stream.set_write_timeout(Some(TCP_WRITE_TIMEOUT)).ok();
 
         let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
         Ok(Self {
@@ -38,10 +44,9 @@ impl TcpTransport {
     fn read_response(&mut self) -> Result<String, String> {
         let mut response = String::new();
         let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(5);
 
         loop {
-            if start.elapsed() > timeout {
+            if start.elapsed() > TCP_RESPONSE_TIMEOUT {
                 break;
             }
 

@@ -101,12 +101,10 @@
   │     │
   │     └─ v.method_name(t, args)  ← ModemVendor trait
   │              │
-  │              ├─ QuectelModem::xxx  →  match self.chip {
-  │              │      Qualcomm => vendors/quectel/qualcomm.rs::xxx,
-  │              │      UniSoc   => vendors/quectel/unisoc.rs::xxx,
-  │              │   }
-  │              │
-  │              └─ TdTechModem::xxx  → 直接发 AT^ 命令
+  │              └─ QuectelModem::xxx  →  match self.chip {
+  │                     Qualcomm => vendors/quectel/qualcomm.rs::xxx,
+  │                     UniSoc   => vendors/quectel/unisoc.rs::xxx,
+  │                  }
   │
   ▼
 [ModemVendor::method]  调 t.send_at("AT+xxx")
@@ -165,8 +163,6 @@ invoke('connect_data', { cid: 1 })
                   │
                   ├─ QuectelModem (UniSoc) → unisoc::connect_data
                   │     AT+CGACT=1,<cid>  → is_ok 检查
-                  │
-                  └─ TdTechModem → AT^NDISDUP=1,<cid>  → is_ok 检查
 ```
 
 ## 6. IP 查询流程
@@ -187,9 +183,6 @@ invoke('get_ip_info', { cid: 1 })
                   ├─ UniSoc    → unisoc::query_ip_info
                   │     AT+QNETDEVSTATUS=<cid>  → 12 字段解析
                   │       [ipv4, mask, gw, empty, dns1, dns2, ipv6, ×3, v6dns1, v6dns2]
-                  │
-                  └─ TdTech    → AT^DHCP=<cid>
-                        → hex_ip_to_string (dial.rs)  IP 是 hex
 ```
 
 ## 7. 5GLAN 流程（Qualcomm 三步）

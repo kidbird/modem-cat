@@ -207,16 +207,6 @@
 | 天线 ANT0-3 (UniSoc) | `AT+QANTRSSI?` | parse_qantrssi | quectel/parser.rs |
 | 数据激活状态 | `AT+CGACT?` | parse_cgact | quectel/parser.rs |
 
-### 4.2 TdTech 对应（独立命令集）
-
-| 显示 | AT 命令 | 解析 |
-|---|---|---|
-| SIM 状态 | `AT^CARDMODE` | 内联（0/1/2 = NO SIM/SIM/USIM） |
-| 服务小区 | `AT^MONSC` | parse_monsc |
-| 信号 | `AT^HCSQ?` | parse_hcsq |
-| 频段 | `AT^SYSCFGEX?` | parse_syscfgex + decode_syscfgex_lteband |
-| IP | `AT^DHCP=<cid>` | hex_ip_to_string（dial.rs） |
-
 ## 5. 前端缓存 / DOM
 
 - 单一 `state` 对象（app.js 顶部 `let state = { ... }`，行号随 commit 漂移）— 全局唯一状态源

@@ -1,21 +1,20 @@
 # 项目架构设计
 
-> 最近更新：2026-06-02（commands.rs 死代码删除 · heartbeat 改 try_lock · 前端拆分落实 · 蓝 light 主题）
 > 适用于：modem-cat v0.2.x
+
+> 最近更新：2026-06-16
 
 ## 1. 整体架构
 
 ```
 ┌──────────────────────────────────────────────────────┐
 │ 前端 (src/desktop/)                                  │
-│   index.html  ← UI 结构（8 个 page，~1500 行）        │
+│   index.html  ← UI 结构（8 个 page）                 │
 │   styles.css  ← 主题样式（3 主题：dark/light/blue-light）│
-│   app.js      ← 全部交互逻辑（~3600 行）              │
+│   app.js      ← 全部交互逻辑                         │
 │                                                      │
 │  ⚠ Tauri 只加载 index.html 本身；styles.css 和 app.js │
-│  必须通过 <link>/<script src=> 显式引用，否则 0 字节  │
-│  对运行生效（早期 e26df93 split 之后曾长期处于这种   │
-│  孤儿状态，commit 4f2fb83 才真正接上）。              │
+│  必须通过 <link>/<script src=> 显式引用               │
 └──────────────────────────────────────────────────────┘
                        │ window.__TAURI__.core.invoke()
                        │ window.__TAURI__.event.listen()
@@ -24,22 +23,14 @@
 │ Tauri 后端 (src-tauri/src/)                          │
 │   main.rs        ← 入口（设置 NO_PROXY）              │
 │   lib.rs         ← Tauri Builder 装配 + AppState      │
-│                     + LoggingTransport + 52 IPC cmd   │
+│                     + LoggingTransport + IPC commands  │
 │                     + start_port_monitor              │
-│                                                      │
-│  (历史) commands.rs (504 行) 2026-06-02 已删除        │
-│   —— 旧 IPC 层，0 caller，.unwrap() 64 处             │
-│  (历史) monitor.rs 2026-06-02 已删除                  │
-│   —— start_port_monitor 重复孤儿文件                  │
-│  (历史) ports.rs 2026-06-16 已删除                    │
-│   —— 串口列表函数已内联到 lib.rs，ports.rs 从未被     │
-│   mod 引用，纯死代码（12 处 .unwrap()）                │
 └──────────────────────────────────────────────────────┘
                        │ Box<dyn ModemVendor>
                        ▼
 ┌──────────────────────────────────────────────────────┐
 │ 共享 HAL (modem-hal/src/)                            │
-│   modem_vendor.rs   ← ModemVendor trait (**62 个方法**)    │
+│   modem_vendor.rs   ← ModemVendor trait              │
 │   modem_factory.rs  ← ModemFactory::create()          │
 │                      (CGMM 型号 → ChipsetVendor)      │
 │   types.rs          ← 共享数据结构（无 spec_bands 表，运行时靠 AT+QNWPREFCFG="rf_band" 拿硬件支持频段）    │
@@ -113,35 +104,36 @@
 
 ## 3. 模块职责
 
-### 3.1 前端 (`src/desktop/`) — 8 个 page 容器
+### 3.1 前端 (`src/desktop/`) — 10 个 page 容器
 
-> ✅ **当前状态（2026-06-02 之后）**：`index.html` 通过 `<link rel="stylesheet" href="styles.css">` 和 `<script src="app.js"></script>` 真正加载了两个外部文件（commit `4f2fb83`）。早期版本的"看起来是单文件 + 两个孤儿副本"是 e26df93 split 残留，已修复。
->
 > ⚠ **编辑约定**：修改前端时优先改外部 `app.js` / `styles.css`，而不是把它们再粘回 `index.html` 内联块。若新增第四个主题或新的 IPC，需在本文档 §3.4 增加条目。
 
-| 行号 | Page | 中文名 | 备注 |
-|---|---|---|---|
-| 1674 | `#page-status` | 模组状态 | 默认 active，进 `doInit` 拉全部数据 |
-| 2061 | `#page-cellular` | 蜂窝网络 | 含 APN / 网络配置 / 小区锁 / 邻区 / 5GLAN 五个子 tab |
-| 2327 | `#page-at` | AT 调试 | AT 终端主体 |
-| 2359 | `#page-hardware` | 系统信息 | 含 unisoc / qualcomm 两个子 tab |
-| 2705 | `#page-settings` | 系统设置 | 语言 / 主题 |
-| 2754 | `#page-ip` | IP 信息 | MTU / DMZ / LAN 配置 |
-| 2849 | `#page-scene` | 情景模式 | UniSoc / Qualcomm 场景切换 |
-| 2879 | `#page-atmanual` | AT 手册速查 | 静态 AT_DB 数据，无 IPC |
+| Page | 中文名 | 备注 |
+|---|---|---|
+| `#page-status` | 模组状态 | 默认 active，进 `doInit` 拉全部数据 |
+| `#page-cellular` | 蜂窝网络 | 含 APN / 网络配置 / 小区锁 / 邻区 / 5GLAN 五个子 tab |
+| `#page-at` | AT 调试 | AT 终端主体 |
+| `#page-hardware` | 系统信息 | 含 unisoc / qualcomm 两个子 tab |
+| `#page-settings` | 系统设置 | 语言 / 主题 |
+| `#page-ip` | IP 信息 | MTU / DMZ / LAN 配置 |
+| `#page-scene` | 情景模式 | UniSoc / Qualcomm 场景切换 |
+| `#page-atmanual` | AT 手册速查 | 静态 AT_DB 数据，无 IPC |
+| `#page-factory` | 工厂模式 | License 控制显示；含生产操作 / 产品配置 / 生产记录三个子 tab |
+| `#page-firmware` | 固件下载 | License 控制显示；PAC 选择 / 安全策略 / 下载控制 / 日志 |
 
-全局状态：单一 `state` 对象（app.js 顶部 `let state = { ... }`，行号随 commit 漂移；**勿引用具体行号**），无框架；`$.dom` 在 `cacheDom()` 函数中（app.js 启动段）。
+前端状态：→ `AGENTS.md §2`。`$.dom` 在 `cacheDom()` 函数中（app.js 启动段）。
 
 ### 3.2 Tauri 后端 (`src-tauri/src/`)
 
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `lib.rs` | ~1386 | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；**52 个 IPC 命令**（`invoke_handler!` 块注册）；`start_port_monitor` |
-| `main.rs` | ~10 | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
+| 文件 | 职责 |
+|---|---|
+| `lib.rs` | Tauri Builder 装配；`AppState`；`LoggingTransport` 装饰器；IPC commands（`invoke_handler!` 块注册）；`start_port_monitor` |
+| `main.rs` | 入口；`NO_PROXY=tauri.localhost,localhost,127.0.0.1` 兜底 |
+| `license.rs` | License 状态管理、文件加载、IPC 命令（`get_license_status` / `load_license_file`） |
+| `factory.rs` | 工厂模式：SN 生成、HTTP 设备客户端、CSV 持久化、21 个 IPC 命令 |
+| `dloader.rs` | 固件下载：PAC 安全分析、r26-cli sidecar 管理、事件转发、4 个 IPC 命令 |
 
-> 历史：`commands.rs` (504 行死代码) 与 `monitor.rs` (重复孤儿版 `start_port_monitor`) 已删除。
-
-**AppState 字段**（lib.rs:15-25）：
+**AppState 字段**：
 
 ```rust
 pub struct AppState {
@@ -150,25 +142,33 @@ pub struct AppState {
     pub data_cid: Arc<Mutex<i32>>,                              // 当前 PDP CID
     pub connected_port: Arc<Mutex<Option<String>>>,             // 已连接串口名（用于 USB 拔插判断）
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,           // 1000 条环形日志
+    pub license: Arc<Mutex<Option<LicenseStatus>>>,             // License 状态
 }
 ```
 
+**其他 Tauri 管理状态**：
+
+| 状态类型 | 模块 | 用途 |
+|---|---|---|
+| `FactoryState` | factory.rs | 工厂模式配置、当前产品、SN 序号、设备 IP |
+| `DloaderState` | dloader.rs | 固件下载 sidecar 进程句柄（用于停止下载） |
+
 ### 3.3 HAL (`modem-hal/src/`)
 
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `lib.rs` | ~176 | `validate_at_string` / `validate_raw_at_command` / `validate_cid` 校验 |
-| `modem_vendor.rs` | ~480 | `ModemVendor` trait 定义（**62 个方法**） |
-| `modem_factory.rs` | ~130 | `ModemFactory::create()` —— AT+CGMM → ChipsetVendor → ModemVendor |
-| `types.rs` | ~250 | 所有共享结构体 |
-| `transport/mod.rs` | ~285 | `AtTransport` trait + `redact_at_command` + `MockTransport` |
-| `transport/serial.rs` | ~200 | `SerialTransport`（serialport v4） |
-| `transport/tcp.rs` | ~100 | `TcpTransport`（BufReader） |
-| `vendors/quectel/mod.rs` | ~1247 | `QuectelModem`（含 `QuectelChip` 二态字段） |
-| `vendors/quectel/parser.rs` | ~1325 | 80+ pure 解析函数 |
-| `vendors/quectel/qualcomm.rs` | ~390 | 高通数据连接 / IP / 5GLAN |
-| `vendors/quectel/unisoc.rs` | ~115 | 展锐数据连接 / IP |
-| `vendors/quectel/band_db.rs` | ~132 | UniSoc 硬件频段静态表 |
+| 文件 | 职责 |
+|---|---|
+| `lib.rs` | `validate_at_string` / `validate_raw_at_command` / `validate_cid` 校验 |
+| `modem_vendor.rs` | `ModemVendor` trait 定义 |
+| `modem_factory.rs` | `ModemFactory::create()` —— AT+CGMM → ChipsetVendor → ModemVendor |
+| `types.rs` | 所有共享结构体 |
+| `transport/mod.rs` | `AtTransport` trait + `redact_at_command` + `MockTransport` |
+| `transport/serial.rs` | `SerialTransport`（serialport v4） |
+| `transport/tcp.rs` | `TcpTransport`（BufReader） |
+| `vendors/quectel/mod.rs` | `QuectelModem`（含 `QuectelChip` 二态字段） |
+| `vendors/quectel/parser.rs` | 80+ pure 解析函数 |
+| `vendors/quectel/qualcomm.rs` | 高通数据连接 / IP / 5GLAN |
+| `vendors/quectel/unisoc.rs` | 展锐数据连接 / IP |
+| `vendors/quectel/band_db.rs` | UniSoc 硬件频段静态表 |
 
 ### 3.4 前端主题系统（`src/desktop/styles.css`）
 
@@ -178,13 +178,12 @@ pub struct AppState {
 |---|---|---|---|---|
 | 深色（暖深） | `dark` | `#F97316` 焦糖橙 | `'Inter', ...` | `localStorage.theme` 缺失或不在白名单 |
 | 浅色（暖米白） | `light` | `#EA580C` 焦糖橙 | 同上 | 用户在设置页选"浅色" |
-| 科技蓝 | `blue-light` | `#0f62fe` IBM 蓝 | 同上 | 用户在设置页选"科技蓝"（commit `d182cc7`） |
+| 科技蓝 | `blue-light` | `#0f62fe` IBM 蓝 | 同上 | 用户在设置页选"科技蓝" |
 
 **实现要点**：
 
-- **三块选择器特异性均为 (0,1,0)**（一个属性选择器）。`:root` 兜底是 (0,0,1)。同一主题内，蓝 light 块不需要 `!important` 即可在 cascade 中胜出（`blue-light` 块已在 2026-06-02 去掉 20 个 `!important`）。`light` / `dark` 块仍保留 `!important` 是因为它们和 `:root` 共享选择器 `(:root, [data-theme="light"])`，去 `!important` 需要拆开选择器，超出本批范围。
 - **持久化**：localStorage key `theme`，值 `dark` / `light` / `blue-light`，三选一。设置页 `app.js::setTheme(theme)` 是唯一写入点。
-- **emoji 字体栈**：`body` 已加入 `'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'`（commit `4f2fb83` 后续补）以避免"🌐"按钮在 Win10 / Linux WebView 上 tofu。
+- **emoji 字体栈**：`body` 已加入 `'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji'` 以避免"🌐"按钮在 Win10 / Linux WebView 上 tofu。
 - **新增主题的步骤**：
   1. `styles.css` 加 `[data-theme="<name>"]` 块（参考蓝 light 模板）
   2. `app.js::setTheme` 加 emoji / 图标分支（如有）
@@ -217,8 +216,6 @@ pub struct AppState {
        └─ UniSoc    → QuectelModem::unisoc(model)
 ```
 
-> **风险点**：当前关键字冲突风险低（`RM500Q` vs `RM500U` 靠末尾字母），但若未来加 `RG500UA` 之类型号需补单元测试。
-
 ## 5. 多平台命令差异（核心业务）
 
 ### 5.1 数据连接
@@ -246,9 +243,7 @@ pub struct AppState {
 | 线程 | 文件 | 间隔 | 锁策略 | 作用 |
 |---|---|---|---|---|
 | `usb-monitor` | lib.rs | 2s | 无锁（只读 `available_ports`） | `serialport::available_ports()` 差集 → emit `port-changed` |
-| `connection-heartbeat` | lib.rs:929 | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
-
-> 2026-06-02 修复：heartbeat 原用 `.lock()` 阻塞等待，与 IPC handler 抢同一把 std Mutex，单条 AT 命令（3-8s）期间会阻塞 4-12s，USB 拔插感知延迟。改为 `.try_lock()` 拿不到直接 `continue`（下一 tick 再试），不再阻塞 IPC。
+| `connection-heartbeat` | lib.rs | 4s | **try_lock**（拿不到就 skip）| `transport.is_alive()` → 拔插 emit `port-changed` |
 
 ## 7. 关键 Trait 一览
 
@@ -262,7 +257,7 @@ pub trait AtTransport: Send {
 }
 ```
 
-### `ModemVendor`（业务级，**62 个方法**）
+### `ModemVendor`（业务级）
 
 按分类列出（详见 [CODE_MAP.md](CODE_MAP.md)）：
 
@@ -277,9 +272,7 @@ pub trait AtTransport: Send {
 
 - **仅 Desktop 模式**。原 CLI 模式已移除。
 - Tauri v2 + `withGlobalTauri: true`：前端直接用 `window.__TAURI__.core.invoke`
-- 系统托盘：关闭窗口隐藏到托盘（`on_window_event` 拦截）；右键菜单"控制面板 / 退出"
-- 启动时自动扫描 AT 端口并连接（`doInit → toggleConnection → auto_connect_at`）
-- 端口变化：USB 拔插 4s 内通过 `port-changed` 事件通知前端（Windows 可靠；Linux 额外检查设备路径存在性，见 REVIEW.md#7）
+- 端口变化：USB 拔插通过 `port-changed` 事件通知前端
 
 ## 9. 添加新 vendor 的步骤
 
@@ -288,3 +281,21 @@ pub trait AtTransport: Send {
 3. 复制 `quectel/` 目录结构，填好 AT 命令和 parser
 4. 在前端 `app.js` 厂商判断处加新分支（用 `state.chipVendor`）
 5. 至少加 3 个 unit test（model detection / connect / parse）
+
+## Source Of Truth
+
+- `ARCHITECTURE.md` — 架构、数据流、模块职责、线程模型（唯一权威）
+- `CODE_MAP.md` — IPC 命令 × 前端触发点 × AT 解析函数 三列映射
+- `AT_COMMANDS.md` — AT 命令→解析函数→平台差异（与 `modem_factory.rs` 厂商检测严格对齐）
+- `CALL_FLOW.md` — IPC 调用全链路时序图
+- `REVIEW.md` — 已知问题清单与修复状态
+- `BUILD.md` — 构建命令与平台注意事项
+- `TECH_STACK.md` — 技术栈与依赖
+
+## Doc Owner
+
+- `ARCHITECTURE.md` — 架构 owner，重大重构必须同步更新
+- `AT_COMMANDS.md` — AT 命令 owner，新增/修改 AT 命令必须同步更新
+- `CODE_MAP.md` — IPC 映射 owner，增删 IPC 命令必须同步更新
+- `REVIEW.md` — 技术债追踪，修复后更新状态
+- 环境、部署、测试命令等操作性信息，更新对应 owner 文档

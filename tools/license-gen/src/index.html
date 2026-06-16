@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>License Generator - Modem Cat</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .date-range { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .date-range span { color: var(--text-secondary); font-size: 13px; }
+    .output-area { margin-top: 16px; display: none; }
+    .output-area.visible { display: block; }
+    .small-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="main-layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="logo">
+        <svg class="logo-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="14" r="7.5"/>
+          <path d="M6.5 9 L7.8 3.8 L11.2 7"/>
+          <path d="M17.5 9 L16.2 3.8 L12.8 7"/>
+        </svg>
+        <div>
+          <div class="logo-text">License Gen</div>
+          <div class="logo-sub">Modem Cat v<span id="appVersion">-</span></div>
+        </div>
+      </div>
+      <nav class="nav">
+        <div class="nav-item active" data-page="generate">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          <span>生成 License</span>
+        </div>
+        <div class="nav-item" data-page="verify">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+          <span>验证 License</span>
+        </div>
+      </nav>
+      <div class="sidebar-footer">ArixoLink Co., Ltd.</div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main-content">
+      <!-- Page: Generate -->
+      <div class="page active" id="page-generate">
+        <div class="panel">
+          <div class="panel-title">MAC 地址绑定</div>
+          <div class="panel-row">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">MAC 地址</label>
+              <input class="form-input" id="macInput" placeholder="AABBCCDDEEFF" style="font-family:'JetBrains Mono',monospace;">
+              <span class="small-hint">大写十六进制，不含分隔符</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="detectMacBtn" style="align-self:flex-end;">自动检测</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">有效期</div>
+          <div class="radio-group">
+            <div class="radio-item">
+              <input type="radio" name="expiry" value="never" id="expiryNever" checked>
+              <label for="expiryNever">永久有效</label>
+            </div>
+            <div class="radio-item">
+              <input type="radio" name="expiry" value="custom" id="expiryCustom">
+              <label for="expiryCustom">自定义日期</label>
+            </div>
+          </div>
+          <div class="date-range" id="dateRange" style="display:none;margin-top:8px;">
+            <span>截止日期:</span>
+            <input type="date" class="form-input" id="expiryDate" style="width:180px;">
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">功能授权</div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="chkFactory" checked>
+            <label for="chkFactory">工厂模式（SN 写入 / 设备激活 / 产品配置 / 生产记录）</label>
+          </div>
+          <div class="checkbox-group">
+            <input type="checkbox" id="chkFirmware" checked>
+            <label for="chkFirmware">固件下载（展锐 PAC 刷写）</label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">授权信息</div>
+          <div class="panel-row">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">授权方名称</label>
+              <input class="form-input" id="licenseeInput" placeholder="例如：Factory-A">
+            </div>
+            <div class="form-group" style="flex:2;">
+              <label class="form-label">备注</label>
+              <input class="form-input" id="noteInput" placeholder="（可选）">
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="generateBtn" style="height:44px;font-size:15px;">
+          生成 License 文件
+        </button>
+
+        <div class="output-area" id="outputArea">
+          <div class="status-bar info" id="statusBar"></div>
+          <div style="margin-top:8px;">
+            <label class="form-label" style="margin-bottom:4px;">License 文件内容预览</label>
+            <pre class="code-block" id="licensePreview"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Page: Verify -->
+      <div class="page" id="page-verify">
+        <div class="panel">
+          <div class="panel-title">验证 License 文件</div>
+          <div class="panel-row">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">License 文件路径</label>
+              <input class="form-input" id="verifyPath" placeholder="选择或输入 license.dat 路径" style="font-family:'JetBrains Mono',monospace;">
+            </div>
+            <button class="btn btn-secondary btn-sm" id="pickVerifyBtn" style="align-self:flex-end;">选择文件</button>
+          </div>
+          <button class="btn btn-primary" id="verifyBtn" style="margin-top:12px;">验证</button>
+        </div>
+        <div id="verifyResult" style="margin-top:12px;display:none;">
+          <pre class="code-block" id="verifyResultText"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

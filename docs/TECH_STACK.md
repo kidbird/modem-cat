@@ -1,6 +1,6 @@
 # 技术栈
 
-> 最近更新：2026-06-01
+> 最近更新：2026-06-16
 
 ## 1. 核心技术
 
@@ -12,12 +12,12 @@
 
 ### 1.2 前端技术
 - **HTML5 + CSS3 + Vanilla JavaScript**（无框架）
-- **已拆分为 3 个文件**（不要再说"单文件"）：
-  - `src/desktop/index.html` (319KB, 6479 行, 含 8 个 page 容器)
-  - `src/desktop/app.js` (62KB, 1556 行, 同步副本交互逻辑)
-  - `src/desktop/styles.css` (19KB, Claude Code 风皮肤主题)
-- 当前 Tauri 实际入口是 `index.html`；改前端行为前按 [CODING.md](CODING.md) 确认外部文件是否被引用。
-- 状态管理：单一全局 `state` 对象（无 Redux/Vuex/Pinia）
+- **已拆分为 3 个文件**：
+  - `src/desktop/index.html`（含 10 个 page 容器）
+  - `src/desktop/app.js`（交互逻辑）
+  - `src/desktop/styles.css`（主题样式）
+- 当前 Tauri 实际入口是 `index.html`。
+- 状态管理：→ `AGENTS.md §2`
 - DOM 缓存：`$.dom` 一次预查常用 ID
 - 通过 Tauri IPC 调用后端命令
 
@@ -25,15 +25,24 @@
 - **Rust 2021 Edition**
 - **Tokio**：异步运行时（所有 IPC 走 `tokio::task::spawn_blocking`）
 - **serialport v4**：串口通信
+- **reqwest 0.12**：HTTP 客户端（工厂模式设备通信）
+- **chrono 0.4**：时间处理（SN 生成、CSV 记录）
 - **winreg 0.56**：Windows 注册表访问（端口友好名）
 - **modem-hal**：项目内共享 Rust HAL（厂商识别、传输抽象、解析能力）
+- **modem-license**：项目内 License 验签 crate（Ed25519）
 - **错误处理**：全程 `Result<T, String>`（**未引入 thiserror**，见 [REVIEW.md#17]）
 
 ### 1.4 HAL 拆分
 - `modem-hal/src/transport/` — AtTransport trait + Serial/TCP 实现
-- `modem-hal/src/modem_vendor.rs` — ModemVendor trait（**62 个方法**）
+- `modem-hal/src/modem_vendor.rs` — ModemVendor trait
 - `modem-hal/src/modem_factory.rs` — `AT+CGMM` → 厂商识别
 - `modem-hal/src/vendors/quectel/` — Quectel 全家（Qualcomm / UniSoc 二态）
+
+### 1.5 固件下载 Sidecar
+- **r26-cli**（32-bit Windows 可执行文件）
+  - 位置：`src-tauri/binaries/r26-cli-x86_64-pc-windows-msvc.exe`
+  - 功能：解析 PAC 文件、驱动 DLFrame.dll 进行 Unisoc 模组刷写
+  - 通信方式：stdout JSON 事件流 → Tauri 后端转发为 `firmware-event` 事件
 
 ## 2. 依赖关系
 
@@ -42,7 +51,7 @@ src/desktop/{index.html, app.js, styles.css}
         |
      invoke() / listen()
         |
-src-tauri/src/{lib.rs, ports.rs, main.rs}
+src-tauri/src/{lib.rs, ports.rs, main.rs, license.rs, factory.rs, dloader.rs}
         |
    Box<dyn ModemVendor>  (lib.rs:AppState.vendor)
         |
@@ -50,9 +59,11 @@ src-tauri/src/{lib.rs, ports.rs, main.rs}
         |
    Box<dyn AtTransport>  (lib.rs:AppState.transport, 含 LoggingTransport 装饰)
         |
-   serialport / TcpStream
+   serialport / TcpStream / reqwest (HTTP)
         |
-   串口 / TCP → 5G Modem
+   串口 / TCP / HTTP → 5G Modem
+
+   r26-cli sidecar (32-bit) → DLFrame.dll → Unisoc 模组
 ```
 
 ## 3. 构建环境
@@ -75,21 +86,23 @@ build-win.bat           # Windows：产出 .exe + .msi
 
 ## 4. 运行模式
 
-- **仅 Desktop 模式**。原 CLI 模式已移除（commit 35d7053）。
-- 系统托盘：关闭窗口隐藏到托盘（`on_window_event` 拦截 `WindowEvent::CloseRequested`）
-- 启动时自动扫描 AT 端口并连接（`doInit → toggleConnection → auto_connect_at`）
+→ `ARCHITECTURE.md §8`
 
 ## 5. 关键 Cargo 依赖（节选）
 
 | Crate | 版本 | 用途 |
 |---|---|---|
 | `tauri` | 2 | 桌面框架 |
-| `tauri-plugin-shell` | 2 | shell 插件 |
+| `tauri-plugin-shell` | 2 | shell 插件（sidecar 管理） |
+| `tauri-plugin-dialog` | 2 | 文件选择对话框 |
 | `tauri-plugin-single-instance` | 2 | 单实例 |
 | `tokio` | 1 (rt, rt-multi-thread) | 异步运行时 |
 | `serialport` | 4 | 串口 |
+| `reqwest` | 0.12 (json, rustls-tls) | HTTP 客户端（工厂模式） |
+| `chrono` | 0.4 | 时间处理 |
 | `serde` / `serde_json` | 1 | 序列化 |
 | `winreg` | 0.56 | Windows 注册表（仅 windows target） |
 | `modem-hal` | path = "../modem-hal" | 项目内 HAL |
+| `modem-license` | path = "../modem-license" | License 验签（Ed25519） |
 
 `modem-hal` 内部：`serialport` 4（optional, default feature）、`napi` 2 + `napi-derive` 2（optional, napi-feature）。

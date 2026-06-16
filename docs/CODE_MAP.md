@@ -1,11 +1,9 @@
 # Code Map
 
-> 最近更新：2026-06-01
+> 最近更新：2026-06-16
 > 覆盖：前端 UI 元素 → IPC 命令 → 后端实现 三列映射
 
-## 1. 后端 IPC 命令清单（52 个，由 `lib.rs` 暴露）
-
-> 旧 `commands.rs` 还有 30 个同名/类似命令，但 0 caller 全部死代码（见 [REVIEW.md](REVIEW.md)#1）。
+## 1. 后端 IPC 命令清单（由 `lib.rs` 暴露）
 
 | # | IPC 命令 | 后端位置 | 类别 | 异步模型 |
 |---|---|---|---|---|
@@ -61,13 +59,32 @@
 | 50 | `connect_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
 | 51 | `send_raw_at` | lib.rs | AT | spawn_blocking；完整 AT 命令走 `validate_raw_at_command` |
 | 52 | `pop_at_commands` | lib.rs | AT 日志 | 同步 |
+| 53 | `get_license_status` | license.rs | License | 异步 |
+| 54 | `load_license_file` | license.rs | License | 异步 |
+| 55 | `init_factory` | factory.rs | 工厂 | 异步 |
+| 56 | `factory_get_base_data` | factory.rs | 工厂 | 异步 |
+| 57 | `factory_get_current_product` | factory.rs | 工厂 | 异步 |
+| 58 | `factory_set_product` | factory.rs | 工厂 | 异步 |
+| 59 | `factory_get_current_sn` | factory.rs | 工厂 | 异步 |
+| 60 | `factory_get_code_set` | factory.rs | 工厂 | 异步 |
+| 61 | `factory_increment_sequence` | factory.rs | 工厂 | 异步 |
+| 62 | `factory_set_device_ip` | factory.rs | 工厂 | 异步 |
+| 63 | `factory_write_sn_to_device` | factory.rs | 工厂 | 异步 |
+| 64 | `factory_get_device_info` | factory.rs | 工厂 | 异步 |
+| 65 | `factory_save_execute_data` | factory.rs | 工厂 | 异步 |
+| 66 | `factory_save_device_record` | factory.rs | 工厂 | 异步 |
+| 67 | `factory_add_brand` | factory.rs | 工厂 | 异步 |
+| 68 | `factory_remove_brand` | factory.rs | 工厂 | 异步 |
+| 69 | `factory_add_product_type` | factory.rs | 工厂 | 异步 |
+| 70 | `factory_remove_product_type` | factory.rs | 工厂 | 异步 |
+| 71 | `factory_add_factory` | factory.rs | 工厂 | 异步 |
+| 72 | `factory_remove_factory` | factory.rs | 工厂 | 异步 |
+| 73 | `pick_pac_file` | dloader.rs | 固件 | 异步 |
+| 74 | `pac_info` | dloader.rs | 固件 | 异步 |
+| 75 | `start_firmware_download` | dloader.rs | 固件 | 异步 |
+| 76 | `stop_firmware_download` | dloader.rs | 固件 | 同步 |
 
-> 注：三套独立数字：
-> - 前端同步副本 `app.js` 有 **32 个**唯一 `invoke('...')` 调用（`grep -oE "invoke\('[a-z_]+'" src/desktop/app.js | sort -u | wc -l`）
-> - 实际入口 `index.html` 有 **44 个**唯一 `invoke('...')` 调用（同上命令替换文件名）
-> - 后端 `lib.rs` 实际暴露 **52 个** `#[tauri::command]`（`invoke_handler!` 块中注册）
-> - `commands.rs` 另有 **30 个**同名/类似死代码（0 caller，REVIEW.md#1）
-> 三套数加起来不一致是正常的；要求是前端调用名必须都能在后端实际暴露命令中找到，不算死代码。
+> 注：后端 `lib.rs` 暴露的 `#[tauri::command]` 在 `invoke_handler!` 块中注册。前端调用名必须能在后端实际暴露命令中找到。
 
 ## 2. 前端 UI → IPC 触发点
 
@@ -183,12 +200,54 @@
 
 纯前端（静态 AT_DB），无 IPC。
 
+### 2.9 工厂模式页（`#page-factory`，License 控制显示，3 个子 tab）
+
+#### 生产操作 tab
+
+| UI 元素 | HTML ID | 触发函数 | IPC 命令 |
+|---|---|---|---|
+| 设备 IP + 连接 | `#factoryDeviceIp` + 连接按钮 | factoryConnectDevice | `factory_set_device_ip` + `factory_get_device_info` |
+| 品牌/类型/工厂下拉 | `#factoryBrandSel` / `#factoryTypeSel` / `#factoryFacSel` | onFactoryProductChange | `factory_set_product` + `factory_get_current_sn` |
+| 写入 SN | `#factoryWriteSnBtn` | factoryWriteSn | `factory_write_sn_to_device` + `factory_save_execute_data` + `factory_get_device_info` + `factory_save_device_record` + `factory_increment_sequence` |
+| 获取设备信息 | `#factoryGetInfoBtn` | factoryGetDeviceInfo | `factory_get_device_info` |
+
+#### 产品配置 tab（3 个子面板：品牌/类型/工厂）
+
+| UI 元素 | 触发函数 | IPC 命令 |
+|---|---|---|
+| 添加品牌 | factoryAddBrand | `factory_add_brand` |
+| 删除品牌 | factoryRemoveBrand | `factory_remove_brand` |
+| 添加产品类型 | factoryAddType | `factory_add_product_type` |
+| 删除产品类型 | factoryRemoveType | `factory_remove_product_type` |
+| 添加工厂 | factoryAddFactory | `factory_add_factory` |
+| 删除工厂 | factoryRemoveFactory | `factory_remove_factory` |
+
+#### 生产记录 tab
+
+| UI 元素 | 触发函数 | 数据来源 |
+|---|---|---|
+| 记录表格 | factoryUpdateRecordsTab | 前端 state（写入 SN 时追加） |
+
+> 懒加载：首次点击工厂模式导航时调用 `init_factory` 初始化。
+
+### 2.10 固件下载页（`#page-firmware`，License 控制显示）
+
+| UI 元素 | HTML ID | 触发函数 | IPC 命令 |
+|---|---|---|---|
+| 选择 PAC | `#fwSelectPacBtn` | click handler | `pick_pac_file` → `pac_info` |
+| 开始下载 | `#fwStartBtn` | click handler | `start_firmware_download` |
+| 停止下载 | `#fwStopBtn` | click handler | `stop_firmware_download` |
+| 进度条 | `#fwProgressFill` | — | 由 `firmware-event` 事件驱动 |
+| 日志控制台 | `#fwLog` | — | 由 `firmware-event` 事件驱动 |
+
 ## 3. Tauri 事件订阅
 
 | 事件名 | 触发源 | 前端回调位置 | 作用 |
 |---|---|---|---|
 | `port-changed` | usb-monitor 线程 + heartbeat 线程 | app.js `setupUsbMonitor` 函数 | `{ added, removed: string[] }`，触发自动重连 / 强制断开 |
 | `show-about` | Tauri 菜单 / 快捷键 | app.js `setupAboutListener` 函数 | `showAbout()` 显示关于对话框 |
+| `firmware-event` | dloader.rs sidecar 事件转发 | app.js `fwListen` 回调 | Log/Progress/StateChange/Completed/Error/Terminated 等固件下载事件 |
+| `license-changed` | license 模块 | app.js license 监听器 | License 状态变更，更新导航可见性 |
 
 ## 4. UI 元素 → AT 命令 → 解析函数（重点页面）
 
@@ -209,8 +268,7 @@
 
 ## 5. 前端缓存 / DOM
 
-- 单一 `state` 对象（app.js 顶部 `let state = { ... }`，行号随 commit 漂移）— 全局唯一状态源
-- `$.dom` 缓存（在 `cacheDom()` 函数中，app.js 启动段；行号漂移）— 一次预查常用 ID
+- 前端状态：→ `AGENTS.md §2`。`$.dom` 缓存（在 `cacheDom()` 函数中，app.js 启动段）— 一次预查常用 ID
 - 5GLAN / APN / 场景等页面有局部变量（`apnData`, `glanData`, `sceneCurrentState`）
 
 ## 6. 改前端需注意

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-v2-schema/refs/heads/master/tauri-conf-v2.schema.json",
+  "productName": "License Generator",
+  "version": "0.1.0",
+  "identifier": "com.modemcat.licensegen",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "License Generator - Modem Cat",
+        "width": 700,
+        "height": 650,
+        "minWidth": 600,
+        "minHeight": 500,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

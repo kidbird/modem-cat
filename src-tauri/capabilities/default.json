@@ -8,6 +8,19 @@
     "core:window:allow-close",
     "core:window:allow-hide",
     "core:window:allow-show",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "dialog:allow-open",
+    "shell:allow-spawn",
+    "shell:allow-kill",
+    "shell:allow-stdin-write",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "r26-cli",
+          "sidecar": true
+        }
+      ]
+    }
   ]
 }

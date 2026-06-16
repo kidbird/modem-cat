@@ -55,6 +55,7 @@ debug/
 release/
 *.rlib
 *.prof*
+tools/*/target/
 
 # AtomCode
 .atomcode/

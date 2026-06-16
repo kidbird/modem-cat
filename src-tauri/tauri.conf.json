@@ -41,6 +41,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["binaries/r26-cli"],
     "windows": {
       "wix": {
         "language": "zh-CN"

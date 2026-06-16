@@ -30,9 +30,8 @@ validate_raw_at_command(&command)?;
 
 ## 3. 前端入口
 
-- Tauri 当前加载 `src/desktop/index.html`。
-- 修改前端行为时，先确认 `index.html` 是否引用外部 `app.js` / `styles.css`。如果没有引用，实际运行代码在 `index.html` 的内联 `<script>` / `<style>` 中。
-- 若保留拆分文件作为同步副本，改同名函数时必须同步修改，避免文档和检查脚本只验证未加载文件。
+- Tauri 加载 `src/desktop/index.html`，前端逻辑拆分到 `app.js` + `styles.css`（通过 `<link>` / `<script src>` 引用）。
+- 修改前端行为时，根据改动类型编辑对应文件；纯样式改 `styles.css`，逻辑改 `app.js`。
 
 ## 4. 文档与检查
 

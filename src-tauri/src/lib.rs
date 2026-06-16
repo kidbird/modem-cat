@@ -16,6 +16,9 @@ use tauri::Emitter;
 use tauri::Manager;
 
 mod mqtt;
+pub mod license;
+pub mod factory;
+pub mod dloader;
 
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
@@ -33,6 +36,8 @@ pub struct AppState {
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,
     /// Handle of the active background MQTT connection loop task.
     pub mqtt_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// Loaded license payload (None = unlicensed or invalid).
+    pub license: Arc<Mutex<Option<modem_license::LicensePayload>>>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
@@ -1440,6 +1445,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // Second instance launched — bring existing window to front
             if let Some(window) = app.webview_windows().get("main") {
@@ -1454,16 +1460,42 @@ pub fn run() {
             connected_port: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
             mqtt_task: Arc::new(Mutex::new(None)),
+            license: Arc::new(Mutex::new(None)),
         })
+        .manage(factory::FactoryState::new())
+        .manage(dloader::DloaderState::default())
         .setup(|app| {
+            // ── Load license ──
+            let state = app.state::<AppState>();
+            let license_payload = license::init_license(&app.handle());
+            license::update_license_state(&state.license, license_payload);
+
             // ── Build menu bar ──
             let about = MenuItemBuilder::with_id("about", "关于 Modem Cat").build(app)?;
-            let help_menu = SubmenuBuilder::new(app, "帮助").item(&about).build()?;
+            let load_license =
+                MenuItemBuilder::with_id("load_license", "加载 License...").build(app)?;
+            let license_status =
+                MenuItemBuilder::with_id("license_status", "License 状态").build(app)?;
+            let help_menu = SubmenuBuilder::new(app, "帮助")
+                .item(&about)
+                .separator()
+                .item(&load_license)
+                .item(&license_status)
+                .build()?;
             let menu = MenuBuilder::new(app).item(&help_menu).build()?;
             app.set_menu(menu)?;
             app.on_menu_event(|handle, event| {
-                if event.id() == "about" {
-                    let _ = handle.emit("show-about", ());
+                match event.id().as_ref() {
+                    "about" => {
+                        let _ = handle.emit("show-about", ());
+                    }
+                    "load_license" => {
+                        let _ = handle.emit("show-load-license", ());
+                    }
+                    "license_status" => {
+                        let _ = handle.emit("show-license-status", ());
+                    }
+                    _ => {}
                 }
             });
 
@@ -1585,8 +1617,50 @@ pub fn run() {
             clear_plmn_lock,
             set_mqtt_enabled,
             get_mqtt_enabled,
+            // License
+            license::get_license_status,
+            license::load_license_file,
+            // Factory mode
+            factory::init_factory,
+            factory::factory_get_base_data,
+            factory::factory_get_current_product,
+            factory::factory_set_product,
+            factory::factory_get_current_sn,
+            factory::factory_get_code_set,
+            factory::factory_increment_sequence,
+            factory::factory_set_device_ip,
+            factory::factory_write_sn_to_device,
+            factory::factory_get_device_info,
+            factory::factory_save_execute_data,
+            factory::factory_save_device_record,
+            factory::factory_add_brand,
+            factory::factory_remove_brand,
+            factory::factory_add_product_type,
+            factory::factory_remove_product_type,
+            factory::factory_add_factory,
+            factory::factory_remove_factory,
+            // Firmware download
+            dloader::pick_pac_file,
+            dloader::pac_info,
+            dloader::start_firmware_download,
+            dloader::stop_firmware_download,
         ])
         .on_window_event(|window, event| {
+            // Kill sidecar if window closes mid-flash.
+            if matches!(
+                event,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                if let Some(child) = window
+                    .state::<dloader::DloaderState>()
+                    .child
+                    .lock()
+                    .unwrap()
+                    .take()
+                {
+                    let _ = child.kill();
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if let Err(e) = window.hide() {
                     log::warn!("Failed to hide window: {}", e);

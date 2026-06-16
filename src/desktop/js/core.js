@@ -24,4 +24,5 @@
       chipVendor: '',
       currentBand: '',
       vlanEnabled: false,
+      licenseStatus: null,
     };

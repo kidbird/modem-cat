@@ -20,19 +20,7 @@
 
 ## 文档维护原则
 
-1. **代码与文档不一致时，以代码为准**。本次 review 已发现多处偏差：
-   - 前端"单文件"描述 → 实际已拆 3 文件
-   - `at_adapter.rs` / `at_parser.rs` 描述 → 已删除
-   - `lib.rs ~1000 行` → 实际 1142 行（2026-06-01 raw AT / PLMN 安全修复后）
-   - `commands.rs` 未提 → 实际是 504 行死代码（30 个 #[tauri::command] + 64 处 .unwrap()）
-2. **改代码必同步改文档**。三个高优先级文件（ARCHITECTURE.md / CODE_MAP.md / CALL_FLOW.md）每次结构变更后必须 review。
-3. **REVIEW.md 是 P0/P1 任务清单**。每条都有 file:line + 建议，可直接拿来排期。
-
-## 历史归档
-
-老文档（与现状偏差较大）保留在 git 历史，本次重写覆盖：
-
-- `ARCHITECTURE.md` 2026-05-14 版（提到 at_adapter.rs / at_parser.rs）
-- `CALL_FLOW.md` 2026-04-30 版（line 引用已失效）
-- `CODE_MAP.md` 2026-05-30 版（仅列 21 个 IPC，少了 5GLAN / VLAN / 频段等 30 个）
-- `TECH_STACK.md` 2026-05-14 版（说"单文件前端"）
+1. **代码与文档不一致时，以代码为准。**
+2. **改代码必同步改文档。** ARCHITECTURE.md / CODE_MAP.md / CALL_FLOW.md 每次结构变更后必须 review。
+3. **REVIEW.md 是活跃任务清单。** P1/P2 条目可直接排期，已修复项归档到附录。
+4. **文档禁含 commit hash / 精确行号 / 已删除文件历史。** 详见 AGENTS.md §6。

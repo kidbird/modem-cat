@@ -1584,3 +1584,108 @@ body {
 [data-theme="blue-light"] .tab-indicator {
   box-shadow: 0 1px 3px rgba(0, 102, 255, 0.08) !important;
 }
+
+/* ── Firmware Download Page ─────────────────────────────────────────────── */
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+.alert-success {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.alert-error {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(244, 63, 94, 0.25);
+}
+.alert-info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.chip.ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--success);
+}
+.chip.warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--warning);
+}
+.chip.err {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--error);
+}
+.chip.info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.log-console {
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+[data-theme="light"] .log-console {
+  background: #1e1e2e;
+  color: #c9d1d9;
+}
+
+.risk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 8px;
+}
+.risk-table th {
+  text-align: left;
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+.risk-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.04));
+}
+.risk-table td.id {
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+}

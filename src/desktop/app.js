@@ -675,7 +675,7 @@
 
     function updateConnectionUI(connected) {
       const connType = document.getElementById('connectionType');
-      connType.disabled = connected;
+      if (connType) connType.disabled = false;
       $.connectionParams.disabled = connected;
       const icon = document.getElementById('statusDot');
       if (connected) {
@@ -3739,6 +3739,14 @@
     }
 
     async function refreshConnectionParams() {
+      if (state.connected) {
+        addTerminalLine('[连接] 检测到连接模式切换，正在自动断开当前连接...', 'info');
+        try {
+          await toggleConnection();
+        } catch (e) {
+          console.error('Auto-disconnect failed:', e);
+        }
+      }
       const connType = document.getElementById('connectionType')?.value || 'serial';
       if (connType === 'serial') {
         await refreshPortList();

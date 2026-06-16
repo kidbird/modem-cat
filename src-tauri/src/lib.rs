@@ -587,6 +587,13 @@ mod tests {
         assert!(!is_at_port("COM3", &Some(&"Quectel USB NMEA Port".to_string()), &Some(&"Quectel".to_string())));
         assert!(!is_at_port("COM3", &Some(&"Qualcomm HS-USB QDLoader 9008".to_string()), &Some(&"Qualcomm".to_string())));
     }
+
+    #[tokio::test]
+    async fn test_list_network_adapters() {
+        let res = list_network_adapters().await;
+        println!("Network adapters: {:?}", res);
+        assert!(res.is_ok());
+    }
 }
 
 // ── Connection management ──

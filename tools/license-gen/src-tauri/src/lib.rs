@@ -150,23 +150,55 @@ fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-fn load_private_key() -> Result<Vec<u8>, String> {
-    if let Ok(path) = std::env::var("MODEM_CAT_SK_PATH") {
-        return fs::read(&path).map_err(|e| format!("读取私钥文件失败 ({path}): {e}"));
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let sk_path = dir.join("keys").join("modem-cat.sk");
-            if sk_path.exists() {
-                return fs::read(&sk_path).map_err(|e| format!("读取私钥文件失败: {e}"));
+/// Extract and return the public key bytes from the loaded private key.
+/// This is used to sync the public key with the main application.
+#[tauri::command]
+fn export_public_key() -> Result<String, String> {
+    let pkcs8 = load_private_key()?;
+    
+    // Use modem_license's new function to extract public key
+    let pub_bytes = modem_license::extract_public_key_from_pkcs8(&pkcs8)?;
+
+    // Format as Rust array literal for easy copy-paste
+    let mut output = String::from("pub const PUBLIC_KEY_BYTES: [u8; 32] = [\n");
+    for (i, chunk) in pub_bytes.chunks(8).enumerate() {
+        output.push_str("    ");
+        for (j, byte) in chunk.iter().enumerate() {
+            output.push_str(&format!("0x{:02X}", byte));
+            if i < 3 || j < 7 {
+                output.push_str(", ");
             }
         }
+        output.push('\n');
     }
-    let dev_path = std::path::Path::new("keys/modem-cat.sk");
-    if dev_path.exists() {
-        return fs::read(dev_path).map_err(|e| format!("读取私钥文件失败: {e}"));
-    }
-    Err("未找到私钥文件。请将私钥放到 keys/modem-cat.sk 或设置 MODEM_CAT_SK_PATH 环境变量".into())
+    output.push_str("];\n");
+
+    Ok(output)
+}
+
+fn load_private_key() -> Result<Vec<u8>, String> {
+    // Always use the embedded private key from modem-license crate
+    // This ensures consistency between license-gen and main app
+    modem_license::get_embedded_private_key()
+        .or_else(|_| {
+            // Fallback to file-based loading for backward compatibility during development
+            if let Ok(path) = std::env::var("MODEM_CAT_SK_PATH") {
+                return fs::read(&path).map_err(|e| format!("读取私钥文件失败 ({path}): {e}"));
+            }
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(dir) = exe.parent() {
+                    let sk_path = dir.join("keys").join("modem-cat.sk");
+                    if sk_path.exists() {
+                        return fs::read(&sk_path).map_err(|e| format!("读取私钥文件失败: {e}"));
+                    }
+                }
+            }
+            let dev_path = std::path::Path::new("keys/modem-cat.sk");
+            if dev_path.exists() {
+                return fs::read(dev_path).map_err(|e| format!("读取私钥文件失败: {e}"));
+            }
+            Err("未找到私钥文件。请将私钥放到 keys/modem-cat.sk 或设置 MODEM_CAT_SK_PATH 环境变量".into())
+        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -180,6 +212,7 @@ pub fn run() {
             generate_license,
             verify_license_file,
             get_app_version,
+            export_public_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running license-gen");

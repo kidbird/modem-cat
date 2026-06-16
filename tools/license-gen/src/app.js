@@ -28,7 +28,6 @@ function cacheDom() {
   $.verifyResult = document.getElementById('verifyResult');
   $.verifyResultText = document.getElementById('verifyResultText');
   $.toast = document.getElementById('toast');
-  $.appVersion = document.getElementById('appVersion');
 }
 
 // ── Navigation ──
@@ -51,7 +50,9 @@ function showToast(msg, type='info') {
   if (toastTimer) clearTimeout(toastTimer);
   $.toast.textContent = msg;
   $.toast.className = 'toast ' + type + ' show';
-  toastTimer = setTimeout(() => { $.toast.classList.remove('show'); }, 3000);
+  toastTimer = setTimeout(() => {
+    $.toast.classList.remove('show');
+  }, 3000);
 }
 
 // ── MAC detection ──
@@ -75,8 +76,7 @@ function initExpiry() {
     $.dateRange.style.display = 'none';
   });
   $.expiryCustom.addEventListener('change', () => {
-    $.dateRange.style.display = 'flex';
-    // Default to 1 year from now
+    $.dateRange.style.display = 'block';
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
     $.expiryDate.value = d.toISOString().split('T')[0];
@@ -117,17 +117,16 @@ async function generate() {
       }
     });
 
+    $.outputArea.style.display = 'block';
     if (result.success) {
-      $.outputArea.classList.add('visible');
-      $.statusBar.className = 'status-bar success';
+      $.statusBar.className = 'status-msg success';
       $.statusBar.textContent = result.message;
       if (result.preview) {
         $.licensePreview.textContent = result.preview;
       }
       showToast(result.message, 'success');
     } else {
-      $.outputArea.classList.add('visible');
-      $.statusBar.className = 'status-bar error';
+      $.statusBar.className = 'status-msg error';
       $.statusBar.textContent = result.message;
       if (result.preview) {
         $.licensePreview.textContent = result.preview;
@@ -135,11 +134,14 @@ async function generate() {
       showToast(result.message, 'info');
     }
   } catch (e) {
-    // Check for private key missing error and show helpful message
     const errMsg = String(e);
+    $.outputArea.style.display = 'block';
+    $.statusBar.className = 'status-msg error';
+    $.statusBar.textContent = '';
+    $.licensePreview.textContent = '';
     if (errMsg.includes('未找到私钥文件')) {
       showToast(
-        '❌ 私钥文件缺失\n\n请将 modem-cat.sk 放到以下位置之一：\n' +
+        '私钥文件缺失\n\n请将 modem-cat.sk 放到以下位置之一：\n' +
         '1. keys/modem-cat.sk（开发模式）\n' +
         '2. <exe_dir>/keys/modem-cat.sk（生产模式）\n' +
         '3. 或设置环境变量 MODEM_CAT_SK_PATH 指向私钥文件',
@@ -187,7 +189,7 @@ async function verifyLicense() {
     }
   } catch (e) {
     $.verifyResult.style.display = 'block';
-    $.verifyResultText.textContent = '❌ 验证出错: ' + e;
+    $.verifyResultText.textContent = '验证出错: ' + e;
     showToast('验证失败: ' + e, 'error');
   } finally {
     $.verifyBtn.disabled = false;
@@ -196,7 +198,7 @@ async function verifyLicense() {
 }
 
 // ── Init ──
-async function init() {
+function init() {
   cacheDom();
   initNav();
   initExpiry();
@@ -206,15 +208,22 @@ async function init() {
   $.pickVerifyBtn.addEventListener('click', pickVerifyFile);
   $.verifyBtn.addEventListener('click', verifyLicense);
 
-  // Show version
-  try {
-    $.appVersion.textContent = await invoke('get_app_version');
-  } catch (e) {
-    $.appVersion.textContent = '0.1.0';
-  }
-
   // Auto-detect MAC on load
   detectMac();
+
+  // Export public key for main app (console only, for debugging/setup)
+  exportPublicKey().catch(() => {});
+}
+
+async function exportPublicKey() {
+  try {
+    const pubKey = await invoke('export_public_key');
+    console.log('%c=== PUBLIC KEY FOR MAIN APP ===', 'color: #f97316; font-weight: bold;');
+    console.log(pubKey);
+    console.log('%cCopy the above into modem-license/src/lib.rs as PUBLIC_KEY_BYTES', 'color: #94a3b8;');
+  } catch (e) {
+    console.error('Failed to export public key:', e);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);

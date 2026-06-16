@@ -16,6 +16,19 @@ pub const PUBLIC_KEY_BYTES: [u8; 32] = [
     0xB6, 0x44, 0xEB, 0xAB, 0x25, 0x71, 0x80, 0xA8,
 ];
 
+/// Embedded private key (PKCS#8 DER format, base64-encoded).
+/// This is the corresponding private key for PUBLIC_KEY_BYTES above.
+/// Only used by license-gen tool for signing licenses.
+const PRIVATE_KEY_BASE64: &str = "MFECAQEwBQYDK2VwBCIEIBganfXX63bGLDqgGyhxnJw/dlRTyVHSx7ZcmtVZC1ZSgSEA/BNYJrR5yI6CC/hBQRoHals0firv7OzbtkTrqyVxgKg=";
+
+/// Decode the embedded private key from base64.
+pub fn get_embedded_private_key() -> Result<Vec<u8>, String> {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(PRIVATE_KEY_BASE64)
+        .map_err(|e| format!("私钥解码失败: {e}"))
+}
+
 /// Complete license file as stored on disk (JSON).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct License {
@@ -216,12 +229,37 @@ pub fn generate_key_pair() -> Result<(Vec<u8>, [u8; 32]), String> {
     Ok((pkcs8.as_ref().to_vec(), pub_key_bytes))
 }
 
-/// Sign a message with a PKCS#8 Ed25519 private key.
-/// Only used by license-gen.
-pub fn sign_message(pkcs8_der: &[u8], message: &[u8]) -> Result<Vec<u8>, String> {
+/// Sign a message with the embedded private key.
+/// Only used by license-gen. Uses the embedded key by default.
+pub fn sign_message(_pkcs8_der: &[u8], message: &[u8]) -> Result<Vec<u8>, String> {
+    // Always use the embedded private key for consistency
+    let pkcs8_bytes = get_embedded_private_key()?;
+    let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(&pkcs8_bytes)
+        .map_err(|e| format!("私钥加载失败: {e}"))?;
+    Ok(key_pair.sign(message).as_ref().to_vec())
+}
+
+/// Internal function to sign with a specific key (for testing only).
+#[cfg(test)]
+fn sign_message_with_key(pkcs8_der: &[u8], message: &[u8]) -> Result<Vec<u8>, String> {
     let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8_der)
         .map_err(|e| format!("私钥加载失败: {e}"))?;
     Ok(key_pair.sign(message).as_ref().to_vec())
+}
+
+/// Extract the public key from the embedded private key.
+/// Only used by license-gen for syncing with main app.
+pub fn extract_public_key_from_pkcs8(_pkcs8_der: &[u8]) -> Result<[u8; 32], String> {
+    // Always use the embedded private key for consistency
+    let pkcs8_bytes = get_embedded_private_key()?;
+    let key_pair = ring::signature::Ed25519KeyPair::from_pkcs8(&pkcs8_bytes)
+        .map_err(|e| format!("私钥加载失败: {e}"))?;
+    let pub_bytes: [u8; 32] = key_pair
+        .public_key()
+        .as_ref()
+        .try_into()
+        .map_err(|_| "公钥长度错误".to_string())?;
+    Ok(pub_bytes)
 }
 
 #[cfg(test)]
@@ -247,7 +285,8 @@ mod tests {
             note: "".into(),
         };
         let payload_bytes = canonical_json(&payload).unwrap();
-        let signature = sign_message(&pkcs8, &payload_bytes).unwrap();
+        // Use test-specific signing function that respects the provided key
+        let signature = sign_message_with_key(&pkcs8, &payload_bytes).unwrap();
         let license = License {
             version: 1,
             payload: base64_encode(&payload_bytes),

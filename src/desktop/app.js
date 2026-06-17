@@ -2629,7 +2629,8 @@
         brandSel.innerHTML = bd.brands.map(b => `<option value="${escAttr(b.name)}" ${b.name === factoryState.currentProduct?.brand ? 'selected' : ''}>${escHtml(b.name)} (${escHtml(b.code)})</option>`).join('');
       }
       if (typeSel) {
-        typeSel.innerHTML = bd.product_types.map(t => `<option value="${escAttr(t.name)}" ${t.name === factoryState.currentProduct?.product_type ? 'selected' : ''}>${escHtml(t.name)} (${escHtml(t.code)})</option>`).join('');
+        // 后端 BaseData 用 #[serde(rename = "types")]，IPC 响应字段为 types 而非 product_types
+        typeSel.innerHTML = bd.types.map(t => `<option value="${escAttr(t.name)}" ${t.name === factoryState.currentProduct?.product_type ? 'selected' : ''}>${escHtml(t.name)} (${escHtml(t.code)})</option>`).join('');
       }
       if (facSel) {
         facSel.innerHTML = bd.factories.map(f => `<option value="${escAttr(f.name)}" ${f.name === factoryState.currentProduct?.fac ? 'selected' : ''}>${escHtml(f.name)} (${escHtml(f.code)})</option>`).join('');
@@ -2775,7 +2776,7 @@
         ).join('');
       };
       renderTable('factoryBrandsTable', bd.brands, 'factoryRemoveBrand');
-      renderTable('factoryTypesTable', bd.product_types, 'factoryRemoveType');
+      renderTable('factoryTypesTable', bd.types, 'factoryRemoveType');
       renderTable('factoryFactoriesTable', bd.factories, 'factoryRemoveFactory');
     }
 

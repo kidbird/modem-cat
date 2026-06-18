@@ -8,7 +8,6 @@ pub use serial::SerialTransport;
 pub use tcp::TcpTransport;
 pub use websocket::WebSocketTransport;
 
-
 pub trait AtTransport: Send {
     fn send_at(&mut self, command: &str) -> Result<String, String>;
     fn close(&mut self);

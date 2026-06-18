@@ -1,9 +1,9 @@
 use crate::transport::AtTransport;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
-use tungstenite::{client, Message, WebSocket};
 use tungstenite::client::IntoClientRequest;
 use tungstenite::http::header::AUTHORIZATION;
+use tungstenite::{client, Message, WebSocket};
 
 /// Custom Base64 encoder to avoid versioning or import issues with the base64 crate.
 fn base64_encode(input: &[u8]) -> String {
@@ -78,8 +78,12 @@ impl WebSocketTransport {
         .map_err(|e| format!("Failed to connect to {}: {}", addr, e))?;
 
         // Set temporary short read/write timeouts for handshake
-        tcp_stream.set_read_timeout(Some(Duration::from_millis(500))).ok();
-        tcp_stream.set_write_timeout(Some(Duration::from_secs(3))).ok();
+        tcp_stream
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .ok();
+        tcp_stream
+            .set_write_timeout(Some(Duration::from_secs(3)))
+            .ok();
 
         // 4. Perform WebSocket client handshake
         let (mut socket, _response) = client(request, tcp_stream)
@@ -88,11 +92,14 @@ impl WebSocketTransport {
         // 5. Interactive terminal/console authentication fallback
         // If the server doesn't use Basic Auth but presents a login prompt over the WebSocket stream,
         // we wait briefly and respond if requested.
-        let _ = socket.get_ref().set_read_timeout(Some(Duration::from_millis(200)));
+        let _ = socket
+            .get_ref()
+            .set_read_timeout(Some(Duration::from_millis(200)));
         if let Ok(msg) = socket.read() {
             if let Message::Text(ref text) = msg {
                 let lower = text.to_lowercase();
-                if lower.contains("login") || lower.contains("username") || lower.contains("user:") {
+                if lower.contains("login") || lower.contains("username") || lower.contains("user:")
+                {
                     // Send username
                     let user_to_send = username.unwrap_or("admin");
                     socket
@@ -100,7 +107,9 @@ impl WebSocketTransport {
                         .map_err(|e| format!("Failed to send username: {}", e))?;
 
                     // Wait and read password prompt
-                    let _ = socket.get_ref().set_read_timeout(Some(Duration::from_millis(200)));
+                    let _ = socket
+                        .get_ref()
+                        .set_read_timeout(Some(Duration::from_millis(200)));
                     if let Ok(msg2) = socket.read() {
                         if let Message::Text(ref text2) = msg2 {
                             let lower2 = text2.to_lowercase();
@@ -118,8 +127,14 @@ impl WebSocketTransport {
         }
 
         // Restore normal AT timeouts (500ms read timeout)
-        socket.get_ref().set_read_timeout(Some(Duration::from_millis(500))).ok();
-        socket.get_ref().set_write_timeout(Some(Duration::from_secs(3))).ok();
+        socket
+            .get_ref()
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .ok();
+        socket
+            .get_ref()
+            .set_write_timeout(Some(Duration::from_secs(3)))
+            .ok();
 
         Ok(Self { socket })
     }

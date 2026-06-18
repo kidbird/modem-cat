@@ -441,12 +441,12 @@ pub trait ModemVendor: Send {
         // Default implementation that combines individual queries
         let sim_status = self.query_sim_status(transport)?;
         let imei = self.query_imei(transport)?;
-        let iccid = self.query_iccid(transport).unwrap_or_default();
-        let cops_name = self.query_operator(transport).unwrap_or_default();
+        let iccid = self.query_iccid(transport)?;
+        let cops_name = self.query_operator(transport)?;
         let reg_status = self.query_registration_status(transport)?;
         let conn_status = self.query_connection_status(transport)?;
-        let serving_cell = self.query_serving_cell(transport).unwrap_or_default();
-        let signal = self.query_signal_strength(transport).unwrap_or_default();
+        let serving_cell = self.query_serving_cell(transport)?;
+        let signal = self.query_signal_strength(transport)?;
         let operator = if cops_name.is_empty() && !serving_cell.operator_mcc.is_empty() {
             format!("{}{}", serving_cell.operator_mcc, serving_cell.operator_mnc)
         } else {

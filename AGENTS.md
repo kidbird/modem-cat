@@ -1,53 +1,42 @@
 # AGENTS.md
 
-> 仓库级统一入口。所有 agent 必读。根 `CLAUDE.md` 委托到本文件。
+> 仓库级共享入口。`CLAUDE.md` 只委托到本文件；本文件只保留任务路由、根约束、文档 owner 规则。
 
-## 必读顺序
+## Required Read Order
 
 1. 本文件
-2. `docs/ARCHITECTURE.md`（架构 + 数据流 + Source Of Truth + Doc Owner）
-3. 按任务类型：
-   - 前端 → `docs/CODE_MAP.md` + `docs/CALL_FLOW.md`
-   - 后端 IPC / HAL → `docs/AT_COMMANDS.md` + `docs/REVIEW.md`
-   - 新厂商 → `docs/ARCHITECTURE.md §9` + `docs/AT_COMMANDS.md`
-   - 构建 → `docs/BUILD.md`
+2. `docs/CONTEXT_PACK.md`
+3. 按 `docs/CONTEXT_PACK.md` 的任务路由继续读取 owner 文档
+4. 不要把架构、AT、API、构建细节回填到本文件
+
+## Task Routing
+
+| Task Type | Workdir | Read Next |
+|---|---|---|
+| Frontend (HTML/CSS/JS) | `src/desktop/` | `docs/CONTEXT_PACK.md` + `docs/CODE_MAP.md` + `docs/CALL_FLOW.md` |
+| Tauri Backend (IPC/State/Queue/MQTT) | `src-tauri/src/{lib,mqtt}.rs` | `docs/CONTEXT_PACK.md` + `docs/ARCHITECTURE.md` + `docs/CODE_MAP.md` |
+| License / Factory / Firmware | `src-tauri/src/{license,factory,dloader}.rs` | `docs/CONTEXT_PACK.md` + `docs/ARCHITECTURE.md` + `docs/CODE_MAP.md` + `docs/TECH_STACK.md` |
+| HAL / Parser / Vendor / Transport | `modem-hal/src/` | `docs/CONTEXT_PACK.md` + `docs/AT_COMMANDS.md` + `docs/ARCHITECTURE.md` + `docs/REVIEW.md` |
+| Build / Deploy / Docs | repo root | `docs/CONTEXT_PACK.md` + `docs/BUILD.md` + `docs/TECH_STACK.md` + 对应 owner 文档 |
 
 ## Hard Constraints
 
-### 1. 流程/入口唯一性
-- 同一功能一条主流程。禁止 fallback / 备用 handler / `unwrap_or_default()` 掩盖 AT 失败。
-- 同一业务一个 IPC 入口。handler 统一走 `with_vendor!` / `with_vendor_cid!` 宏。
+- **唯一 AT 队列**：所有 live modem I/O 只能复用 `AppState.transport` 持有的 `AtTransport`，最终统一汇聚到 `AtTransport::send_at`。禁止新增第二条 AT 发送队列、后台直连 transport、或绕过现有串行化路径的 helper。
+- **唯一调用路径**：同一业务只允许一条 live IPC / transport / parser 主路径。旧 handler、旧模块、旧脚本、旧文档在替换时必须同步删除。
+- **实时状态禁止 fallback**：状态查询或配置读取失败必须直接报错。禁止二次改发 AT、`unwrap_or_default()` / `unwrap_or(0)`、伪默认值、静默吞错。
+- **单一真相源**：前端状态以 `state` 为准；后端 modem 状态以 `AppState` 为准；License / Factory / Firmware 各自以其受管状态 owner 为准。不要维护第二份 live 镜像。
+- **AT 命令来源受限**：只允许来自 `docs/` AT 手册或用户明确给出的修正；禁止按“相似型号 / 论坛片段 / 其他平台分支”猜命令。
+- **用户可控 AT 参数必须校验**：所有字符串 AT 参数统一走 `validate_at_string` / `validate_raw_at_command` / `validate_cid`，AT 拼接统一用 `format!()`。
+- **锁与敏感信息安全**：Mutex 锁路径禁止 `.unwrap()`；PLMN / APN / token / password 等敏感字段不得设置公开默认值，进入 AT 日志前必须经 `redact_at_command`。
+- **文档分层**：`AGENTS.md` 与 `CLAUDE.md` 只保留入口性质内容；实现细节写进 `docs/CONTEXT_PACK.md` 与 owner 文档。
+- **验证基线**：改动完成后至少跑 `cargo test --workspace` 和 `cargo build -p modem-hal`；完整桌面构建说明见 `docs/BUILD.md`。
 
-### 2. 状态唯一性
-- 前端 `app.js::state` / 后端 `AppState` 各自唯一真相源。`localStorage` 仅存 theme/lang/ui-scale。
-- 模组状态统一走 `get_modem_status`，其它 IPC 不重复查询。
+## Ownership Rules
 
-### 3. AT 命令规范
-- 来源：`docs/` AT 手册 + 用户明确给出。禁止从其他分支/型号推断。
-- 同功能禁止 fallback AT；失败即报错。
-- `unwrap_or_default()` / `unwrap_or(0)` 在 AT 响应处理中禁止。
-- 用户可控字符串走 `validate_at_string` / `validate_raw_at_command` / `validate_cid`（详见 CODING.md）。
-
-### 4. 字符串/Buffer/锁安全（Rust）
-- Mutex 锁路径禁止 `.unwrap()`。统一走宏或 `.map_err()`。
-- 魔数 buffer / 超时必须为命名常量，并注释来源。
-- AT 命令拼接统一 `format!()`，禁止手动 `+` / `push_str`。
-
-### 5. 代码生命周期
-- 替换旧实现必须同步删除旧代码（不保留注释掉的备份）。
-- 新增 IPC 必填 3 项：前端 caller、`invoke_handler!` 注册、`CODE_MAP.md` 记录。
-- 删除功能同步清理前端调用/IPC handler/trait 方法/文档引用。
-
-### 6. 文档维护
-- 架构/API/流程变更必须同次改动更新对应 owner 文档。
-- 文档禁 commit hash / 精确行号 / 已删除文件历史记录。
-- `CLAUDE.md` 是兼容薄层，不重复维护。
-
-### 7. 构建与测试
-- `cargo test --workspace` 每次改动后必过。
-- 前端无构建工具；ES Modules（`<script type="module">`）。
-
-## 敏感信息
-
-- 禁为 PLMN / APN / token 等敏感字段设公开默认（`"12345678"`、`"admin"`、空密码等）。用户未传时返回 `Err`。
-- 所有进入 AT 日志的命令必须经 `redact_at_command`。
+- `docs/ARCHITECTURE.md`：架构、状态边界、AT 队列、连接模式、后台模块
+- `docs/AT_COMMANDS.md`：AT 命令合同、平台差异、禁止复制的历史兼容路径
+- `docs/CODE_MAP.md`：前端触发点 → IPC → 后端执行面
+- `docs/CALL_FLOW.md`：主要 UI → IPC → HAL 调用链
+- `docs/REVIEW.md`：当前 live 技术债与文档/代码偏差
+- `docs/BUILD.md` / `docs/TECH_STACK.md`：工具链、构建、依赖、运行方式
+- 架构、AT、调用路径、构建方式变化必须同一次更新对应 owner 文档

@@ -1,90 +1,22 @@
 # Code Map
 
-> 最近更新：2026-06-16
-> 覆盖：前端 UI 元素 → IPC 命令 → 后端实现 三列映射
+> 最近更新：2026-06-18
+> 覆盖：前端 UI 元素 → IPC 命令 → 后端 live handler 三列映射
 
-## 1. 后端 IPC 命令清单（由 `lib.rs` 暴露）
+## 1. 后端 live IPC 命令清单
 
-| # | IPC 命令 | 后端位置 | 类别 | 异步模型 |
-|---|---|---|---|---|
-| 1 | `get_app_version` | lib.rs | 系统 | 同步 |
-| 2 | `list_ports` | lib.rs (→ ports.rs) | 连接 | 同步 |
-| 3 | `auto_connect_at` | lib.rs | 连接 | spawn_blocking |
-| 4 | `connect_serial` | lib.rs (→ ports.rs) | 连接 | spawn_blocking |
-| 5 | `connect_tcp` | lib.rs (→ ports.rs) | 连接 | spawn_blocking |
-| 6 | `disconnect` | lib.rs | 连接 | 同步 |
-| 7 | `get_modem_status` | lib.rs | 状态 | spawn_blocking |
-| 8 | `get_hardware_info` | lib.rs | 状态 | spawn_blocking |
-| 9 | `get_ip_info` | lib.rs | 状态 | spawn_blocking |
-| 10 | `get_apn_list` | lib.rs | APN | spawn_blocking |
-| 11 | `get_neighbor_cells` | lib.rs | 网络 | spawn_blocking |
-| 12 | `get_qos_info` | lib.rs | 网络 | spawn_blocking |
-| 13 | `get_network_mode` | lib.rs | 网络 | spawn_blocking |
-| 14 | `get_bands` | lib.rs | 频段 | spawn_blocking |
-| 15 | `get_feature_toggles` | lib.rs | 开关 | spawn_blocking |
-| 16 | `get_usbnet_mode` | lib.rs | 开关 | spawn_blocking |
-| 17 | `get_traffic` | lib.rs | 流量 | spawn_blocking |
-| 18 | `get_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 19 | `get_sim_slot` | lib.rs | SIM | spawn_blocking |
-| 20 | `get_nat_mode` | lib.rs | 情景 | spawn_blocking |
-| 21 | `get_vlan` | lib.rs | VLAN | spawn_blocking |
-| 22 | `get_qualcomm_config` | lib.rs | 高通 | spawn_blocking |
-| 23 | `set_apn_config` | lib.rs | APN | spawn_blocking |
-| 24 | `delete_apn_config` | lib.rs | APN | spawn_blocking |
-| 25 | `set_apn_active` | lib.rs | APN | spawn_blocking |
-| 26 | `set_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 27 | `set_network_mode_cmd` | lib.rs | 网络 | spawn_blocking |
-| 28 | `set_nr5g_band_cmd` | lib.rs | 频段 | spawn_blocking |
-| 29 | `set_bands` | lib.rs | 频段 | spawn_blocking |
-| 30 | `reset_all_bands` | lib.rs | 频段 | spawn_blocking |
-| 31 | `set_feature_toggle` | lib.rs | 开关 | spawn_blocking |
-| 32 | `set_usbnet_mode` | lib.rs | 开关 | spawn_blocking |
-| 33 | `set_sim_slot` | lib.rs | SIM | spawn_blocking |
-| 34 | `set_nat_mode` | lib.rs | 情景 | spawn_blocking |
-| 35 | `set_vlan` | lib.rs | VLAN | spawn_blocking |
-| 36 | `set_qualcomm_config` | lib.rs | 高通 | spawn_blocking |
-| 37 | `connect_data` | lib.rs | 数据 | spawn_blocking |
-| 38 | `disconnect_data` | lib.rs | 数据 | spawn_blocking |
-| 39 | `set_cfun` | lib.rs | 射频 | spawn_blocking |
-| 40 | `reboot_modem` | lib.rs | 系统 | spawn_blocking |
-| 41 | `factory_reset` | lib.rs | 系统 | spawn_blocking |
-| 42 | `set_plmn_lock` | lib.rs | PLMN | spawn_blocking |
-| 43 | `clear_plmn_lock` | lib.rs | PLMN | spawn_blocking |
-| 44 | `query_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 45 | `set_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 46 | `clear_cell_lock` | lib.rs | 小区锁 | spawn_blocking |
-| 47 | `query_qualcomm_5glan_status` | lib.rs | 5GLAN | spawn_blocking |
-| 48 | `configure_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 49 | `enable_eth_pdu` | lib.rs | 5GLAN | spawn_blocking |
-| 50 | `connect_qualcomm_5glan` | lib.rs | 5GLAN | spawn_blocking |
-| 51 | `send_raw_at` | lib.rs | AT | spawn_blocking；完整 AT 命令走 `validate_raw_at_command` |
-| 52 | `pop_at_commands` | lib.rs | AT 日志 | 同步 |
-| 53 | `get_license_status` | license.rs | License | 异步 |
-| 54 | `load_license_file` | license.rs | License | 异步 |
-| 55 | `init_factory` | factory.rs | 工厂 | 异步 |
-| 56 | `factory_get_base_data` | factory.rs | 工厂 | 异步 |
-| 57 | `factory_get_current_product` | factory.rs | 工厂 | 异步 |
-| 58 | `factory_set_product` | factory.rs | 工厂 | 异步 |
-| 59 | `factory_get_current_sn` | factory.rs | 工厂 | 异步 |
-| 60 | `factory_get_code_set` | factory.rs | 工厂 | 异步 |
-| 61 | `factory_increment_sequence` | factory.rs | 工厂 | 异步 |
-| 62 | `factory_set_device_ip` | factory.rs | 工厂 | 异步 |
-| 63 | `factory_write_sn_to_device` | factory.rs | 工厂 | 异步 |
-| 64 | `factory_get_device_info` | factory.rs | 工厂 | 异步 |
-| 65 | `factory_save_execute_data` | factory.rs | 工厂 | 异步 |
-| 66 | `factory_save_device_record` | factory.rs | 工厂 | 异步 |
-| 67 | `factory_add_brand` | factory.rs | 工厂 | 异步 |
-| 68 | `factory_remove_brand` | factory.rs | 工厂 | 异步 |
-| 69 | `factory_add_product_type` | factory.rs | 工厂 | 异步 |
-| 70 | `factory_remove_product_type` | factory.rs | 工厂 | 异步 |
-| 71 | `factory_add_factory` | factory.rs | 工厂 | 异步 |
-| 72 | `factory_remove_factory` | factory.rs | 工厂 | 异步 |
-| 73 | `pick_pac_file` | dloader.rs | 固件 | 异步 |
-| 74 | `pac_info` | dloader.rs | 固件 | 异步 |
-| 75 | `start_firmware_download` | dloader.rs | 固件 | 异步 |
-| 76 | `stop_firmware_download` | dloader.rs | 固件 | 同步 |
+> 当前 live handler 统一注册在 `src-tauri/src/lib.rs::generate_handler!`。
 
-> 注：后端 `lib.rs` 暴露的 `#[tauri::command]` 在 `invoke_handler!` 块中注册。前端调用名必须能在后端实际暴露命令中找到。
+- 连接类：`list_ports` / `auto_connect_at` / `connect_serial` / `connect_tcp` / `list_network_adapters` / `connect_websocket` / `disconnect`
+- 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
+- 写操作：`set_apn_config` / `delete_apn_config` / `set_apn_active` / `set_5glan` / `set_network_mode_cmd` / `set_nr5g_band_cmd` / `set_bands` / `reset_all_bands` / `set_feature_toggle` / `set_usbnet_mode` / `set_sim_slot` / `set_nat_mode` / `set_vlan` / `set_qualcomm_config`
+- 数据 / 射频 / 系统：`connect_data` / `disconnect_data` / `set_cfun` / `reboot_modem` / `factory_reset`
+- 锁网 / 小区锁：`query_cell_lock` / `set_cell_lock` / `clear_cell_lock` / `set_plmn_lock` / `clear_plmn_lock`
+- Qualcomm 5GLAN：`query_qualcomm_5glan_status` / `configure_qualcomm_5glan` / `enable_eth_pdu` / `connect_qualcomm_5glan`
+- AT / MQTT：`send_raw_at` / `pop_at_commands` / `set_mqtt_enabled` / `get_mqtt_enabled`
+- License：`get_license_status` / `load_license_file`
+- Factory：`init_factory` / `factory_get_base_data` / `factory_get_current_product` / `factory_set_product` / `factory_get_current_sn` / `factory_get_code_set` / `factory_increment_sequence` / `factory_set_device_ip` / `factory_write_sn_to_device` / `factory_get_device_info` / `factory_save_execute_data` / `factory_save_device_record` / `factory_add_brand` / `factory_remove_brand` / `factory_add_product_type` / `factory_remove_product_type` / `factory_add_factory` / `factory_remove_factory`
+- Firmware：`pick_pac_file` / `pac_info` / `start_firmware_download` / `stop_firmware_download`
 
 ## 2. 前端 UI → IPC 触发点
 
@@ -121,7 +53,7 @@
 | 应用频段 | applyBandLock | `set_bands` |
 | 重置频段 | resetBandLock | `reset_all_bands` |
 | PLMN 锁 | applyOperatorLock / clearOperatorLock | `set_plmn_lock` / `clear_plmn_lock` |
-| IMS 状态 | loadNetlockData / setIms | `send_raw_at`（IMS 走兜底） |
+| IMS 状态 | loadNetlockData / setIms | `send_raw_at`（当前以前端快捷 AT 直发） |
 
 #### 小区/频点锁定 tab（`#ctab-celllock`）
 
@@ -180,10 +112,10 @@
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
 | IP/掩码/网关/DNS | refreshIpInfo | `get_ip_info` |
-| MTU 设置 | applyMtu | `send_raw_at`（兜底） |
-| DMZ 设置 | applyDmz / clearDmz | `send_raw_at`（兜底） |
-| LAN IP 查询 | refreshLanConfig | `send_raw_at`（兜底） |
-| LAN IP 配置 | applyLanConfig | `send_raw_at`（兜底） |
+| MTU 设置 | applyMtu | `send_raw_at`（当前以前端快捷 AT 直发） |
+| DMZ 设置 | applyDmz / clearDmz | `send_raw_at`（当前以前端快捷 AT 直发） |
+| LAN IP 查询 | refreshLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
+| LAN IP 配置 | applyLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
 
 ### 2.6 情景模式页（`#page-scene`）
 
@@ -253,27 +185,29 @@
 
 ### 4.1 状态页（`get_modem_status`）
 
-| 显示 | AT 命令 | 解析函数 | parser.rs 位置 |
+| 显示 | AT 命令 | 解析函数 | 位置 |
 |---|---|---|---|
-| SIM 状态 | `AT+CPIN?` | parse_cpin | quectel/parser.rs |
-| IMEI | `AT+CGSN` | parse_cgsn | quectel/parser.rs |
-| ICCID (Qualcomm) | `AT+ICCID` | parse_iccid | quectel/parser.rs |
-| ICCID (UniSoc) | `AT+CCID` | parse_iccid | quectel/parser.rs |
-| 服务小区 | `AT+QENG="servingcell"` | parse_qeng_serving_cell | quectel/parser.rs |
-| 运营商 | `AT+COPS?` | parse_cops_with_act | quectel/parser.rs |
-| 注册状态 | `AT+CEREG?` | parse_cereg | quectel/parser.rs |
-| 天线 ANT0-3 (Qualcomm) | `AT+QRSRP` | parse_qrsrp | quectel/parser.rs |
-| 天线 ANT0-3 (UniSoc) | `AT+QANTRSSI?` | parse_qantrssi | quectel/parser.rs |
-| 数据激活状态 | `AT+CGACT?` | parse_cgact | quectel/parser.rs |
+| SIM 状态 | `AT+CPIN?` | `parse_cpin` | `quectel/parser.rs` |
+| IMEI | `AT+CGSN` | `parse_cgsn` | `quectel/parser.rs` |
+| ICCID (Qualcomm) | `AT+ICCID` | `parse_iccid` | `quectel/parser.rs` |
+| ICCID (UniSoc) | `AT+CCID` | `parse_iccid` | `quectel/parser.rs` |
+| 服务小区 | `AT+QENG="servingcell"` | `parse_qeng_serving_cell` | `quectel/parser.rs` |
+| 运营商 | `AT+COPS?` | `parse_cops_with_act` | `quectel/parser.rs` |
+| 注册状态 | `AT+CEREG?` | `parse_cereg` | `quectel/parser.rs` |
+| 天线 ANT0-3 (Qualcomm) | `AT+QRSRP` | `parse_qrsrp` | `quectel/parser.rs` |
+| 天线 ANT0-3 (UniSoc) | `AT+QANTRSSI?` | `parse_qantrssi` | `quectel/parser.rs` |
+| 数据激活状态 (Qualcomm) | `AT+QMAP="MPDN_status"` | `parse_mpdn_connect_status` | `quectel/qualcomm.rs` |
+| 数据激活状态 (UniSoc) | `AT+CGACT?` | `parse_cgact` | `quectel/parser.rs` |
 
 ## 5. 前端缓存 / DOM
 
-- 前端状态：→ `AGENTS.md §2`。`$.dom` 缓存（在 `cacheDom()` 函数中，app.js 启动段）— 一次预查常用 ID
-- 5GLAN / APN / 场景等页面有局部变量（`apnData`, `glanData`, `sceneCurrentState`）
+- 全局唯一前端状态源：`state`
+- `$.dom` 在 `cacheDom()` 中缓存常用节点
+- 5GLAN / APN / 场景 / Factory 等页面可有局部 UI 数据，但不能替代 live 状态 owner
 
 ## 6. 改前端需注意
 
 - **所有 IPC 必须有 `await`**：Tauri v2 Promise 化
 - **错误处理**：`invoke` 失败时 `catch` 拿到的对象是 `{ message: string }`，统一用 `e.message || String(e)` 兜底
-- **懒加载**：4 个页面 (`hardware` / `ip` / `scene` / `atmanual`) 在 nav-click 时按需加载数据，其它 4 个靠 `doInit` 一次性拉
-- **Tauri 事件**：`listen` 必须在 `doInit` 内调用（`DOMContentLoaded` + 3s timeout 兜底）
+- **懒加载**：重页面（如 hardware / ip / scene / atmanual / factory / firmware）优先按需拉取，不要在启动时堆满同步请求
+- **Tauri 事件**：`listen` 必须在初始化阶段注册

@@ -1,4 +1,3 @@
-use super::parser::parse_cgact;
 use crate::transport::AtTransport;
 use crate::types::{IpInfo, TrafficInfo};
 
@@ -147,80 +146,6 @@ fn ip_info_default() -> IpInfo {
     }
 }
 
-pub fn parse_ims_cids(response: &str) -> Vec<i32> {
-    let mut ims = Vec::new();
-    for line in response.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("+CGDCONT:") {
-            let parts: Vec<&str> = rest.trim().split(',').collect();
-            if parts.len() >= 3 {
-                let apn = parts[2].trim().trim_matches('"').to_lowercase();
-                if apn == "ims" {
-                    if let Ok(cid) = parts[0].trim().parse::<i32>() {
-                        ims.push(cid);
-                    }
-                }
-            }
-        }
-    }
-    ims
-}
-
-fn dotted_to_ipv6(decimal_str: &str) -> String {
-    let bytes: Vec<u8> = decimal_str
-        .split('.')
-        .filter_map(|s| s.parse::<u8>().ok())
-        .collect();
-    if bytes.len() != 16 {
-        return String::new();
-    }
-    bytes
-        .chunks(2)
-        .map(|chunk| format!("{:02x}{:02x}", chunk[0], chunk[1]))
-        .collect::<Vec<_>>()
-        .join(":")
-}
-
-fn parse_cgpaddr(response: &str, info: &mut IpInfo) {
-    for line in response.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("+CGPADDR:") {
-            let after_cid = match rest.trim().split_once(',') {
-                Some((_, s)) => s.trim(),
-                None => continue,
-            };
-            let addrs: Vec<&str> = after_cid.split("\",\"").collect();
-            let addr0 = addrs
-                .first()
-                .map(|s| s.trim().trim_matches('"'))
-                .unwrap_or("");
-            let addr1 = addrs
-                .get(1)
-                .map(|s| s.trim().trim_matches('"'))
-                .unwrap_or("");
-
-            if !addr0.is_empty() && addr0 != "0.0.0.0" {
-                let dots = addr0.matches('.').count();
-                if dots == 3 {
-                    info.ipv4_addr = addr0.to_string();
-                } else if dots == 15 {
-                    info.ipv6_addr = dotted_to_ipv6(addr0);
-                }
-            }
-            if !addr1.is_empty() && addr1 != "0.0.0.0" {
-                let dots = addr1.matches('.').count();
-                if dots == 15 {
-                    info.ipv6_addr = dotted_to_ipv6(addr1);
-                }
-            }
-        }
-    }
-}
-
-fn has_valid_ip(info: &IpInfo) -> bool {
-    !info.ipv4_addr.is_empty() || !info.ipv6_addr.is_empty()
-}
-
 fn parse_qmap_wwan(response: &str) -> IpInfo {
     let mut info = ip_info_default();
     for line in response.lines() {
@@ -250,43 +175,9 @@ fn parse_qmap_wwan(response: &str) -> IpInfo {
     info
 }
 
-pub fn query_ip_info(t: &mut dyn AtTransport, data_cid: i32) -> Result<IpInfo, String> {
+pub fn query_ip_info(t: &mut dyn AtTransport, _data_cid: i32) -> Result<IpInfo, String> {
     let qmap_resp = t.send_at("AT+QMAP=\"WWAN\"")?;
-    let info = parse_qmap_wwan(&qmap_resp);
-    if has_valid_ip(&info) {
-        return Ok(info);
-    }
-
-    let mut info = ip_info_default();
-
-    let cgact_resp = t.send_at("AT+CGACT?")?;
-    let active_cids: Vec<i32> = parse_cgact(&cgact_resp)
-        .into_iter()
-        .filter(|(_, status)| *status == 1)
-        .map(|(cid, _)| cid)
-        .collect();
-
-    let cgdcont_resp = t.send_at("AT+CGDCONT?")?;
-    let ims_cids = parse_ims_cids(&cgdcont_resp);
-
-    let valid_cids: Vec<i32> = active_cids
-        .into_iter()
-        .filter(|c| !ims_cids.contains(c))
-        .collect();
-
-    if valid_cids.is_empty() {
-        return Ok(info);
-    }
-
-    let target_cid = if valid_cids.contains(&data_cid) {
-        data_cid
-    } else {
-        valid_cids[0]
-    };
-
-    let resp = t.send_at(&format!("AT+CGPADDR={}", target_cid))?;
-    parse_cgpaddr(&resp, &mut info);
-    Ok(info)
+    Ok(parse_qmap_wwan(&qmap_resp))
 }
 
 /// Set auto-connect for a QMAP data call rule.
@@ -300,7 +191,10 @@ pub fn set_auto_connect(
 ) -> Result<(), String> {
     use super::parser::is_ok;
     let cmd = if let Some(pid) = profile_id {
-        format!("AT+QMAP=\"auto_connect\",{},{},{}", rule_num, auto_connect, pid)
+        format!(
+            "AT+QMAP=\"auto_connect\",{},{},{}",
+            rule_num, auto_connect, pid
+        )
     } else {
         format!("AT+QMAP=\"auto_connect\",{},{}", rule_num, auto_connect)
     };
@@ -398,5 +292,16 @@ mod tests {
 
         let resp_usb = "+QMAP: \"MPDN_rule\",0,1,0,3,1,\"FF:FF:FF:FF:FF:FF\"\r\nOK";
         assert_eq!(parse_mpdn_ippt_mode(resp_usb), 3);
+    }
+
+    #[test]
+    fn query_ip_info_uses_single_qmap_path() {
+        let mut transport = crate::transport::MockTransport::new(vec![
+            "+QMAP: \"WWAN\",0,1,\"IPV4\",\"10.0.0.8\"\r\nOK",
+        ]);
+        let info = query_ip_info(&mut transport, 1).expect("query_ip_info should succeed");
+
+        assert_eq!(transport.sent, vec!["AT+QMAP=\"WWAN\""]);
+        assert_eq!(info.ipv4_addr, "10.0.0.8");
     }
 }

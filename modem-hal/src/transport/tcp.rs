@@ -29,9 +29,7 @@ impl TcpTransport {
         )
         .map_err(|e| format!("Failed to connect to {}: {}", addr, e))?;
 
-        stream
-            .set_read_timeout(Some(TCP_READ_TIMEOUT))
-            .ok();
+        stream.set_read_timeout(Some(TCP_READ_TIMEOUT)).ok();
         stream.set_write_timeout(Some(TCP_WRITE_TIMEOUT)).ok();
 
         let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);

@@ -1,7 +1,13 @@
 # AT 指令功能映射
 
-> 最近更新：2026-06-01
-> 与 `modem-hal/src/modem_factory.rs::detect_vendor_from_model` 严格对齐
+> 最近更新：2026-06-18
+> 本文档只记录**当前正式主合同** AT 路径；历史兼容命令留在手册资料中，不作为 live 代码设计依据。
+
+## 使用规则
+
+- 实时状态查询失败必须直接报错，不要改发第二条 AT 掩盖失败。
+- `Unknown` 型号的正式合同是直接报错，不允许猜测 adapter。
+- 只有主合同命令写在本表；历史兼容命令请回原始手册查询，不视为 live 合同。
 
 ## 平台划分（按检测优先级）
 
@@ -9,9 +15,9 @@
 |---|---|---|---|
 | 1 | **Qualcomm（高通）** | `RG500Q`, `RM500Q`, `RG520N`, `RM520N`, `RG525F`, `RG530F`, `RM530F`, `RM530N`, `RM551E`, `RM501Q`, `RG540F`, `RM540N` | RM520N, RM500Q, RG525F, RM530N, RM551E… |
 | 2 | **UniSoc（展锐）** | `RG200U`, `RM500U`, `RG500U`, `RG501U`, `RM501U` | RM500U, RG200U, RG500U… |
-| 3 | **Unknown** | （兜底，未识别直接 `Err`） | — |
+| 3 | **Unknown** | 未识别型号 | — |
 
-⚠️ **无默认 adapter**：`Unknown` 直接返回错误，业务侧需重试 / 提示 UI。
+⚠️ **正式合同**：`Unknown` 直接返回错误，业务侧重试 / 提示 UI。
 ⚠️ **关键字冲突**：`RM500Q`（Qualcomm） vs `RM500U`（UniSoc）靠末尾字母区分；若未来加 `RG500UA` 之类型号需补测试。
 
 ---
@@ -24,7 +30,6 @@
 | IMEI | `AT+CGSN` | `parse_cgsn()` | |
 | ICCID（UniSoc） | `AT+CCID` | `parse_iccid()` | UniSoc 首选 |
 | ICCID（Qualcomm） | `AT+ICCID` | `parse_iccid()` | Qualcomm 首选 |
-| ICCID（备用） | `AT+QCCID` | `parse_iccid()` | 两平台均可 fallback |
 | 型号 | `AT+CGMM` | `parse_cgmm()` | 用于厂商检测 |
 | 厂商 | `AT+CGMI` | `parse_cgmm()` | |
 | 固件版本 | `AT+GMR` | `parse_gmr()` | |
@@ -67,7 +72,7 @@
 |------|---------|------|
 | 连接数据 | `AT+QMAP="connect",{rule},1` | `<rule_num>,<connect=1>`（手册 §12.10） |
 | 断开数据 | `AT+QMAP="connect",{rule},0` | `<rule_num>,<connect=0>`；QMAP 无 `"disconnect"` 子命令 |
-| 查询 IP | `AT+QMAP="WWAN"` | fallback: `AT+CGPADDR` |
+| 查询 IP | `AT+QMAP="WWAN"` | Qualcomm 当前唯一 live 主路径 |
 | 流量统计 | `AT+QGDNRCNT?` | `parse_qgdnrcnt()` |
 | 重置流量 | `AT+QGDNRCNT=0` | |
 | 天线信号 | `AT+QRSRP` | `parse_qrsrp()` → `[ANT0, ANT1, ANT2, ANT3]` |

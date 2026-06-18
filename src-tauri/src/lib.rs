@@ -581,16 +581,48 @@ mod tests {
     #[test]
     fn test_is_at_port() {
         // Test AT ports (should be true)
-        assert!(is_at_port("COM5", &Some(&"Qualcomm HS-USB Android Modem".to_string()), &Some(&"Qualcomm".to_string())));
-        assert!(is_at_port("COM5", &Some(&"Qualcomm HS-USB Modem".to_string()), &Some(&"Qualcomm Incorporated".to_string())));
-        assert!(is_at_port("COM5", &Some(&"Quectel USB AT Port".to_string()), &Some(&"Quectel".to_string())));
+        assert!(is_at_port(
+            "COM5",
+            &Some(&"Qualcomm HS-USB Android Modem".to_string()),
+            &Some(&"Qualcomm".to_string())
+        ));
+        assert!(is_at_port(
+            "COM5",
+            &Some(&"Qualcomm HS-USB Modem".to_string()),
+            &Some(&"Qualcomm Incorporated".to_string())
+        ));
+        assert!(is_at_port(
+            "COM5",
+            &Some(&"Quectel USB AT Port".to_string()),
+            &Some(&"Quectel".to_string())
+        ));
 
         // Test DM/Diag/QDLoader/NMEA ports (should be false)
-        assert!(!is_at_port("COM4", &Some(&"Qualcomm HS-USB Diagnostics 9008".to_string()), &Some(&"Qualcomm".to_string())));
-        assert!(!is_at_port("COM4", &Some(&"Qualcomm HS-USB DM Port".to_string()), &Some(&"Qualcomm".to_string())));
-        assert!(!is_at_port("COM4", &Some(&"Quectel USB DM Port".to_string()), &Some(&"Quectel".to_string())));
-        assert!(!is_at_port("COM3", &Some(&"Quectel USB NMEA Port".to_string()), &Some(&"Quectel".to_string())));
-        assert!(!is_at_port("COM3", &Some(&"Qualcomm HS-USB QDLoader 9008".to_string()), &Some(&"Qualcomm".to_string())));
+        assert!(!is_at_port(
+            "COM4",
+            &Some(&"Qualcomm HS-USB Diagnostics 9008".to_string()),
+            &Some(&"Qualcomm".to_string())
+        ));
+        assert!(!is_at_port(
+            "COM4",
+            &Some(&"Qualcomm HS-USB DM Port".to_string()),
+            &Some(&"Qualcomm".to_string())
+        ));
+        assert!(!is_at_port(
+            "COM4",
+            &Some(&"Quectel USB DM Port".to_string()),
+            &Some(&"Quectel".to_string())
+        ));
+        assert!(!is_at_port(
+            "COM3",
+            &Some(&"Quectel USB NMEA Port".to_string()),
+            &Some(&"Quectel".to_string())
+        ));
+        assert!(!is_at_port(
+            "COM3",
+            &Some(&"Qualcomm HS-USB QDLoader 9008".to_string()),
+            &Some(&"Qualcomm".to_string())
+        ));
     }
 
     #[tokio::test]
@@ -1277,7 +1309,10 @@ async fn set_nat_mode(mode: i32, state: tauri::State<'_, AppState>) -> Result<()
 
 #[tauri::command]
 async fn set_mqtt_enabled(enabled: bool, state: tauri::State<'_, AppState>) -> Result<(), String> {
-    let mut task_guard = state.mqtt_task.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    let mut task_guard = state
+        .mqtt_task
+        .lock()
+        .map_err(|e| format!("Lock poisoned: {}", e))?;
     if enabled {
         if task_guard.is_none() {
             log::info!("MQTT: Enabling remote connection...");
@@ -1299,7 +1334,10 @@ async fn set_mqtt_enabled(enabled: bool, state: tauri::State<'_, AppState>) -> R
 
 #[tauri::command]
 async fn get_mqtt_enabled(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    let task_guard = state.mqtt_task.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+    let task_guard = state
+        .mqtt_task
+        .lock()
+        .map_err(|e| format!("Lock poisoned: {}", e))?;
     Ok(task_guard.is_some())
 }
 

@@ -26,10 +26,10 @@ impl ModemFactory {
                 log::info!("Creating UniSoc adapter for {}", model);
                 Ok(Box::new(QuectelModem::unisoc(model)))
             }
-            ChipsetVendor::Unknown => {
-                log::warn!("Unknown vendor for '{}', falling back to Qualcomm adapter", model);
-                Ok(Box::new(QuectelModem::qualcomm(model)))
-            }
+            ChipsetVendor::Unknown => Err(format!(
+                "Unknown modem vendor for '{}': refusing to guess an adapter",
+                model
+            )),
         }
     }
 
@@ -117,6 +117,14 @@ mod tests {
         assert_eq!(
             ModemFactory::detect_vendor_from_model("XYZ1234"),
             ChipsetVendor::Unknown
+        );
+    }
+
+    #[test]
+    fn create_from_unknown_vendor_returns_error() {
+        assert!(
+            ModemFactory::create_from_vendor("XYZ1234".to_string(), ChipsetVendor::Unknown,)
+                .is_err()
         );
     }
 }

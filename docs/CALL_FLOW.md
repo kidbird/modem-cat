@@ -162,7 +162,7 @@ invoke('connect_data', { cid: 1 })
                   │     AT+QMAP="connect",<cid>,1  → is_ok 检查
                   │
                   ├─ QuectelModem (UniSoc) → unisoc::connect_data
-                  │     AT+CGACT=1,<cid>  → is_ok 检查
+                  │     AT+QNETDEVCTL=<cid>,1,1  → is_ok 检查
 ```
 
 ## 6. IP 查询流程
@@ -175,8 +175,6 @@ invoke('get_ip_info', { cid: 1 })
           └─→ vendor.query_ip_info(&mut transport, cid)
                   │
                   ├─ Qualcomm  → qualcomm::query_ip_info
-                  │     ├─ AT+QMAP="MPPDN_status"  → parse_mpdn_connect_status
-                  │     ├─ AT+CGPADDR  → parse_cgpaddr
                   │     └─ AT+QMAP="WWAN"  → parse_qmap_wwan
                   │     → 拼装 IpInfo { ip, mask, gw, dns_primary, dns_secondary }
                   │

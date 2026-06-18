@@ -1,108 +1,100 @@
 # 技术栈
 
-> 最近更新：2026-06-16
+> 最近更新：2026-06-18
 
 ## 1. 核心技术
 
-### 1.1 桌面应用框架
-- **Tauri 2.10.3**（Rust 编写的桌面应用框架）
-  - features: `custom-protocol`, `tray-icon`
-  - 能力: 窗口管理、系统托盘、IPC 通信
-  - `withGlobalTauri = true`：前端直接用 `window.__TAURI__.core.invoke`
+### 1.1 桌面框架
 
-### 1.2 前端技术
-- **HTML5 + CSS3 + Vanilla JavaScript**（无框架）
-- **已拆分为 3 个文件**：
-  - `src/desktop/index.html`（含 10 个 page 容器）
-  - `src/desktop/app.js`（交互逻辑）
-  - `src/desktop/styles.css`（主题样式）
-- 当前 Tauri 实际入口是 `index.html`。
-- 状态管理：→ `AGENTS.md §2`
-- DOM 缓存：`$.dom` 一次预查常用 ID
-- 通过 Tauri IPC 调用后端命令
+- **Tauri 2**
+  - 前端通过 `window.__TAURI__.core.invoke` / `event.listen` 与后端通信
+  - Tray、窗口行为、IPC 注册集中在 `src-tauri/src/lib.rs`
 
-### 1.3 后端技术
-- **Rust 2021 Edition**
-- **Tokio**：异步运行时（所有 IPC 走 `tokio::task::spawn_blocking`）
-- **serialport v4**：串口通信
-- **reqwest 0.12**：HTTP 客户端（工厂模式设备通信）
-- **chrono 0.4**：时间处理（SN 生成、CSV 记录）
-- **winreg 0.56**：Windows 注册表访问（端口友好名）
-- **modem-hal**：项目内共享 Rust HAL（厂商识别、传输抽象、解析能力）
-- **modem-license**：项目内 License 验签 crate（Ed25519）
-- **错误处理**：全程 `Result<T, String>`（**未引入 thiserror**，见 [REVIEW.md#17]）
+### 1.2 前端
 
-### 1.4 HAL 拆分
-- `modem-hal/src/transport/` — AtTransport trait + Serial/TCP 实现
-- `modem-hal/src/modem_vendor.rs` — ModemVendor trait
-- `modem-hal/src/modem_factory.rs` — `AT+CGMM` → 厂商识别
-- `modem-hal/src/vendors/quectel/` — Quectel 全家（Qualcomm / UniSoc 二态）
+- **HTML + CSS + plain JavaScript**
+- **无框架、无 bundler、无 ES Modules**
+- 当前采用顺序 `<script src>` 分层加载：
+  - `src/desktop/js/core.js`
+  - `src/desktop/js/i18n.js`
+  - `src/desktop/js/theme.js`
+  - `src/desktop/js/scene.js`
+  - `src/desktop/data/atdb.js`
+  - `src/desktop/app.js`
+- 全局状态 owner：`state`
 
-### 1.5 固件下载 Sidecar
-- **r26-cli**（32-bit Windows 可执行文件）
-  - 位置：`src-tauri/binaries/r26-cli-x86_64-pc-windows-msvc.exe`
-  - 功能：解析 PAC 文件、驱动 DLFrame.dll 进行 Unisoc 模组刷写
-  - 通信方式：stdout JSON 事件流 → Tauri 后端转发为 `firmware-event` 事件
+### 1.3 后端
 
-## 2. 依赖关系
+- **Rust 2021**
+- **Tokio**
+  - IPC handler 以 async 暴露，阻塞 I/O 通过 `tokio::task::spawn_blocking` 下沉
+- **serialport**
+  - 串口 transport
+- **rumqttc**
+  - 可选 MQTT 后台上报
+- **reqwest**
+  - 工厂模式设备 HTTP 通信
+- **chrono**
+  - SN / 记录 / 时间处理
+- **winreg**
+  - Windows 端口友好名解析
 
-```
-src/desktop/{index.html, app.js, styles.css}
-        |
-     invoke() / listen()
-        |
-src-tauri/src/{lib.rs, ports.rs, main.rs, license.rs, factory.rs, dloader.rs}
-        |
-   Box<dyn ModemVendor>  (lib.rs:AppState.vendor)
-        |
-   modem-hal/src/
-        |
-   Box<dyn AtTransport>  (lib.rs:AppState.transport, 含 LoggingTransport 装饰)
-        |
-   serialport / TcpStream / reqwest (HTTP)
-        |
-   串口 / TCP / HTTP → 5G Modem
+### 1.4 HAL
 
-   r26-cli sidecar (32-bit) → DLFrame.dll → Unisoc 模组
-```
+- `modem-hal`
+  - `AtTransport` trait
+  - `SerialTransport` / `TcpTransport` / `WebSocketTransport`
+  - `ModemFactory`
+  - `ModemVendor`
+  - `vendors/quectel/*`
 
-## 3. 构建环境
+### 1.5 辅助模块
 
-### 3.1 编译工具
-- **Rust 1.80+**（用 edition 2021）
-- **cargo-tauri v2**（首次构建时自动安装）
-- **MSVC Build Tools 2019/2022**（Windows，由 `build-win.bat` 自动定位）
-- **Xcode CLI Tools**（macOS）
+- `modem-license`
+  - License 校验与状态建模
+- `r26-cli` sidecar
+  - PAC 解析与固件下载执行
+  - 由 `src-tauri/src/dloader.rs` 管理
+  - 真正刷机能力当前只随 Windows 二进制交付；非 Windows 目标保留占位 sidecar 以保证本地构建 / 测试可通过
 
-### 3.2 构建脚本
+## 2. Live 依赖关系
 
-```bash
-./build-mac.sh          # macOS：产出 .app + .dmg
-build-win.bat           # Windows：产出 .exe + .msi
-./bump-version.sh X.Y.Z # 升级版本号（同步所有文件）
+```text
+src/desktop/*
+  → invoke / listen
+src-tauri/src/lib.rs
+  → AppState.transport / vendor / license
+modem-hal/src/*
+  → AtTransport / ModemVendor
+serial / tcp / websocket transport
+  → 5G modem / gateway / tcp peer
+
+src-tauri/src/factory.rs
+  → reqwest / HTTP device APIs
+
+src-tauri/src/dloader.rs
+  → r26-cli sidecar / DLFrame.dll
 ```
 
-详细说明见 [BUILD.md](BUILD.md)。
+## 3. 运行方式
 
-## 4. 运行模式
+- 当前主产品形态是 **Tauri 桌面应用**
+- backend 支持的 transport 形态包括：
+  - serial
+  - tcp
+  - websocket
+- `mqtt.rs` 是可选后台上报模块，不是第二条业务主路径
+- `factory.rs` 和 `dloader.rs` 是辅助业务模块，不得绕过 HAL 新建 AT 队列
 
-→ `ARCHITECTURE.md §8`
+## 4. 设计约束与技术栈关系
 
-## 5. 关键 Cargo 依赖（节选）
+- 由于前端没有 bundler，文档和代码都必须按“顺序脚本加载”设计，不要照搬 Vue / Vite / ES Module 项目的约定
+- 由于 modem I/O 通过 Rust HAL 串行化，任何并发设计都必须围绕**单一 AT 队列**展开，而不是增加 fallback 路径
+- 由于 transport 抽象已经支持 serial / tcp / websocket，新功能应复用 `AtTransport` 边界，不要旁路直接发命令
+- 由于 Factory / Firmware 属于辅助路径，它们可以使用 HTTP / sidecar，但不能反向污染 live modem 状态 owner
 
-| Crate | 版本 | 用途 |
-|---|---|---|
-| `tauri` | 2 | 桌面框架 |
-| `tauri-plugin-shell` | 2 | shell 插件（sidecar 管理） |
-| `tauri-plugin-dialog` | 2 | 文件选择对话框 |
-| `tauri-plugin-single-instance` | 2 | 单实例 |
-| `tokio` | 1 (rt, rt-multi-thread) | 异步运行时 |
-| `serialport` | 4 | 串口 |
-| `reqwest` | 0.12 (json, rustls-tls) | HTTP 客户端（工厂模式） |
-| `chrono` | 0.4 | 时间处理 |
-| `serde` / `serde_json` | 1 | 序列化 |
-| `winreg` | 0.56 | Windows 注册表（仅 windows target） |
-| `modem-hal` | path = "../modem-hal" | 项目内 HAL |
-| `modem-license` | path = "../modem-license" | License 验签（Ed25519） |
+## 5. 构建与测试入口
 
-`modem-hal` 内部：`serialport` 4（optional, default feature）、`napi` 2 + `napi-derive` 2（optional, napi-feature）。
+- `cargo test --workspace`
+- `cargo build -p modem-hal`
+- 完整桌面构建与平台说明见 `docs/BUILD.md`

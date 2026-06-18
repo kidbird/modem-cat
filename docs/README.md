@@ -1,26 +1,35 @@
 # Docs 总目录
 
-> 2026-06-01 重新整理
-> 项目根还有 [CLAUDE.md](../CLAUDE.md) 和 [AGENTS.md](../AGENTS.md) 作为 agent 入口。
+> 2026-06-18 更新
+> Agent 入口在仓库根：[AGENTS.md](../AGENTS.md) 是根契约，[CLAUDE.md](../CLAUDE.md) 只做委托。
 
 ## 文档列表
 
 | 文档 | 用途 | 受众 |
 |---|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 整体架构、模块职责、关键数据流、厂商检测流程、添加新 vendor 步骤 | 所有读者 |
+| [CONTEXT_PACK.md](CONTEXT_PACK.md) | 任务路由、owner 文档索引、按需加载规则 | Agent / 新协作者 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 整体架构、模块职责、状态边界、后台模块、连接模式 | 所有读者 |
 | [CODE_MAP.md](CODE_MAP.md) | 前端 UI 元素 → IPC 命令 → 后端 handler 三列映射；Tauri 事件订阅 | 改前端 / 加新 IPC 时查 |
-| [CALL_FLOW.md](CALL_FLOW.md) | 启动、连接、查询、配置、数据连接、5GLAN、频段、AT 调试、后台监控 12 个流程图 | 调试 / 改后端时查 |
-| [AT_COMMANDS.md](AT_COMMANDS.md) | 全平台 AT 指令功能映射（与 `modem_factory.rs` 严格对齐） | 改 HAL / 写新 vendor 时查 |
+| [CALL_FLOW.md](CALL_FLOW.md) | 启动、连接、查询、配置、数据连接、5GLAN、频段、AT 调试、后台监控流程图 | 调试 / 改后端时查 |
+| [AT_COMMANDS.md](AT_COMMANDS.md) | 正式主合同的 AT 指令映射（与 `modem_factory.rs` 厂商检测对齐） | 改 HAL / 写新 vendor 时查 |
 | [Quectel_AT_Commands.md](Quectel_AT_Commands.md) | Quectel RGx00U & RM500U 系列 AT 命令手册（参考自 PDF） | 翻老型号手册 |
-| [MODEM_BAND_SPECS.md](MODEM_BAND_SPECS.md) | 型号硬件频段参考（**当前未在代码中使用**，仅资料） | 翻规格 |
+| [MODEM_BAND_SPECS.md](MODEM_BAND_SPECS.md) | 型号硬件频段参考（当前未在代码中直接使用） | 翻规格 |
 | [BUILD.md](BUILD.md) | macOS / Windows 构建、版本管理、发版流程、常见问题 | 发布时查 |
-| [TECH_STACK.md](TECH_STACK.md) | 技术栈、依赖、模块依赖图 | 新人入门 |
+| [TECH_STACK.md](TECH_STACK.md) | 当前技术栈、依赖、运行约束、辅助模块 | 新人入门 |
 | [CODING.md](CODING.md) | AT 输入校验、敏感信息、前端入口、文档同步规范 | 改代码前查 |
-| [REVIEW.md](REVIEW.md) | 代码 review 报告（20 条可操作发现，按 P0/P1/P2 排序） | 排期修 bug 时查 |
+| [REVIEW.md](REVIEW.md) | 当前已知技术债、风险点、与正式设计合同的偏差 | 排期修 bug 时查 |
 
 ## 文档维护原则
 
-1. **代码与文档不一致时，以代码为准。**
-2. **改代码必同步改文档。** ARCHITECTURE.md / CODE_MAP.md / CALL_FLOW.md 每次结构变更后必须 review。
-3. **REVIEW.md 是活跃任务清单。** P1/P2 条目可直接排期，已修复项归档到附录。
-4. **文档禁含 commit hash / 精确行号 / 已删除文件历史。** 详见 AGENTS.md §6。
+1. **先看根入口，再按需加载**。从 [AGENTS.md](../AGENTS.md) 开始，经由 [CONTEXT_PACK.md](CONTEXT_PACK.md) 路由到对应 owner 文档，不要把所有细节塞回根文件。
+2. **代码与文档不一致时，以代码为准**。修文档时先确认 live path，再决定是更新 owner 文档还是把偏差登记到 [REVIEW.md](REVIEW.md)。
+3. **正式合同与技术债分开写**。主流程、主合同写进 `ARCHITECTURE.md` / `AT_COMMANDS.md` / `CODE_MAP.md`；fallback、兼容分支、历史残留写进 `REVIEW.md`，不要混写。
+4. **改代码必同步改 owner 文档**。新增/删除 IPC、调整 AT 合同、改变调用路径时，同一次改动内完成文档更新。
+
+## 历史归档
+
+旧说明保留在 git 历史中；当前文档已经按现有技术栈重整，后续以当前 owner 文档为准：
+
+- 旧 `ARCHITECTURE.md` 曾混入已下线结构、旧入口与历史估算
+- 旧 `CODE_MAP.md` 曾遗漏 License / Factory / Firmware IPC，并把旧连接路径写成当前入口
+- 旧 `TECH_STACK.md` 曾带入其他项目的前端假设，不适用于当前 plain HTML/CSS/JS + Tauri 结构

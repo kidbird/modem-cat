@@ -1,6 +1,6 @@
 # Code Map
 
-> 最近更新：2026-06-18
+> 最近更新：2026-06-22
 > 覆盖：前端 UI 元素 → IPC 命令 → 后端 live handler 三列映射
 
 ## 1. 后端 live IPC 命令清单
@@ -180,6 +180,8 @@
 | `show-about` | Tauri 菜单 / 快捷键 | app.js `setupAboutListener` 函数 | `showAbout()` 显示关于对话框 |
 | `firmware-event` | dloader.rs sidecar 事件转发 | app.js `fwListen` 回调 | Log/Progress/StateChange/Completed/Error/Terminated 等固件下载事件 |
 | `license-changed` | license 模块 | app.js license 监听器 | License 状态变更，更新导航可见性 |
+| `show-load-license` | Tauri 托盘菜单 | app.js license 监听器 | 打开 License 文件加载对话框 |
+| `show-license-status` | Tauri 托盘菜单 | app.js license 监听器 | 显示当前 License 状态信息 |
 
 ## 4. UI 元素 → AT 命令 → 解析函数（重点页面）
 

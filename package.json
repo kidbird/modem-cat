@@ -1,6 +1,6 @@
 {
   "name": "modem-cat",
-  "version": "0.2.3",
+  "version": "0.2.6",
   "description": "5G Modem调试工具 - Desktop mode only",
   "type": "module",
   "scripts": {

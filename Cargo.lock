@@ -2369,7 +2369,7 @@ dependencies = [
 
 [[package]]
 name = "modem-cat"
-version = "0.2.4"
+version = "0.2.6"
 dependencies = [
  "chrono",
  "env_logger",
@@ -2392,8 +2392,9 @@ dependencies = [
 
 [[package]]
 name = "modem-hal"
-version = "0.2.2"
+version = "0.2.6"
 dependencies = [
+ "base64 0.22.1",
  "log",
  "serde",
  "serde_json",
@@ -2403,7 +2404,7 @@ dependencies = [
 
 [[package]]
 name = "modem-license"
-version = "0.1.0"
+version = "0.2.6"
 dependencies = [
  "base64 0.22.1",
  "chrono",

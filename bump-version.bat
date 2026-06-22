@@ -9,6 +9,8 @@ REM 会同步更新以下文件：
 REM   src-tauri\tauri.conf.json   → "version"
 REM   src-tauri\Cargo.toml        → version
 REM   package.json                → "version"
+REM   modem-hal\Cargo.toml        → version
+REM   modem-license\Cargo.toml    → version
 REM ─────────────────────────────────────────────────────────────────────────────
 setlocal EnableDelayedExpansion
 
@@ -63,7 +65,21 @@ powershell -NoProfile -Command ^
 "$content = Get-Content $p -Raw; " ^
 "$content = $content -replace '(?m)^(version\s*=\s*)""[^""]*""', ('${1}""' + $new + '""'); " ^
 "Set-Content $p $content -Encoding UTF8 -NoNewline; " ^
-"Write-Host '[OK]    src-tauri\Cargo.toml        ->  version = ' + $new -ForegroundColor Green"
+"Write-Host '[OK]    src-tauri\Cargo.toml        ->  version = ' + $new -ForegroundColor Green; " ^
+^
+"# 4. modem-hal\Cargo.toml " ^
+"$p = 'modem-hal\Cargo.toml'; " ^
+"$content = Get-Content $p -Raw; " ^
+"$content = $content -replace '(?m)^(version\s*=\s*)""[^""]*""', ('${1}""' + $new + '""'); " ^
+"Set-Content $p $content -Encoding UTF8 -NoNewline; " ^
+"Write-Host '[OK]    modem-hal\Cargo.toml        ->  version = ' + $new -ForegroundColor Green; " ^
+^
+"# 5. modem-license\Cargo.toml " ^
+"$p = 'modem-license\Cargo.toml'; " ^
+"$content = Get-Content $p -Raw; " ^
+"$content = $content -replace '(?m)^(version\s*=\s*)""[^""]*""', ('${1}""' + $new + '""'); " ^
+"Set-Content $p $content -Encoding UTF8 -NoNewline; " ^
+"Write-Host '[OK]    modem-license\Cargo.toml    ->  version = ' + $new -ForegroundColor Green"
 
 if errorlevel 1 (
     echo [ERR] 更新失败，请检查上方错误信息。

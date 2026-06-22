@@ -95,7 +95,6 @@ check    "前端 PLMN 锁不再通过 send_raw_at 硬编码 QSIMLOCK 密码" \
 
 # ── 4. 厂商检测关键字 (modem_factory.rs 是 source of truth) ────────────
 echo "[4] 厂商检测关键字（顺序敏感）"
-check "MT5700 优先于 RG500Q" "grep -B1 -A2 '\"MT5700\"' modem-hal/src/modem_factory.rs | grep -A2 'tdtech' | head -1 | grep -q 'MT5700'"
 check "Qualcomm 关键字在 modem_factory.rs" "grep -q '\"RG500Q\"' modem-hal/src/modem_factory.rs"
 check "UniSoc 关键字在 modem_factory.rs"   "grep -q '\"RG200U\"' modem-hal/src/modem_factory.rs"
 

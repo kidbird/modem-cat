@@ -1,42 +1,11 @@
 use crate::transport::AtTransport;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 use tungstenite::client::IntoClientRequest;
 use tungstenite::http::header::AUTHORIZATION;
 use tungstenite::{client, Message, WebSocket};
-
-/// Custom Base64 encoder to avoid versioning or import issues with the base64 crate.
-fn base64_encode(input: &[u8]) -> String {
-    const CHARSET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::with_capacity((input.len() + 2) / 3 * 4);
-    for chunk in input.chunks(3) {
-        match chunk.len() {
-            3 => {
-                let b = ((chunk[0] as u32) << 16) | ((chunk[1] as u32) << 8) | (chunk[2] as u32);
-                result.push(CHARSET[((b >> 18) & 0x3F) as usize] as char);
-                result.push(CHARSET[((b >> 12) & 0x3F) as usize] as char);
-                result.push(CHARSET[((b >> 6) & 0x3F) as usize] as char);
-                result.push(CHARSET[(b & 0x3F) as usize] as char);
-            }
-            2 => {
-                let b = ((chunk[0] as u32) << 8) | (chunk[1] as u32);
-                result.push(CHARSET[((b >> 10) & 0x3F) as usize] as char);
-                result.push(CHARSET[((b >> 4) & 0x3F) as usize] as char);
-                result.push(CHARSET[((b << 2) & 0x3F) as usize] as char);
-                result.push('=');
-            }
-            1 => {
-                let b = chunk[0] as u32;
-                result.push(CHARSET[((b >> 2) & 0x3F) as usize] as char);
-                result.push(CHARSET[((b << 4) & 0x3F) as usize] as char);
-                result.push('=');
-                result.push('=');
-            }
-            _ => unreachable!(),
-        }
-    }
-    result
-}
 
 pub struct WebSocketTransport {
     socket: WebSocket<TcpStream>,
@@ -60,7 +29,7 @@ impl WebSocketTransport {
         // 2. Add HTTP Basic Authentication if credentials are provided
         if let (Some(u), Some(p)) = (username, password) {
             let auth = format!("{}:{}", u, p);
-            let auth_base64 = base64_encode(auth.as_bytes());
+            let auth_base64 = BASE64_STANDARD.encode(auth.as_bytes());
             request.headers_mut().insert(
                 AUTHORIZATION,
                 format!("Basic {}", auth_base64).parse().unwrap(),

@@ -732,9 +732,9 @@
       }
       if (tab === '5glan') {
         const cv = state.chipVendor;
-        const targetTab = cv === 'qualcomm' ? 'qualcomm' : cv === 'tdtech' ? 'tdtech' : 'unisoc';
+        const targetTab = cv === 'qualcomm' ? 'qualcomm' : 'unisoc';
         const targetBtn = document.getElementById(
-          targetTab === 'qualcomm' ? 'glanTabQualcomm' : targetTab === 'tdtech' ? 'glanTabTdtech' : 'glanTabUnisoc'
+          targetTab === 'qualcomm' ? 'glanTabQualcomm' : 'glanTabUnisoc'
         );
         if (targetBtn) switch5GlanTab(targetTab, targetBtn);
         else if (state.connected) refresh5Glan();
@@ -1053,7 +1053,6 @@
     function getChipFamily(model) {
       if (!model) return 'unisoc';
       const m = model.toUpperCase();
-      if (m.includes('MT5700')) return 'tdtech';
       if (m.includes('RG520') || m.includes('RM520') || m.includes('RG525') ||
           m.includes('RG530') || m.includes('RM530') ||
           m.includes('RG500Q') || m.includes('RM500Q') || m.includes('RM501Q') || m.includes('RM551'))
@@ -1064,7 +1063,7 @@
     function buildNetworkModeOptions(sel) {
       const zh = state.lang === 'zh';
       const family = getChipFamily(state.model);
-      // Qualcomm / TdTech: AUTO WCDMA & LTE & 5G | NR5G 5G only | LTE LTE only
+      // Qualcomm: AUTO WCDMA & LTE & 5G | NR5G 5G only | LTE LTE only
       const qualcommOpts = [
         { value: 'AUTO',     zh: '自动',       en: 'Auto' },
         { value: 'NR5G',     zh: '仅 5G',      en: '5G Only' },
@@ -1082,23 +1081,15 @@
       sel.innerHTML = opts.map(o => `<option value="${o.value}">${zh ? o.zh : o.en}</option>`).join('');
     }
 
-    // TdTech query_network_mode returns "NR5G-SA" for what it labels as general 5G (code "08").
-    // For UniSoc, NR5G-SA is a real distinct option — do not normalize it.
-    function normalizeNetworkMode(mode, family) {
-      if (family === 'tdtech' && mode === 'NR5G-SA') return 'NR5G';
-      return mode;
-    }
-
     async function loadNetlockData() {
       if (!state.connected) return;
       showLoading('正在读取网络配置...');
       // Load preferred network mode
       try {
         const sel = document.getElementById('preferredNetwork');
-        const family = getChipFamily(state.model);
         buildNetworkModeOptions(sel);
         const mode = await invoke('get_network_mode');
-        sel.value = normalizeNetworkMode(mode, family);
+        sel.value = mode;
       } catch (e) {
         console.warn('get_network_mode failed:', e);
       }
@@ -1165,7 +1156,7 @@
         try {
           const mode = await invoke('get_network_mode');
           addTerminalLine(`[网络] 回读原始值: ${mode}`, 'info');
-          sel.value = normalizeNetworkMode(mode, getChipFamily(state.model));
+          sel.value = mode;
         } catch (e2) { console.warn('get_network_mode after save failed:', e2); }
       } catch (e) {
         hideLoading();

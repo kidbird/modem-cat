@@ -1,6 +1,6 @@
 [package]
 name = "modem-license"
-version = "0.1.0"
+version = "0.2.6"
 edition = "2021"
 description = "Shared license verification library for Modem Cat"
 

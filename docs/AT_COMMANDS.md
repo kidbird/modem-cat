@@ -1,6 +1,6 @@
 # AT 指令功能映射
 
-> 最近更新：2026-06-18
+> 最近更新：2026-06-22
 > 本文档只记录**当前正式主合同** AT 路径；历史兼容命令留在手册资料中，不作为 live 代码设计依据。
 
 ## 使用规则
@@ -117,7 +117,7 @@
 | 以太网 | `AT+QCFG="ethernet"` | `AT+QCFG="ethernet",{0/1}` | |
 | Proxy ARP | `AT+QCFG="proxyarp"` | `AT+QCFG="proxyarp",{0/1}` | |
 | UART AT | `AT+QCFG="uartat"` | `AT+QCFG="uartat",{0/1}` | |
-| ETH AT | `AT+QCFG="eth_at"` | `AT+QCFG="eth_at",{0/1}` | |
+| ETH AT | `AT+QCFG="eth_at"` | `AT+QCFG="eth_at",{0/1}` | 仅 Qualcomm；UniSoc 硬编码 false |
 | ADB | `AT+QCFG="usbcfg"` | `AT+QCFG="usbcfg",{...}` | 修改倒数第二个字段 |
 | NAPT | `AT+QCFG="napt"` | `AT+QCFG="napt",{0/1}` | |
 | Netmask | `AT+QCFG="netmask"` | `AT+QCFG="netmask",{0/1}` | |
@@ -163,7 +163,9 @@
 | LAN IP 查询 | `AT+QCFG="lanip_ex"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
 | LAN IP 设置 | `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
 | 设置 APN | `AT+QICSGP={cid},{type},"<apn>","<user>","<pass>",{auth}` | |
+| 查询所有 APN | `AT+QICSGP?` | `query_apn_list()` 首选 |
 | 删除 APN | `AT+CGDCONT={cid}` | |
+| 查询所有 PDP | `AT+CGDCONT?` | `query_apn_list()` QICSGP 为空时 fallback |
 | 激活/停用 PDP | `AT+CGACT={0/1},{cid}` | |
 | 5GLAN 查询 | `AT+QCFG="5glan"` | |
 | 5GLAN 设置 | `AT+QCFG="5glan",{cid},{0/1},1` | |

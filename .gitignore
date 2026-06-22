@@ -75,3 +75,21 @@ docs/AT_HANDBOOK_*.md
 
 # AtomCode local-scope configs (machine-specific)
 .atomcode/local/
+
+# Agent tool artifacts
+.gitnexus/
+.remember/
+.workbuddy/
+.specify/
+.qoder/
+.understand-anything/
+
+# Stale build artifacts
+check-err.txt
+check-out.txt
+
+# Worktree patches
+worktree-patch/
+
+# Orphaned lockfile (workspace root Cargo.lock is authoritative)
+src-tauri/Cargo.lock

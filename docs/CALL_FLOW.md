@@ -1,6 +1,6 @@
 # 函数调用流程
 
-> 最近更新：2026-06-16（对齐 `main` 分支当前代码）
+> 最近更新：2026-06-22（对齐 `main` 分支当前代码）
 
 ## 1. 启动与初始化
 
@@ -20,7 +20,7 @@
               │    │              ├─ set_menu(控制面板/退出)
               │    │              └─ on_menu_event / on_tray_icon_event
               │    │
-              │    ├─ invoke_handler!  ← 30 个 IPC 命令注册
+              │    ├─ invoke_handler!  ← ~80 个 IPC 命令注册
               │    │
               │    ├─ on_window_event() → 窗口关闭时 hide() 而非退出
               │    │
@@ -42,7 +42,7 @@
                       │
                       └─ toggleConnection()  ← 若已连接则跳过
                               │
-                              └─→ auto_connect_at()  [lib.rs:353-429]
+                              └─→ auto_connect_at()  [lib.rs:424-548]
                                       │
                                       ├─ serialport::available_ports()
                                       ├─ get_windows_all_port_info() [winreg, cfg(windows)]
@@ -56,13 +56,14 @@
 
                           // 连接成功后
                           └─ refreshAll()  [app.js 启动段 doInit 内]
-                                  ├─ Promise.allSettled
-                                  │   ├─ refreshModemStatus()  → get_modem_status
-                                  │   ├─ refreshIpInfo()       → get_ip_info
-                                  │   ├─ refreshApnList()      → get_apn_list
-                                  │   ├─ refreshQos()          → get_qos_info
-                                  │   └─ refreshTraffic()      → get_traffic
-                                  └─ 各 promise 完成时更新 state.connected / chipVendor
+                                  ├─ sequential try/catch（非并行）
+                                  │   ├─ refreshModemStatus()    → get_modem_status
+                                  │   ├─ refreshIpInfo()         → get_ip_info
+                                  │   ├─ refreshHardwareInfo()   → get_hardware_info
+                                  │   ├─ refreshApnList()        → get_apn_list
+                                  │   ├─ refreshQos()            → get_qos_info
+                                  │   └─ refreshTraffic()        → get_traffic
+                                  └─ 各调用独立 catch，失败不阻断后续
 ```
 
 ## 2. 前端页面导航
@@ -75,7 +76,7 @@
   ├─ 对应 #page-xxx 加 .active
   │
   └─ 懒加载检查（仅 4 个页面）
-       ├─ hardware → loadHardwarePage()  → refreshHardwareInfo + refreshFeatureToggles
+       ├─ hardware → loadHardwarePage()  → refreshHardwareInfo
        ├─ ip       → refreshLanConfig()  → send_raw_at (AT+QCFG="lanip_ex")
        ├─ scene    → loadScenePage()     → 并发拉 feature_toggles / nat_mode / usbnet_mode
        └─ atmanual → initAtdbPage()      → 纯前端 AT_DB 索引
@@ -141,10 +142,12 @@ invoke('get_modem_status')
                   │     ├─ NR5G-SA: 17 字段
                   │     ├─ LTE:     19 字段
                   │     └─ NR5G-NSA: 15 字段
+                  │     └─ reg_status ← serving_cell.mobility_state（非独立 AT+CEREG?）
                   ├─ AT+COPS?           → parse_cops_with_act  → operator
                   ├─ AT+QRSRP (Qual)    → parse_qrsrp          → ant[4]
                   │  AT+QANTRSSI? (UniS)
-                  ├─ AT+CGACT?          → parse_cgact          → active_cids, conn_status
+                  ├─ AT+CGACT? (UniSoc) → parse_cgact          → active_cids, conn_status
+                  ├─ AT+QMAP="MPDN_status" (Qualcomm) → parse_mpdn_connect_status → conn_status
                   │
                   └─→ ModemStatus { sim, imei, iccid, operator, ant[], active_cids, ... }
 ```
@@ -231,8 +234,10 @@ invoke('get_feature_toggles')
         ├─ AT+QCFG="ethernet"    → parse_qcfg_int → ethernet
         ├─ AT+QCFG="proxyarp"    → parse_qcfg_int → proxyarp
         ├─ AT+QCFG="uartat"      → parse_qcfg_int → uartat
-        ├─ AT+QCFG="eth_at"      → parse_qcfg_int → eth_at
-        └─ AT+QCFG="usbcfg"      → parse_qcfg_usbcfg_adb → adb
+        ├─ AT+QCFG="eth_at"      → parse_qcfg_int → eth_at  （仅 Qualcomm；UniSoc 硬编码 false）
+        ├─ AT+QCFG="usbcfg"      → parse_qcfg_usbcfg_adb → adb
+        ├─ AT+QCFG="napt"        → parse_qcfg_int → napt
+        └─ AT+QCFG="netmask"     → parse_qcfg_int → netmask
 
 invoke('set_feature_toggle', { feature: "adb", enabled: true })
   │
@@ -249,7 +254,7 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
 ```
 [app.js]  invoke('send_raw_at', { command: "AT+XXX" })
   │
-  └─→ lib.rs::send_raw_at  (line 725)
+  └─→ lib.rs::send_raw_at  (line 1157)
         │
         └─→ tokio::task::spawn_blocking
               │

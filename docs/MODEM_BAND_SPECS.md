@@ -14,6 +14,7 @@ Supported models and their hardware band specifications (reference only).
 | RM520N-EU | Qualcomm | B1/3/5/7/8/20/28/32/38/40/41/42/43/71 | n1/3/5/7/8/20/28/38/40/41/71/75/76/77/78 |
 | RM500U-CNV / RG200U-CN | UniSoc (展锐) | B1/3/5/8/34/38/39/40/41 | n1/3/5/8/28/41/77/78/79 |
 | RM500U-EA | UniSoc (展锐) | B1/2/3/4/5/7/8/20/28/38/40/41/66 | n1/3/5/7/8/20/28/38/40/41/66/77/78 |
+| RG255AA | ASR | B1/3/5/8/34/38/39/40/41 (占位) | n1/28/41/77/78/79 (占位) |
 
 ## Qualcomm Models
 
@@ -49,6 +50,15 @@ Supported models and their hardware band specifications (reference only).
 
 - **LTE**: B1/ 2/ 3/ 4/ 5/ 7/ 8/ 20/ 28/ 66/ B38/ 40/ 41
 - **NR**: n1/ 3/ 5/ 7/ 8/ 20/ 28/ 38/ 40/ 41/ 66/ 77/ 78
+
+## ASR Models
+
+### RG255AA
+
+> ⚠️ **占位**：以下频段复用 RM500U-CN（UniSoc）资料，ASR 平台实测频段待校准后替换。
+
+- **LTE**: B1/ 3/ 5/ 8/ B34/ 38/ 39/ 40/ 41
+- **NR**: n1/ 28/ 41/ 77/ 78/ 79
 
 ## Notes
 

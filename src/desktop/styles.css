@@ -1050,6 +1050,7 @@
     .atdb-platform-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
     .atdb-platform-badge.unisoc { background: rgba(16,185,129,0.15); color: #10b981; }
     .atdb-platform-badge.qualcomm { background: rgba(249,115,22,0.15); color: #f97316; }
+    .atdb-platform-badge.asr { background: rgba(59,130,246,0.15); color: #3b82f6; }
     .atdb-detail-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; }
     .atdb-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin: 16px 0 6px; }
     .atdb-code { background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 12.5px; color: var(--text-primary); white-space: pre-wrap; position: relative; padding-right: 70px; }

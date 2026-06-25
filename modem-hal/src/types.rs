@@ -188,6 +188,7 @@ pub struct PortInfo {
 pub enum ChipsetVendor {
     UniSoc,   // 展锐 - RG200U, RM500U系列
     Qualcomm, // 高通 - RG520N, RM520N系列
+    Asr,      // ASR  - RG255AA 系列（当前 AT 指令集复用 UniSoc）
     Unknown,
 }
 
@@ -196,6 +197,7 @@ impl ChipsetVendor {
         match self {
             ChipsetVendor::UniSoc => "unisoc",
             ChipsetVendor::Qualcomm => "qualcomm",
+            ChipsetVendor::Asr => "asr",
             ChipsetVendor::Unknown => "unknown",
         }
     }

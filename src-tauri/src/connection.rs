@@ -274,7 +274,25 @@ pub(crate) async fn auto_connect_at(
         return Err("未找到AT端口".to_string());
     }
 
-    log::info!("AT candidates: {:?}", at_candidates);
+    // 首选端口：名称或描述里带 "AT" 的串口（典型 Quectel 多口中，AT 口响应
+    // `AT` 最快，诊断/NMEA 口会拖慢或失败）。stable-sort 保持同组内原有 COM 号顺序。
+    at_candidates.sort_by(|a, b| {
+        let a_at = a.to_uppercase().contains("AT")
+            || win_info
+                .get(a)
+                .and_then(|(d, _)| d.as_ref())
+                .map(|s| s.to_uppercase().contains("AT"))
+                .unwrap_or(false);
+        let b_at = b.to_uppercase().contains("AT")
+            || win_info
+                .get(b)
+                .and_then(|(d, _)| d.as_ref())
+                .map(|s| s.to_uppercase().contains("AT"))
+                .unwrap_or(false);
+        b_at.cmp(&a_at)
+    });
+
+    log::info!("AT candidates (AT-preferred): {:?}", at_candidates);
 
     let mut handles = Vec::with_capacity(at_candidates.len());
     for port_name in &at_candidates {

@@ -113,6 +113,10 @@ impl QuectelModem {
 
 impl ModemVendor for QuectelModem {
     fn vendor(&self) -> ChipsetVendor {
+        // ASR 平台在 UI/序列化层独立标识，AT 分发仍走 self.chip = UniSoc。
+        if self.model.to_uppercase().contains("RG255") {
+            return ChipsetVendor::Asr;
+        }
         match self.chip {
             QuectelChip::Qualcomm => ChipsetVendor::Qualcomm,
             QuectelChip::UniSoc => ChipsetVendor::UniSoc,

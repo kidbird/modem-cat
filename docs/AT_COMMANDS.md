@@ -1,6 +1,6 @@
 # AT 指令功能映射
 
-> 最近更新：2026-06-22
+> 最近更新：2026-06-25
 > 本文档只记录**当前正式主合同** AT 路径；历史兼容命令留在手册资料中，不作为 live 代码设计依据。
 
 ## 使用规则
@@ -14,10 +14,12 @@
 | 优先级 | 厂商 | 关键字（CGMM 大写后子串匹配） | 代表型号 |
 |---|---|---|---|
 | 1 | **Qualcomm（高通）** | `RG500Q`, `RM500Q`, `RG520N`, `RM520N`, `RG525F`, `RG530F`, `RM530F`, `RM530N`, `RM551E`, `RM501Q`, `RG540F`, `RM540N` | RM520N, RM500Q, RG525F, RM530N, RM551E… |
-| 2 | **UniSoc（展锐）** | `RG200U`, `RM500U`, `RG500U`, `RG501U`, `RM501U` | RM500U, RG200U, RG500U… |
-| 3 | **Unknown** | 未识别型号 | — |
+| 2 | **ASR** | `RG255` | RG255AA |
+| 3 | **UniSoc（展锐）** | `RG200U`, `RM500U`, `RG500U`, `RG501U`, `RM501U` | RM500U, RG200U, RG500U… |
+| 4 | **Unknown** | 未识别型号 | — |
 
 ⚠️ **正式合同**：`Unknown` 直接返回错误，业务侧重试 / 提示 UI。
+⚠️ **ASR 现阶段 AT 指令集复用 UniSoc**：同一 Quectel 厂家 AT 共通；后端 `ModemFactory` 对 `ChipsetVendor::Asr` 走 `QuectelModem::unisoc(model)`，UI 平台徽标显示 "ASR"。后续按实测逐条调整。
 ⚠️ **关键字冲突**：`RM500Q`（Qualcomm） vs `RM500U`（UniSoc）靠末尾字母区分；若未来加 `RG500UA` 之类型号需补测试。
 
 ---

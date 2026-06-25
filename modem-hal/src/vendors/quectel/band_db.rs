@@ -34,6 +34,12 @@ const RG200U_CN: ModelBands = ModelBands {
     nr: &[1, 3, 5, 8, 28, 41, 77, 78, 79],
 };
 
+// TODO(RG255AA): 当前频段为 RM500U-CN 占位，ASR 平台实测频段待校准后替换。
+const RG255AA_CN: ModelBands = ModelBands {
+    lte: &[1, 3, 5, 8, 34, 38, 39, 40, 41],
+    nr: &[1, 28, 41, 77, 78, 79],
+};
+
 /// Look up hard-coded supported bands for a UniSoc modem model string.
 ///
 /// Model matching is case-insensitive and uses prefix matching on the full
@@ -42,6 +48,9 @@ const RG200U_CN: ModelBands = ModelBands {
 /// **Order matters**: CNV is checked before CN to avoid false matches.
 pub fn get_supported_bands(model: &str) -> Option<&'static ModelBands> {
     let m = model.to_uppercase();
+    if m.contains("RG255") {
+        return Some(&RG255AA_CN);
+    }
     // RM500U-CNV must be checked before RM500U-CN
     if m.contains("RM500U-CNV") {
         return Some(&RM500U_CNV);
@@ -104,6 +113,16 @@ mod tests {
         let bands = get_supported_bands("RG200U-CN").unwrap();
         assert!(bands.nr.contains(&3));
         assert!(bands.nr.contains(&5));
+    }
+
+    #[test]
+    fn rg255aa_cn() {
+        // 当前为 RM500U-CN 占位；后续实测校准后调整断言。
+        let bands = get_supported_bands("RG255AA").unwrap();
+        assert!(bands.lte.contains(&1));
+        assert!(bands.nr.contains(&78));
+        let bands2 = get_supported_bands("RG255AA-CN").unwrap();
+        assert!(bands2.nr.contains(&79));
     }
 
     #[test]

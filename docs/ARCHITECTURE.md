@@ -160,6 +160,7 @@ pub trait AtTransport: Send {
 
 - Qualcomm：数据连接 / 状态查询主路径围绕 `AT+QMAP`
 - UniSoc：数据连接 / IP 查询主路径围绕 `AT+QNETDEVCTL` / `AT+QNETDEVSTATUS`
+- ASR（RG255AA 系列）：当前 AT 指令集**复用 UniSoc adapter**（同一 Quectel 厂家共通），`ChipsetVendor::Asr` 仅用于 UI/序列化标识；若后续出现 ASR 独有 AT，再拆分 `asr.rs` 并扩展 `QuectelChip`。
 - `Unknown`：正式合同是直接报错，不允许猜 adapter
 
 ### 6.2 不属于正式合同的内容

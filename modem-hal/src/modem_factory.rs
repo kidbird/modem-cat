@@ -26,6 +26,12 @@ impl ModemFactory {
                 log::info!("Creating UniSoc adapter for {}", model);
                 Ok(Box::new(QuectelModem::unisoc(model)))
             }
+            ChipsetVendor::Asr => {
+                // ASR 平台现阶段复用 UniSoc AT 指令集（同一 Quectel 厂家共通），
+                // 后续若出现 ASR 独有 AT，再拆分独立 adapter。
+                log::info!("Creating ASR adapter (reusing UniSoc AT set) for {}", model);
+                Ok(Box::new(QuectelModem::unisoc(model)))
+            }
             ChipsetVendor::Unknown => Err(format!(
                 "Unknown modem vendor for '{}': refusing to guess an adapter",
                 model
@@ -42,6 +48,12 @@ impl ModemFactory {
         for m in &qualcomm {
             if upper.contains(m) {
                 return ChipsetVendor::Qualcomm;
+            }
+        }
+        let asr = ["RG255"];
+        for m in &asr {
+            if upper.contains(m) {
+                return ChipsetVendor::Asr;
             }
         }
         let unisoc = ["RG200U", "RM500U", "RG500U", "RG501U", "RM501U"];
@@ -109,6 +121,22 @@ mod tests {
         assert_eq!(
             ModemFactory::detect_vendor_from_model("RM500U-GL"),
             ChipsetVendor::UniSoc
+        );
+    }
+
+    #[test]
+    fn detects_asr_from_model() {
+        assert_eq!(
+            ModemFactory::detect_vendor_from_model("RG255AA"),
+            ChipsetVendor::Asr
+        );
+        assert_eq!(
+            ModemFactory::detect_vendor_from_model("RG255AA-CN"),
+            ChipsetVendor::Asr
+        );
+        assert_eq!(
+            ModemFactory::detect_vendor_from_model("rg255aa"),
+            ChipsetVendor::Asr
         );
     }
 

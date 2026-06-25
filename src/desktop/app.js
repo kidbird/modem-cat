@@ -1057,6 +1057,7 @@
           m.includes('RG530') || m.includes('RM530') ||
           m.includes('RG500Q') || m.includes('RM500Q') || m.includes('RM501Q') || m.includes('RM551'))
         return 'qualcomm';
+      if (m.includes('RG255')) return 'asr';
       return 'unisoc';
     }
 
@@ -1077,7 +1078,7 @@
         { value: 'NR5G-NSA', zh: '仅 5G NSA',  en: '5G NSA Only' },
         { value: 'LTE',      zh: '仅 LTE',     en: 'LTE Only' },
       ];
-      const opts = family === 'unisoc' ? unisocOpts : qualcommOpts;
+      const opts = family === 'qualcomm' ? qualcommOpts : unisocOpts;
       sel.innerHTML = opts.map(o => `<option value="${o.value}">${zh ? o.zh : o.en}</option>`).join('');
     }
 
@@ -1715,6 +1716,8 @@
       if (searchEl) searchEl.value = '';
       document.getElementById('atdbBtnUnisoc').classList.toggle('active', platform === 'unisoc');
       document.getElementById('atdbBtnQualcomm').classList.toggle('active', platform === 'qualcomm');
+      const asrBtn = document.getElementById('atdbBtnAsr');
+      if (asrBtn) asrBtn.classList.toggle('active', platform === 'asr');
       renderAtdbIndex();
       clearAtdbDetail();
     }
@@ -1736,7 +1739,8 @@
     }
 
     function renderAtdbIndex() {
-      const cmds = AT_DB[atdbPlatform];
+      const srcKey = atdbPlatform === 'asr' ? 'unisoc' : atdbPlatform;
+      const cmds = AT_DB[srcKey] || [];
       const query = atdbSearchText;
       const categories = {};
       const catOrder = [];
@@ -1785,8 +1789,8 @@
       detail.style.display = '';
 
       const platform = atdbPlatform;
-      const badgeClass = platform === 'unisoc' ? 'unisoc' : 'qualcomm';
-      const badgeLabel = platform === 'unisoc' ? '展锐 UniSoc' : '高通 Qualcomm';
+      const badgeClass = platform === 'qualcomm' ? 'qualcomm' : platform === 'asr' ? 'asr' : 'unisoc';
+      const badgeLabel = platform === 'qualcomm' ? '高通 Qualcomm' : platform === 'asr' ? 'ASR' : '展锐 UniSoc';
 
       let paramsHtml = '';
       if (entry.params && entry.params.length > 0) {
@@ -2245,7 +2249,12 @@
 
     async function confirmAction(action) {
       const labels = { reboot: '重启模组', factory: '恢复出厂设置（所有配置将丢失）' };
-      if (!confirm(`确认要执行：${labels[action]}？`)) return;
+      const tauriConfirm = window.__TAURI__?.dialog?.confirm;
+      const doConfirm = tauriConfirm
+        ? (msg) => tauriConfirm(msg, { title: '确认操作', kind: 'warning' })
+        : (msg) => confirm(msg);
+      const ok = await doConfirm(`确认要执行：${labels[action]}？`);
+      if (!ok) return;
       addTerminalLine(`[操作] 正在执行: ${labels[action]}...`, 'cmd');
       try {
         if (action === 'reboot') { try { await invoke('reboot_modem'); } catch (_) {} }

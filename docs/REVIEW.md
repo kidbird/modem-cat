@@ -13,11 +13,15 @@
 
 ## High Priority
 
-### 1. transport 超时后可能把截断响应当成功
+### 1. ~~transport 超时后可能把截断响应当成功~~ ✅ 已修复 (2026-06-30)
 
-- `serial.rs` / `tcp.rs` / `websocket.rs` 现在都可能在”收到部分字节后超时”时返回 `Ok`
-- 风险：上层 parser 会把链路抖动误判成真实状态
-- 处理原则：实时状态读取应把”不完整响应”视为错误，而不是伪成功
+- **原问题**：read_response 在超时 + 收到部分数据时返回 `Ok(部分数据)`。
+- **修复**：
+  - 新增 `is_complete_response()` 辅助函数（OK / ERROR / +CME ERROR / +CMS ERROR 终止符校验）
+  - `serial.rs` / `tcp.rs` / `websocket.rs` 的 overall_timeout 到达后，仅在响应完整时返回 Ok，否则 `Err(“incomplete”)`
+  - WouldBlock/TimedOut 中间态：继续等待；overall deadline 兜底截断失败
+  - 2 个自动化测试验证 accept + reject 行为
+- **AGENTS.md 合同**：”实时状态禁止 fallback” — 截断响应不再被静默返回
 
 ### 2. ~~非 Windows 网卡列表仍返回 mock 数据~~ ✅ 已修复 (2026-06-30)
 
@@ -36,10 +40,14 @@
 
 ## Medium Priority
 
-### 3. 自动连接缺少 in-flight 保护
+### 3. ~~自动连接缺少 in-flight 保护~~ ✅ 已修复 (2026-06-30)
 
-- 热插拔自动重连与人工连接触发之间缺少统一”连接中”状态
-- 风险：旧断开收尾打掉新连接，或重复发起并发连接任务
+- **原问题**：`auto_connect_at`、`connect_serial`、`connect_tcp`、`connect_websocket` 可并发触发，最后写入者覆盖 transport。
+- **修复**：
+  - `AppState.connecting: Arc<AtomicBool>` CAS 原子标志
+  - `ConnectionGuard` RAII：`compare_exchange(false, true)` 保证单一进入；`Drop` 自动清除标志（panic 也安全）
+  - `acquire_connect_guard()` 辅助函数统一被 4 个连接入口调用
+  - 并发第二个调用立即返回”连接正在进行中，请稍候”
 
 ### 4. MQTT 启停状态不是单一真相源
 

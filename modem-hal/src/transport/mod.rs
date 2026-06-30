@@ -28,6 +28,25 @@ pub trait AtTransport: Send {
     }
 }
 
+/// Check whether an AT response is terminally complete.
+///
+/// All valid AT responses end with one of: `OK`, `ERROR`, `+CME ERROR`,
+/// `+CMS ERROR`. A response without any of these terminators is either still
+/// streaming or was truncated by a timeout — parsers must treat such responses
+/// as unreliable (AGENTS.md: "实时状态禁止 fallback / 禁止伪成功").
+///
+/// Used by `read_response` in serial.rs / tcp.rs / websocket.rs to decide
+/// whether a timeout-terminated read should return `Ok(response)` or
+/// `Err("incomplete")`.
+#[inline]
+pub fn is_complete_response(response: &str) -> bool {
+    let t = response.trim();
+    t.ends_with("OK")
+        || t.ends_with("ERROR")
+        || t.contains("+CME ERROR")
+        || t.contains("+CMS ERROR")
+}
+
 pub struct MockTransport {
     pub responses: std::collections::VecDeque<String>,
     /// Records every command passed to `send_at`, in order — lets tests assert the exact AT string.
@@ -63,6 +82,25 @@ mod tests {
         assert_eq!(t.send_at("AT").unwrap(), "OK");
         assert_eq!(t.send_at("AT+FAIL").unwrap(), "ERROR");
         assert!(t.send_at("AT").is_err());
+    }
+
+    #[test]
+    fn is_complete_response_accepts_terminators() {
+        assert!(is_complete_response("OK"));
+        assert!(is_complete_response("+CPIN: READY\r\nOK"));
+        assert!(is_complete_response("ERROR"));
+        assert!(is_complete_response("+CME ERROR: 10"));
+        assert!(is_complete_response("+CMS ERROR: 304"));
+        assert!(is_complete_response("+COPS: 0,2,\"46001\"\r\nOK"));
+    }
+
+    #[test]
+    fn is_complete_response_rejects_truncated() {
+        assert!(!is_complete_response(""));
+        assert!(!is_complete_response("+CPIN: READY"));           // missing OK
+        assert!(!is_complete_response("+QENG: \"servingcell\""));  // partial
+        assert!(!is_complete_response("some intermediate data"));
+        assert!(!is_complete_response("+COPS: 0,"));               // cut mid-line
     }
 
     #[test]

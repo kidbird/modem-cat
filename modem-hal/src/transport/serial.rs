@@ -1,4 +1,5 @@
 use crate::transport::AtTransport;
+use crate::transport::is_complete_response;
 use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
@@ -82,8 +83,16 @@ impl SerialTransport {
 
         loop {
             if start.elapsed() > overall_timeout {
-                log::warn!("read_response: overall timeout after {:?}", overall_timeout);
-                return Err("Read response timeout".to_string());
+                // Overall timeout reached. Only return Ok if the response is
+                // terminally complete; otherwise surface as an error so parsers
+                // don't misinterpret truncated data as valid state.
+                let trimmed = response.trim();
+                if !trimmed.is_empty() && is_complete_response(trimmed) {
+                    log::debug!("read_response: got {} bytes (complete, edge of overall timeout)", response.len());
+                    return Ok(trimmed.to_string());
+                }
+                log::warn!("read_response: overall timeout after {:?} (response incomplete, {} bytes discarded)", overall_timeout, response.len());
+                return Err("Read response timeout (incomplete)".to_string());
             }
 
             match self.port.read(&mut buf) {
@@ -92,10 +101,7 @@ impl SerialTransport {
                     response.push_str(&text);
 
                     let trimmed = response.trim();
-                    if trimmed.ends_with("OK")
-                        || trimmed.ends_with("ERROR")
-                        || trimmed.contains("+CME ERROR")
-                    {
+                    if is_complete_response(trimmed) {
                         // Got a complete response, do one more short read to catch any trailing data
                         let old_timeout = self.port.timeout();
                         let _ = self.port.set_timeout(TRAILING_DRAIN_TIMEOUT);
@@ -110,18 +116,25 @@ impl SerialTransport {
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    if !response.is_empty() {
-                        // We have data but got a timeout — check if it looks complete
-                        let trimmed = response.trim();
-                        if trimmed.ends_with("OK")
-                            || trimmed.ends_with("ERROR")
-                            || trimmed.contains("+CME ERROR")
-                            || start.elapsed() > RESPONSE_DATA_TIMEOUT
-                        {
-                            break;
-                        }
+                    if !response.is_empty() && is_complete_response(response.trim()) {
+                        // Data complete before read timeout — safe to return.
+                        break;
                     }
-                    // No data yet, keep waiting up to overall_timeout
+                    if response.is_empty() {
+                        // No data yet, keep waiting up to overall_timeout
+                        continue;
+                    }
+                    // Partial data + per-read timeout. Two cases:
+                    //   - elapsed > RESPONSE_DATA_TIMEOUT → upper layer was slow;
+                    //     if response is complete return it, otherwise keep waiting.
+                    //   - otherwise → continue waiting for more data.
+                    if start.elapsed() > RESPONSE_DATA_TIMEOUT
+                        && is_complete_response(response.trim())
+                    {
+                        break;
+                    }
+                    // Otherwise keep looping; the overall_timeout check above will
+                    // return Err if we never reach completeness.
                 }
                 Err(e) => return Err(format!("Read error: {}", e)),
             }

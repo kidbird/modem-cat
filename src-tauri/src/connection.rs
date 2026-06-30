@@ -8,6 +8,58 @@ use modem_hal::ModemFactory;
 
 use crate::{wrap_transport, AppState};
 
+// ── Connection in-flight guard ─────────────────────────────────────────────
+//
+// Prevents concurrent connect_serial / auto_connect_at / connect_tcp /
+// connect_websocket from racing on AppState.transport. Uses CAS (compare-and-
+// swap) so only one caller can observe the transition false → true.
+//
+// The guard is RAII: Drop clears the flag even if the connection task panics,
+// so a crashed connect path can never wedge the AppState into "connecting
+// forever".
+pub(crate) struct ConnectionGuard {
+    state: AppState,
+}
+
+impl ConnectionGuard {
+    /// Try to acquire the connection lock. Returns Err if another call is
+    /// already in progress. Uses CAS to guarantee atomicity without blocking.
+    pub(crate) fn try_acquire(state: AppState) -> Result<Self, String> {
+        if state
+            .connecting
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+            .is_ok()
+        {
+            Ok(Self { state })
+        } else {
+            Err("连接正在进行中，请稍候".to_string())
+        }
+    }
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.state.connecting.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Clone AppState Arcs and acquire the connection guard. Extracted so all
+/// four connect entry points share one line of boilerplate.
+fn acquire_connect_guard(state: &tauri::State<'_, AppState>) -> Result<ConnectionGuard, String> {
+    let state_clone = AppState {
+        transport: state.transport.clone(),
+        vendor: state.vendor.clone(),
+        data_cid: state.data_cid.clone(),
+        connected_port: state.connected_port.clone(),
+        at_command_log: state.at_command_log.clone(),
+        mqtt_task: state.mqtt_task.clone(),
+        license: state.license.clone(),
+        disconnecting: state.disconnecting.clone(),
+        connecting: state.connecting.clone(),
+    };
+    ConnectionGuard::try_acquire(state_clone)
+}
+
 // ── Port listing helpers ──
 
 #[cfg(target_os = "windows")]
@@ -251,8 +303,8 @@ where
 pub(crate) async fn auto_connect_at(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let ports =
-        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
+    let _guard = acquire_connect_guard(&state)?;
+    let ports = serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     let win_info = get_windows_all_port_info();
 
@@ -397,6 +449,7 @@ pub(crate) async fn connect_serial(
     baud_rate: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
+    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
@@ -444,6 +497,7 @@ pub(crate) async fn connect_tcp(
     port: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
+    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
@@ -641,6 +695,7 @@ pub(crate) async fn connect_websocket(
     password: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
+    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();

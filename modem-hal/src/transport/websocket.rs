@@ -1,4 +1,5 @@
 use crate::transport::AtTransport;
+use crate::transport::is_complete_response;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use std::net::TcpStream;
@@ -127,7 +128,16 @@ impl AtTransport for WebSocketTransport {
 
         loop {
             if start.elapsed() > timeout {
-                break;
+                // Overall timeout: only return Ok if response is terminally complete.
+                let trimmed = response.trim();
+                if !trimmed.is_empty() && is_complete_response(trimmed) {
+                    return Ok(trimmed.to_string());
+                }
+                return Err(format!(
+                    "WebSocket read timeout after {:?} (response incomplete, {} bytes discarded)",
+                    timeout,
+                    response.len()
+                ));
             }
 
             match self.socket.read() {
@@ -144,10 +154,7 @@ impl AtTransport for WebSocketTransport {
                         return Err("Response exceeded 1MB limit".to_string());
                     }
 
-                    if trimmed == "OK"
-                        || trimmed.starts_with("ERROR")
-                        || trimmed.starts_with("+CME ERROR")
-                    {
+                    if is_complete_response(trimmed) {
                         break;
                     }
                 }
@@ -155,7 +162,12 @@ impl AtTransport for WebSocketTransport {
                     // Ignore binary frames
                 }
                 Ok(Message::Close(_)) => {
-                    return Err("Connection closed by server".to_string());
+                    // Server closed. Return what we have if complete.
+                    let trimmed = response.trim();
+                    if !trimmed.is_empty() && is_complete_response(trimmed) {
+                        return Ok(trimmed.to_string());
+                    }
+                    return Err("Connection closed by server (incomplete response)".to_string());
                 }
                 Ok(_) => {
                     // Ignore Ping/Pong frames
@@ -164,9 +176,11 @@ impl AtTransport for WebSocketTransport {
                     if e.kind() == std::io::ErrorKind::WouldBlock
                         || e.kind() == std::io::ErrorKind::TimedOut =>
                 {
-                    if !response.is_empty() {
+                    if !response.is_empty() && is_complete_response(response.trim()) {
                         break;
                     }
+                    // Partial or no data + wouldblock: keep waiting. The overall
+                    // timeout check above handles the truncation failure case.
                 }
                 Err(e) => return Err(format!("WebSocket read error: {}", e)),
             }

@@ -31,6 +31,10 @@ pub struct AppState {
     /// Prevents the heartbeat from emitting duplicate `port-changed` and from
     /// touching a transport that `disconnect` is tearing down.
     pub disconnecting: Arc<AtomicBool>,
+    /// Set while a connection attempt is in progress (auto or manual).
+    /// Prevents concurrent connect_serial / auto_connect_at / connect_tcp
+    /// from racing on AppState.transport. CAS-guarded; see ConnectionGuard.
+    pub connecting: Arc<AtomicBool>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
@@ -252,6 +256,7 @@ pub fn run() {
             mqtt_task: Arc::new(Mutex::new(None)),
             license: Arc::new(Mutex::new(None)),
             disconnecting: Arc::new(AtomicBool::new(false)),
+            connecting: Arc::new(AtomicBool::new(false)),
         })
         .manage(factory::FactoryState::new())
         .manage(dloader::DloaderState::default())
@@ -303,6 +308,7 @@ pub fn run() {
                 mqtt_task: state.mqtt_task.clone(),
                 license: state.license.clone(),
                 disconnecting: state.disconnecting.clone(),
+                connecting: state.connecting.clone(),
             };
             monitor::start_connection_heartbeat(app.handle().clone(), hb_state);
 

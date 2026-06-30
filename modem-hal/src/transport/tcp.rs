@@ -1,4 +1,5 @@
 use crate::transport::AtTransport;
+use crate::transport::is_complete_response;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::time::Duration;
@@ -45,12 +46,28 @@ impl TcpTransport {
 
         loop {
             if start.elapsed() > TCP_RESPONSE_TIMEOUT {
-                break;
+                // Overall timeout: only return Ok if response is terminally complete.
+                let trimmed = response.trim();
+                if !trimmed.is_empty() && is_complete_response(trimmed) {
+                    return Ok(trimmed.to_string());
+                }
+                return Err(format!(
+                    "TCP read timeout after {:?} (response incomplete, {} bytes discarded)",
+                    TCP_RESPONSE_TIMEOUT,
+                    response.len()
+                ));
             }
 
             let mut line = String::new();
             match self.reader.read_line(&mut line) {
-                Ok(0) => break,
+                Ok(0) => {
+                    // EOF — connection closed. Return whatever we have if complete.
+                    let trimmed = response.trim();
+                    if !trimmed.is_empty() && is_complete_response(trimmed) {
+                        return Ok(trimmed.to_string());
+                    }
+                    return Err("TCP connection closed by peer (incomplete response)".to_string());
+                }
                 Ok(_) => {
                     let trimmed = line.trim();
                     if trimmed.is_empty() {
@@ -66,17 +83,19 @@ impl TcpTransport {
                         ));
                     }
 
-                    if trimmed == "OK"
-                        || trimmed.starts_with("ERROR")
-                        || trimmed.starts_with("+CME ERROR")
-                    {
+                    if is_complete_response(trimmed) {
                         break;
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                    if !response.is_empty() {
+                    if !response.is_empty() && is_complete_response(response.trim()) {
                         break;
                     }
+                    if response.is_empty() {
+                        continue;
+                    }
+                    // Partial data + read timeout: keep waiting. The overall
+                    // timeout check above handles the truncation failure case.
                 }
                 Err(e) => return Err(format!("Read error: {}", e)),
             }

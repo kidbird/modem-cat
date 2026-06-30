@@ -32,6 +32,8 @@
 | IMEI | `AT+CGSN` | `parse_cgsn()` | |
 | ICCID（UniSoc） | `AT+CCID` | `parse_iccid()` | UniSoc 首选 |
 | ICCID（Qualcomm） | `AT+ICCID` | `parse_iccid()` | Qualcomm 首选 |
+
+> **ICCID 合同**：`query_modem_status()` 仅在 SIM 为 `READY` 时才下发 ICCID 命令；`NO SIM` / `SIM not inserted` / `SIM PIN` / `UNKNOWN` 等非就绪态一律跳过。ICCID 查询失败（transport 错误或无可解析 ICCID）**不中断整体状态读取**——IMEI / 运营商 / 注册状态等仍正常返回，ICCID 字段置空，前端按 `sim_status !== 'READY'` 显示 `--`。专用命令 `query_iccid()` 维持严格报错语义不变。
 | 型号 | `AT+CGMM` | `parse_cgmm()` | 用于厂商检测 |
 | 厂商 | `AT+CGMI` | `parse_cgmm()` | |
 | 固件版本 | `AT+GMR` | `parse_gmr()` | |
@@ -45,7 +47,7 @@
 | 服务小区 | `AT+QENG="servingcell"` | `parse_qeng_serving_cell()` | 带宽字段 Qualcomm/UniSoc 格式不同 |
 | 邻区列表 | `AT+QENG="neighbourcell"` | `parse_qeng_neighbour_cells()` | |
 | 运营商 | `AT+COPS?` | `parse_cops_with_act()` | |
-| 注册状态 | `AT+CEREG?` | `parse_cereg()` | |
+| 注册状态（专用查询） | `AT+CEREG?` | `parse_cereg()` | `query_modem_status()` 的聚合 `reg_status` 当前来自 `AT+QENG="servingcell"` 解析结果 |
 | PDP 激活状态 | `AT+CGACT?` | `parse_cgact()` | |
 | 网络模式 | `AT+QNWPREFCFG="mode_pref"` | `parse_qnwprefcfg_mode()` | |
 
@@ -67,6 +69,21 @@
 +QNETDEVSTATUS: <ipv4>,<mask>,<gw>,,<dns1>,<dns2>,<ipv6>,,,,<v6dns1>,<v6dns2>
                  [0]   [1]   [2] [3] [4]   [5]   [6]  [7][8][9] [10]    [11]
 ```
+
+### ASR（RG255AA）
+
+| 功能 | AT 指令 | 备注 |
+|------|---------|------|
+| LAN IP 查询 | `AT+QCFG="lanip"` | 响应含子网掩码和 DHCP 租约时间 |
+| LAN IP 设置 | `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"` | 修改后需重启生效 |
+
+`AT+QCFG="lanip"` 响应格式：
+```
++QCFG: "lanip","<gw>","<mask>","<dhcp_start>","<dhcp_end>",<lease_time>
+```
+示例：`+QCFG: "lanip","192.168.42.1","255.255.255.0","192.168.42.100","192.168.42.249",12h`
+
+⚠️ ASR 使用 `"lanip"` 而非 UniSoc 的 `"lanip_ex"`；字段顺序为 gw, mask, start, end（与 UniSoc 一致），末尾多一个 lease_time 字段。
 
 ### Qualcomm（RM500Q / RG500Q / RM520N / RG520N / RM551E / RM530F 等）
 
@@ -101,8 +118,8 @@
 | 支持频段(RF) | `AT+QNWPREFCFG="rf_band"` | `parse_qnwprefcfg_rf_band()` |
 | LTE 锁定频段 | `AT+QNWPREFCFG="lte_band"` | `parse_qnwprefcfg_bands()` |
 | NR 锁定频段 | `AT+QNWPREFCFG="nr5g_band"` | `parse_qnwprefcfg_bands()` |
-| 设置 LTE 频段 | `AT+QNWPREFCFG="lte_band",1:3:5` | 频段号纯数字、冒号分隔、不带引号/不带 B 前缀（手册 §5.24.2，例 `=...,1:2`） |
-| 设置 NR 频段 | `AT+QNWPREFCFG="nr5g_band",78:79` | 同上，不带 n 前缀 |
+| 设置 LTE 频段 | `AT+QNWPREFCFG="lte_band",1:3:5` | 频段号纯数字、冒号分隔、不带额外引号/不带 B 前缀（手册 §5.24.2，例 `=...,1:2`） |
+| 设置 NR 频段 | `AT+QNWPREFCFG="nr5g_band",78:79` | 同上，不带额外引号/不带 n 前缀 |
 | 重置频段 | `AT+QNWPREFCFG="all_band_reset"` | |
 
 ## 5. QoS 信息（通用）
@@ -163,8 +180,8 @@
 | 恢复出厂 | `AT&F`（Qualcomm）/ `AT+QPRTPARA=3`（UniSoc） | 代码按芯片分支下发（`factory_reset()`），非 `AT+QFACT` |
 | SIM 卡槽查询 | `AT+QUIMSLOT?` | |
 | SIM 卡槽切换 | `AT+QUIMSLOT={1/2}` | |
-| LAN IP 查询 | `AT+QCFG="lanip_ex"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
-| LAN IP 设置 | `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现 |
+| LAN IP 查询 | Qualcomm: `AT+QMAP="LANIP"` / ASR: `AT+QCFG="lanip"` / UniSoc: `AT+QCFG="lanip_ex"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现；详见 §3 |
+| LAN IP 设置 | Qualcomm: `AT+QMAP="LANIP",<start>,<end>,<gw>` / ASR: `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"` / UniSoc: `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现；详见 §3 |
 | 设置 APN | `AT+QICSGP={cid},{type},"<apn>","<user>","<pass>",{auth}` | |
 | 查询所有 APN | `AT+QICSGP?` | `query_apn_list()` 首选 |
 | 删除 APN | `AT+CGDCONT={cid}` | |

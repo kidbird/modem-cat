@@ -20,7 +20,7 @@
               │    │              ├─ set_menu(控制面板/退出)
               │    │              └─ on_menu_event / on_tray_icon_event
               │    │
-              │    ├─ invoke_handler!  ← ~80 个 IPC 命令注册
+              │    ├─ invoke_handler!  ← live IPC 命令注册（分发到 handlers / connection / license / factory / dloader）
               │    │
               │    ├─ on_window_event() → 窗口关闭时 hide() 而非退出
               │    │
@@ -42,13 +42,13 @@
                       │
                       └─ toggleConnection()  ← 若已连接则跳过
                               │
-                              └─→ auto_connect_at()  [lib.rs:424-548]
+                              └─→ connection.rs::auto_connect_at()
                                       │
                                       ├─ serialport::available_ports()
                                       ├─ get_windows_all_port_info() [winreg, cfg(windows)]
                                       ├─ is_at_port() → 判断 AT 候选端口
                                       │
-                                      ├─ SerialTransport::probe_at(port)  ← 800ms AT\r\n
+                                      ├─ spawn_blocking + `AT` probe
                                       │
                                       └─ ModemFactory::create()  ← AT+CGMM 型号检测
                                               └─→ 成功：建 LoggingTransport → AppState.transport
@@ -77,7 +77,7 @@
   │
   └─ 懒加载检查（仅 4 个页面）
        ├─ hardware → loadHardwarePage()  → refreshHardwareInfo
-       ├─ ip       → refreshLanConfig()  → send_raw_at (AT+QCFG="lanip_ex")
+       ├─ ip       → refreshLanConfig()  → send_raw_at（按芯片走 `AT+QMAP="LANIP"` / `AT+QCFG="lanip"` / `AT+QCFG="lanip_ex"`）
        ├─ scene    → loadScenePage()     → 并发拉 feature_toggles / nat_mode / usbnet_mode
        └─ atmanual → initAtdbPage()      → 纯前端 AT_DB 索引
 ```
@@ -88,10 +88,10 @@
 [前端]  invoke('command_name', args)
   │
   ▼
-[Tauri runtime]  路由到 #[tauri::command] 函数  (在 lib.rs)
+[Tauri runtime]  路由到 #[tauri::command] 函数
   │
   ▼
-[lib.rs::handler]  with_vendor! 宏展开
+[handlers.rs / connection.rs 等 handler]  with_vendor! 宏展开
   │
   ├─ tokio::task::spawn_blocking(move || { ... })
   │     │
@@ -111,18 +111,13 @@
 [ModemVendor::method]  调 t.send_at("AT+xxx")
   │
   ▼
-[LoggingTransport::send_at]  (lib.rs:33)
+[LoggingTransport::send_at]
   │
-  ├─ log.push(redact_at_command(cmd))  ← 进 1000 条环形日志
+  ├─ inner.send_at(cmd)  ← 真实 transport 先发送
   │
-  └─ inner.send_at(cmd)  ← 真实 SerialTransport / TcpTransport
+  └─ 发送完成后写环形日志（成功或错误都会 redact）
        │
-       ├─ write_all(cmd + "\r\n")
-       ├─ flush()
-       └─ read_response()  循环读直到 OK/ERROR/+CME ERROR (8s 总超时)
-            │
-            ▼
-       Result<String, String>  ← 沿原路径回前端（JSON 序列化）
+       └─ Result<String, String>  ← 沿原路径回前端（JSON 序列化）
 ```
 
 ## 4. 状态查询流程（`get_modem_status`）
@@ -130,7 +125,7 @@
 ```
 invoke('get_modem_status')
   │
-  └─→ lib.rs::get_modem_status  [with_vendor! 宏]
+  └─→ handlers.rs::get_modem_status  [with_vendor! 宏]
           │
           └─→ vendor.query_modem_status(&mut transport)
                   │
@@ -155,11 +150,10 @@ invoke('get_modem_status')
 ## 5. 数据连接流程
 
 ```
-invoke('connect_data')
+invoke('connect_data', { cid: 1 })
   │
-  └─→ lib.rs::connect_data  [spawn_blocking, inline transport+vendor+cid lock]
+  └─→ handlers.rs::connect_data  [with_vendor_cid! 宏]
           │
-          └─→ current_data_cid(&data_cid)  (AtomicI32, lock-free load)
           └─→ vendor.connect_data(&mut transport, cid)
                   │
                   ├─ QuectelModem (Qualcomm) → qualcomm::connect_data
@@ -172,9 +166,9 @@ invoke('connect_data')
 ## 6. IP 查询流程
 
 ```
-invoke('get_ip_info')
+invoke('get_ip_info', { cid: 1 })
   │
-  └─→ lib.rs::get_ip_info  [with_vendor_cid! 宏]
+  └─→ handlers.rs::get_ip_info  [with_vendor_cid! 宏]
           │
           └─→ vendor.query_ip_info(&mut transport, cid)
                   │
@@ -209,7 +203,7 @@ invoke('get_ip_info')
 ```
 invoke('get_bands')
   │
-  └─→ vendor.query_band_config
+  └─→ vendor.query_bands_with_spec
         │
         ├─ AT+QNWPREFCFG=?            → parse_qnwprefcfg_supported (lte_supported, nr_supported)
         ├─ AT+QNWPREFCFG="lte_band"   → parse_qnwprefcfg_bands → lte_locked
@@ -218,8 +212,8 @@ invoke('get_bands')
 invoke('set_bands', { lte: "1:3:5", nr: "78:79" })
   │
   └─→ vendor.set_lte_bands / set_nr5g_bands
-        ├─ AT+QNWPREFCFG="lte_band","1:3:5"     ← 频段号纯数字、冒号分隔
-        └─ AT+QNWPREFCFG="nr5g_band","78:79"
+        ├─ AT+QNWPREFCFG="lte_band",1:3:5     ← 频段号纯数字、冒号分隔、无额外引号
+        └─ AT+QNWPREFCFG="nr5g_band",78:79
 
 invoke('reset_all_bands')
   └─→ AT+QNWPREFCFG="all_band_reset"
@@ -240,9 +234,11 @@ invoke('get_feature_toggles')
         ├─ AT+QCFG="napt"        → parse_qcfg_int → napt
         └─ AT+QCFG="netmask"     → parse_qcfg_int → netmask
 
+  任一 live 读取或解析失败 → 直接返回错误；不再把失败伪装成 false / 0
+
 invoke('set_feature_toggle', { feature: "adb", enabled: true })
   │
-  └─→ lib.rs::set_feature_toggle
+  └─→ handlers.rs::set_feature_toggle
         │
         ├─ feature="adb" → 读当前 usbcfg，修改最后一位，写回
         └─ 其它          → AT+QCFG="<feature>",<0|1>
@@ -255,14 +251,14 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
 ```
 [app.js]  invoke('send_raw_at', { command: "AT+XXX" })
   │
-  └─→ lib.rs::send_raw_at  (line 1157)
+  └─→ handlers.rs::send_raw_at
         │
         └─→ tokio::task::spawn_blocking
               │
               └─→ state.transport.lock()?.send_at(cmd)
                     │
-                    ├─ [LoggingTransport] log.push(redact(cmd))
-                    └─ inner.send_at(cmd)  ← SerialTransport 8s 总超时
+                    ├─ inner.send_at(cmd)  ← transport 先发送
+                    └─ [LoggingTransport] 发送完成后写 redact 日志
                           │
                           └─→ read_response()  返回完整字符串
 

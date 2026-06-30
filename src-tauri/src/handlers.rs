@@ -4,6 +4,12 @@ use modem_hal::{validate_at_string, validate_cid, validate_raw_at_command};
 
 use crate::{mqtt, AppState};
 
+fn current_data_cid(data_cid: &std::sync::Arc<std::sync::atomic::AtomicI32>) -> Result<i32, String> {
+    let cid = data_cid.load(Ordering::Relaxed);
+    validate_cid(cid)?;
+    Ok(cid)
+}
+
 // ── High-level modem queries ──
 
 #[tauri::command]
@@ -24,8 +30,10 @@ pub(crate) async fn get_hardware_info(
 pub(crate) async fn get_ip_info(
     state: tauri::State<'_, AppState>,
 ) -> Result<IpInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v
-        .query_ip_info(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| {
+        validate_cid(cid)?;
+        v.query_ip_info(t, cid)
+    })
 }
 
 #[tauri::command]
@@ -46,8 +54,10 @@ pub(crate) async fn get_neighbor_cells(
 pub(crate) async fn get_qos_info(
     state: tauri::State<'_, AppState>,
 ) -> Result<QosInfo, String> {
-    with_vendor_cid!(state, |t, v, cid| v
-        .query_qos(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| {
+        validate_cid(cid)?;
+        v.query_qos(t, cid)
+    })
 }
 
 #[tauri::command]
@@ -113,10 +123,7 @@ pub(crate) async fn connect_data(
             .map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
-        let cid = {
-            let cur = data_cid.load(Ordering::Relaxed);
-            if cur > 0 { cur } else { 1 }
-        };
+        let cid = current_data_cid(&data_cid)?;
         v.connect_data(t, cid)?;
         data_cid.store(cid, Ordering::Relaxed);
         Ok(())
@@ -209,8 +216,10 @@ pub(crate) async fn set_vlan(
 pub(crate) async fn disconnect_data(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
-    with_vendor_cid!(state, |t, v, cid| v
-        .disconnect_data(t, if cid > 0 { cid } else { 1 }))
+    with_vendor_cid!(state, |t, v, cid| {
+        validate_cid(cid)?;
+        v.disconnect_data(t, cid)
+    })
 }
 
 #[tauri::command]
@@ -462,11 +471,12 @@ pub(crate) async fn set_mqtt_enabled(
         .map_err(|e| format!("Lock poisoned: {}", e))?;
     if enabled {
         if task_guard.is_none() {
+            let config = mqtt::MqttConfig::from_env()?;
             log::info!("MQTT: Enabling remote connection...");
             let transport = state.transport.clone();
             let vendor = state.vendor.clone();
             let handle = tokio::spawn(async move {
-                mqtt::run_mqtt_loop(transport, vendor).await;
+                mqtt::run_mqtt_loop(transport, vendor, config).await;
             });
             *task_guard = Some(handle);
         }

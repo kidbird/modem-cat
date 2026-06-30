@@ -441,7 +441,22 @@ pub trait ModemVendor: Send {
         // Default implementation that combines individual queries
         let sim_status = self.query_sim_status(transport)?;
         let imei = self.query_imei(transport)?;
-        let iccid = self.query_iccid(transport)?;
+        // ICCID only makes sense with a usable SIM. Gate on READY so we don't
+        // query it when there is no card (NO SIM, "SIM not inserted", SIM PIN,
+        // etc.). An ICCID read failure must NOT abort the status query: IMEI,
+        // operator and registration are still valid; the strict contract lives
+        // in the dedicated query_iccid() command instead.
+        let iccid = if sim_status == "READY" {
+            match self.query_iccid(transport) {
+                Ok(val) => val,
+                Err(e) => {
+                    log::warn!("query_iccid failed, leaving ICCID empty: {}", e);
+                    String::new()
+                }
+            }
+        } else {
+            String::new()
+        };
         let cops_name = self.query_operator(transport)?;
         let reg_status = self.query_registration_status(transport)?;
         let conn_status = self.query_connection_status(transport)?;

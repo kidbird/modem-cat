@@ -455,14 +455,15 @@ pub fn run() {
                 event,
                 tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
             ) {
-                if let Some(child) = window
-                    .state::<dloader::DloaderState>()
-                    .child
-                    .lock()
-                    .unwrap()
-                    .take()
-                {
-                    let _ = child.kill();
+                match window.state::<dloader::DloaderState>().child.lock() {
+                    Ok(mut guard) => {
+                        if let Some(child) = guard.take() {
+                            let _ = child.kill();
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to lock dloader child on window close: {}", e);
+                    }
                 }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

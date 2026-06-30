@@ -22,6 +22,9 @@
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
       updateThemeToggle(theme);
+      if (typeof redrawCharts === 'function') {
+        try { redrawCharts(); } catch(_) {}
+      }
     }
 
     // Pass theme as a parameter (single source of truth = the argument to setTheme).

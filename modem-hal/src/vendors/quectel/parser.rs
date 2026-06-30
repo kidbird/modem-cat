@@ -597,6 +597,27 @@ pub fn parse_qtemp_unisoc(response: &str) -> TemperatureInfo {
     }
 }
 
+/// ASR RG255AA: returns single value `+QTEMP: <temp>` which is the AP (SOC) temperature.
+/// PA temperature is not available on this platform.
+pub fn parse_qtemp_asr(response: &str) -> TemperatureInfo {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+QTEMP:") {
+            let trimmed = rest.trim();
+            // Single value format: +QTEMP: 51
+            if let Ok(temp) = trimmed.parse::<i32>() {
+                return TemperatureInfo {
+                    soc_temp: format!("{}°C", temp),
+                    pa_temp: String::new(),
+                };
+            }
+        }
+    }
+    TemperatureInfo {
+        soc_temp: String::new(),
+        pa_temp: String::new(),
+    }
+}
+
 pub fn parse_qtemp_rich(response: &str) -> (String, String) {
     // Collect all (label, raw_value, formatted_value) entries first, then pick.
     let mut entries: Vec<(String, i64, String)> = Vec::new();
@@ -967,17 +988,17 @@ pub fn parse_qcfg_int(response: &str, key: &str) -> Option<i32> {
     None
 }
 
-pub fn parse_qcfg_usbcfg_adb(response: &str) -> bool {
+pub fn parse_qcfg_usbcfg_adb(response: &str) -> Option<bool> {
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
             let parts: Vec<&str> = rest.split(',').collect();
             // ADB flag is the second-to-last parameter
             if parts.len() >= 2 {
-                return parts[parts.len() - 2].trim() == "1";
+                return Some(parts[parts.len() - 2].trim() == "1");
             }
         }
     }
-    false
+    None
 }
 
 pub fn parse_qcfg_usbnet(response: &str) -> Option<i32> {

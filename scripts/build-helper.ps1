@@ -4,11 +4,12 @@
 #   powershell -NoProfile -File scripts\build-helper.ps1 -Variant nowebview
 #
 # 行为:
-#   - Variant=webview:  使用 tauri.conf.json 原始 (offlineInstaller)
-#   - Variant=nowebview: 在临时目录生成 tauri.nowebview.conf.json (downloadBootstrapper)
+#   - Variant=webview:  使用 tauri.conf.json 原始 (fixedRuntime)，包含完整 WebView2
+#   - Variant=nowebview: 在临时目录生成 tauri.nowebview.conf.json (skip)
 #     因为 Tauri 2 schema 不支持 `extends`, 必须完整覆盖
+#   - 预置 WebView2 缓存：从 %LOCALAPPDATA%\tauri 复制已缓存的安装包，避免重复下载
 #   - 运行 cargo tauri build
-#   - 把生成的 msi / nsis exe 改名带 _<variant>_x64_ 后缀, 复制到 dist\installer\
+#   - 把生成的 msi / nsis exe 改名带 _<variant>_x64_ 后缀, 复制到 dist/
 #   - 不再修改任何源码或配置, 纯产物处理
 
 param(
@@ -39,16 +40,66 @@ try {
     $activeCfg = $cfgPath
     $tempCfg = $null
     if ($Variant -eq "nowebview") {
-        # Tauri 2 schema 不接受 `extends` 也不接受 `onlineInstaller`,
-        # 改为完整复制后改 webviewInstallMode.type = downloadBootstrapper
+        # 生成临时配置，改为 skip 模式：不自动下载/安装 WebView2
+        # --config 参数会与默认配置合并, 所以需要先移除默认配置中的 path 字段
         $tempCfg = Join-Path $root "src-tauri\tauri.nowebview.conf.json"
-        $cfg.bundle.windows.webviewInstallMode = [PSCustomObject]@{ type = "downloadBootstrapper" }
+        $cfg.bundle.windows.webviewInstallMode = [PSCustomObject]@{ type = "skip" }
         $cfg | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $tempCfg -Encoding UTF8
+        # 读取临时配置, 插入一个空 path 字段来覆盖默认配置
+        $tempContent = Get-Content $tempCfg -Raw
+        # 将 `"type": "skip"` 改为 `"type": "skip", "path": null` 以覆盖默认的 path
+        $tempContent = $tempContent -replace '"type":\s*"skip"', '"type": "skip", "path": null'
+        Set-Content -LiteralPath $tempCfg -Value $tempContent -Encoding UTF8
         $activeCfg = $tempCfg
-        Write-Host "  generated temp config: $tempCfg  (webviewInstallMode=downloadBootstrapper)"
+        Write-Host "  generated temp config: $tempCfg  (webviewInstallMode=skip, path=null)"
     }
 
-    # 4. 运行 cargo tauri build
+    # 4. 预置 WebView2 缓存（避免重复下载）
+    $wixDir = Join-Path $root "target\release\wix\x64"
+    if (-not (Test-Path $wixDir)) { New-Item -ItemType Directory -Path $wixDir -Force | Out-Null }
+    
+    if ($Variant -eq "webview") {
+        # offlineInstaller 模式：需要复制到 <GUID> 子目录
+        # 从缓存中找一个已有的 installer
+        $cacheDir = Join-Path $env:LOCALAPPDATA "tauri\x64"
+        $cachedInstaller = $null
+        if (Test-Path $cacheDir) {
+            foreach ($guidDir in (Get-ChildItem $cacheDir -Directory -ErrorAction SilentlyContinue)) {
+                $installer = Join-Path $guidDir.FullName "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+                if (Test-Path $installer) {
+                    $cachedInstaller = $installer
+                    $guid = $guidDir.Name
+                    break
+                }
+            }
+        }
+        
+        if ($cachedInstaller) {
+            $destInstallerDir = Join-Path $wixDir "x64\$guid"
+            if (-not (Test-Path $destInstallerDir)) { New-Item -ItemType Directory -Path $destInstallerDir -Force | Out-Null }
+            $destInstaller = Join-Path $destInstallerDir "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+            if (-not (Test-Path $destInstaller)) {
+                Copy-Item -LiteralPath $cachedInstaller -Destination $destInstaller -Force
+                Write-Host "  pre-cached WebView2 offline installer from $guid"
+            }
+        } else {
+            Write-Warning "  no cached WebView2 installer found in $cacheDir - will attempt download"
+        }
+    } else {
+        # downloadBootstrapper 模式：检查 bootstrapper 缓存
+        $bootstrapperCache = Join-Path $wixDir "MicrosoftEdgeWebview2Setup.exe"
+        if (-not (Test-Path $bootstrapperCache)) {
+            # 尝试从 %LOCALAPPDATA%\tauri 查找
+            $tauriCache = Join-Path $env:LOCALAPPDATA "tauri"
+            $cachedBootstrapper = Get-ChildItem $tauriCache -Recurse -Filter "MicrosoftEdgeWebview2Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cachedBootstrapper) {
+                Copy-Item -LiteralPath $cachedBootstrapper.FullName -Destination $bootstrapperCache -Force
+                Write-Host "  pre-cached WebView2 bootstrapper"
+            }
+        }
+    }
+
+    # 5. 运行 cargo tauri build
     Push-Location "src-tauri"
     try {
         if ($Variant -eq "nowebview") {
@@ -65,8 +116,8 @@ try {
         Pop-Location
     }
 
-    # 5. 复制并改名 MSI / NSIS
-    $destDir = Join-Path $root "dist\installer"
+    # 5. 复制并改名 MSI / NSIS 到 dist/ 根目录
+    $destDir = Join-Path $root "dist"
     if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
 
     # Bundle 可能落在工作区根或 src-tauri 下, 两处都查
@@ -118,7 +169,7 @@ try {
     if ($count -eq 0) {
         throw "No MSI/NSIS files found. Searched: $($bundleRoots -join ', ')"
     }
-    Write-Host "  done: $count file(s) staged in dist\installer\"
+    Write-Host "  done: $count file(s) staged in dist/"
 }
 finally {
     # 清理临时 nowebview config

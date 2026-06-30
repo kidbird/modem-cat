@@ -5,7 +5,7 @@
 
 ## 1. 后端 live IPC 命令清单
 
-> 当前 live handler 统一注册在 `src-tauri/src/lib.rs::generate_handler!`。
+> 当前 live IPC 统一注册在 `src-tauri/src/lib.rs::generate_handler!`，但实际执行面分散在 `handlers.rs`、`connection.rs`、`license.rs`、`factory.rs`、`dloader.rs`。
 
 - 连接类：`list_ports` / `auto_connect_at` / `connect_serial` / `connect_tcp` / `list_network_adapters` / `connect_websocket` / `disconnect`
 - 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
@@ -117,6 +117,8 @@
 | LAN IP 查询 | refreshLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
 | LAN IP 配置 | applyLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
 
+> WebSocket 网关连接当前由状态页连接区域触发：`toggleConnection()` 在 `connectionType=ethernet` 时调用 `connect_websocket`，并可选传递显式用户名/密码；未提供时保持匿名模式，不再自动填入默认凭据。
+
 ### 2.6 情景模式页（`#page-scene`）
 
 | UI 元素 | 触发函数 | IPC 命令 |
@@ -180,7 +182,7 @@
 | `show-about` | Tauri 菜单 / 快捷键 | app.js `setupAboutListener` 函数 | `showAbout()` 显示关于对话框 |
 | `firmware-event` | dloader.rs sidecar 事件转发 | app.js `fwListen` 回调 | Log/Progress/StateChange/Completed/Error/Terminated 等固件下载事件 |
 | `license-changed` | license 模块 | app.js license 监听器 | License 状态变更，更新导航可见性 |
-| `show-load-license` | Tauri 托盘菜单 | app.js license 监听器 | 打开 License 文件加载对话框 |
+| `show-load-license` | Tauri 菜单 / 托盘菜单 | app.js license 监听器 | 打开 License 文件加载对话框 |
 | `show-license-status` | Tauri 托盘菜单 | app.js license 监听器 | 显示当前 License 状态信息 |
 
 ## 4. UI 元素 → AT 命令 → 解析函数（重点页面）
@@ -195,10 +197,12 @@
 | ICCID (UniSoc) | `AT+CCID` | `parse_iccid` | `quectel/parser.rs` |
 | 服务小区 | `AT+QENG="servingcell"` | `parse_qeng_serving_cell` | `quectel/parser.rs` |
 | 运营商 | `AT+COPS?` | `parse_cops_with_act` | `quectel/parser.rs` |
-| 注册状态 | `AT+CEREG?` | `parse_cereg` | `quectel/parser.rs` |
+| 注册状态（专用查询） | `AT+CEREG?` | `parse_cereg` | `quectel/parser.rs` |
 | 天线 ANT0-3 (Qualcomm) | `AT+QRSRP` | `parse_qrsrp` | `quectel/parser.rs` |
 | 天线 ANT0-3 (UniSoc) | `AT+QANTRSSI?` | `parse_qantrssi` | `quectel/parser.rs` |
 | 数据激活状态 (Qualcomm) | `AT+QMAP="MPDN_status"` | `parse_mpdn_connect_status` | `quectel/qualcomm.rs` |
+
+> `get_modem_status` 的 `regStatus` 当前来自 `AT+QENG="servingcell"` 解析后的 `mobility_state`；`AT+CEREG?` 仍作为专用查询合同保留，但不是该聚合接口的 live 主路径。
 | 数据激活状态 (UniSoc) | `AT+CGACT?` | `parse_cgact` | `quectel/parser.rs` |
 
 ## 5. 前端缓存 / DOM
@@ -213,3 +217,5 @@
 - **错误处理**：`invoke` 失败时 `catch` 拿到的对象是 `{ message: string }`，统一用 `e.message || String(e)` 兜底
 - **懒加载**：重页面（如 hardware / ip / scene / atmanual / factory / firmware）优先按需拉取，不要在启动时堆满同步请求
 - **Tauri 事件**：`listen` 必须在初始化阶段注册
+- **MQTT 状态回读后端**：UI 不得把 MQTT 开关写入 `localStorage` 充当 live 状态
+- **WebSocket 凭据显式输入**：允许匿名网关；若网关要求认证，必须由用户显式提供用户名/密码，禁止补默认值

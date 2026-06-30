@@ -7,10 +7,82 @@ use std::net::{IpAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MqttCredentials {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MqttConfig {
+    pub host: String,
+    pub port: u16,
+    pub credentials: Option<MqttCredentials>,
+}
+
+impl MqttConfig {
+    pub fn from_env() -> Result<Self, String> {
+        Self::from_settings(
+            std::env::var("MODEM_CAT_MQTT_HOST").ok().as_deref(),
+            std::env::var("MODEM_CAT_MQTT_PORT").ok().as_deref(),
+            std::env::var("MODEM_CAT_MQTT_USERNAME").ok().as_deref(),
+            std::env::var("MODEM_CAT_MQTT_PASSWORD").ok().as_deref(),
+        )
+    }
+
+    fn from_settings(
+        host: Option<&str>,
+        port: Option<&str>,
+        username: Option<&str>,
+        password: Option<&str>,
+    ) -> Result<Self, String> {
+        let host = host
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| {
+                "MQTT is not configured: set MODEM_CAT_MQTT_HOST before enabling it".to_string()
+            })?
+            .to_string();
+        let port_raw = port
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| {
+                "MQTT is not configured: set MODEM_CAT_MQTT_PORT before enabling it".to_string()
+            })?;
+        let port = port_raw.parse::<u16>().map_err(|_| {
+            format!(
+                "Invalid MODEM_CAT_MQTT_PORT value {:?}: expected an integer in 1-65535",
+                port_raw
+            )
+        })?;
+
+        let username = username.map(str::trim).filter(|s| !s.is_empty());
+        let password = password.map(str::trim).filter(|s| !s.is_empty());
+        let credentials = match (username, password) {
+            (None, None) => None,
+            (Some(user), Some(pass)) => Some(MqttCredentials {
+                username: user.to_string(),
+                password: pass.to_string(),
+            }),
+            _ => {
+                return Err(
+                    "MQTT username/password must be provided together; public defaults are forbidden"
+                        .to_string(),
+                )
+            }
+        };
+
+        Ok(Self {
+            host,
+            port,
+            credentials,
+        })
+    }
+}
+
 /// Detects the active outbound network interface IP address by simulating a UDP connect to the MQTT broker.
 /// This queries the OS routing table without sending any actual network packets.
-pub fn detect_outbound_ip() -> Option<IpAddr> {
-    let target = "82.157.177.161:1883";
+pub fn detect_outbound_ip(target: &str) -> Option<IpAddr> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect(target).ok()?;
     let local_addr = socket.local_addr().ok()?;
@@ -56,12 +128,13 @@ fn try_query_modem_status(
 pub async fn run_mqtt_loop(
     transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
+    config: MqttConfig,
 ) {
     loop {
         log::info!("MQTT: Starting connection setup...");
 
         // 1. Detect outbound IP (the interface to bind to)
-        let local_ip = detect_outbound_ip();
+        let local_ip = detect_outbound_ip(&format!("{}:{}", config.host, config.port));
         log::info!("MQTT: Detected outbound IP: {:?}", local_ip);
 
         // 2. Query IMEI from the modem (if connected)
@@ -78,8 +151,10 @@ pub async fn run_mqtt_loop(
         log::info!("MQTT: Using Client ID: {}", client_id);
 
         // 3. Configure MQTT options
-        let mut mqttoptions = MqttOptions::new(&client_id, "82.157.177.161", 1883);
-        mqttoptions.set_credentials("iot_client", "6yvqYJ6Y9dAa9p");
+        let mut mqttoptions = MqttOptions::new(&client_id, &config.host, config.port);
+        if let Some(creds) = &config.credentials {
+            mqttoptions.set_credentials(&creds.username, &creds.password);
+        }
         mqttoptions.set_keep_alive(Duration::from_secs(60));
 
         // 4. Create client & event loop
@@ -184,60 +259,45 @@ pub async fn run_mqtt_loop(
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_mqtt_connection() {
-        let ip = detect_outbound_ip();
-        println!("Test MQTT: Outbound IP detected = {:?}", ip);
+    #[test]
+    fn mqtt_config_requires_explicit_host_and_port() {
+        let err = MqttConfig::from_settings(None, None, None, None)
+            .expect_err("missing broker config must be rejected");
+        assert!(err.contains("MODEM_CAT_MQTT_HOST"), "unexpected error: {err}");
+    }
 
-        let client_id = "modem_cat_test_client";
-        let mut mqttoptions = MqttOptions::new(client_id, "82.157.177.161", 1883);
-        mqttoptions.set_credentials("iot_client", "6yvqYJ6Y9dAa9p");
-        mqttoptions.set_keep_alive(Duration::from_secs(10));
+    #[test]
+    fn mqtt_config_rejects_partial_credentials() {
+        let err = MqttConfig::from_settings(
+            Some("broker.example"),
+            Some("1883"),
+            Some("user"),
+            None,
+        )
+        .expect_err("partial credentials must be rejected");
+        assert!(err.contains("username/password"), "unexpected error: {err}");
+    }
 
-        let (client, mut eventloop) = AsyncClient::new(mqttoptions, 5);
-        if let Some(local_ip) = ip {
-            println!(
-                "Test MQTT: Routing connection via active network interface IP: {}",
-                local_ip
-            );
-        }
+    #[test]
+    fn mqtt_config_accepts_anonymous_and_explicit_modes() {
+        let anonymous = MqttConfig::from_settings(
+            Some("broker.example"),
+            Some("1883"),
+            None,
+            None,
+        )
+        .expect("anonymous broker should be allowed");
+        assert!(anonymous.credentials.is_none());
 
-        let client_clone = client.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            println!("Test MQTT: Publishing validation message...");
-            let res = client_clone
-                .publish(
-                    "modem/test",
-                    QoS::AtLeastOnce,
-                    false,
-                    "Hello from modem-cat integration test!",
-                )
-                .await;
-            println!("Test MQTT: Publish result = {:?}", res);
-        });
-
-        let mut success = false;
-        let start = std::time::Instant::now();
-        while start.elapsed() < Duration::from_secs(10) {
-            match eventloop.poll().await {
-                Ok(notification) => {
-                    println!("Test MQTT: Notification = {:?}", notification);
-                    if let rumqttc::Event::Incoming(rumqttc::Incoming::PubAck(_)) = notification {
-                        println!("Test MQTT: Successfully received PubAck!");
-                        success = true;
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("Test MQTT: Error = {:?}", e);
-                    break;
-                }
-            }
-        }
-        assert!(
-            success,
-            "Failed to connect and publish message successfully within timeout"
-        );
+        let explicit = MqttConfig::from_settings(
+            Some("broker.example"),
+            Some("1883"),
+            Some("user"),
+            Some("pass"),
+        )
+        .expect("explicit credentials should be allowed");
+        let creds = explicit.credentials.expect("credentials should be present");
+        assert_eq!(creds.username, "user");
+        assert_eq!(creds.password, "pass");
     }
 }

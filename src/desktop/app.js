@@ -15,6 +15,9 @@
       $.loadingText = document.getElementById('loadingText');
       $.loadingSub = document.getElementById('loadingSub');
       $.connectionParams = document.getElementById('connectionParams');
+      $.connectionAuthRow = document.getElementById('connectionAuthRow');
+      $.connectionUsername = document.getElementById('connectionUsername');
+      $.connectionPassword = document.getElementById('connectionPassword');
       $.appVersion = document.getElementById('appVersion');
       $.aboutVersion = document.getElementById('aboutVersion');
     }
@@ -157,16 +160,16 @@
       });
     }
 
-    function setMqttEnabled(enabled) {
-      invoke('set_mqtt_enabled', { enabled })
-        .then(() => {
-          localStorage.setItem('mqtt_enabled', enabled ? 'true' : 'false');
-          updateMqttUI(enabled);
-        })
-        .catch(e => {
-          console.error('Failed to set MQTT enabled:', e);
-          showToast('设置失败: ' + (e.message || String(e)), 'err');
-        });
+    async function setMqttEnabled(enabled) {
+      try {
+        await invoke('set_mqtt_enabled', { enabled });
+        const liveEnabled = await invoke('get_mqtt_enabled');
+        updateMqttUI(liveEnabled);
+      } catch (e) {
+        console.error('Failed to set MQTT enabled:', e);
+        updateMqttUI(false);
+        showToast('设置失败: ' + (e.message || String(e)), 'err');
+      }
     }
     window.setMqttEnabled = setMqttEnabled;
 
@@ -177,11 +180,14 @@
       if (offBtn) offBtn.classList.toggle('active', !enabled);
     }
 
-    function initMqttSetting() {
-      const enabled = localStorage.getItem('mqtt_enabled') === 'true';
-      updateMqttUI(enabled);
-      invoke('set_mqtt_enabled', { enabled })
-        .catch(e => console.error('Failed to sync MQTT on startup:', e));
+    async function initMqttSetting() {
+      try {
+        const enabled = await invoke('get_mqtt_enabled');
+        updateMqttUI(enabled);
+      } catch (e) {
+        console.error('Failed to read MQTT state on startup:', e);
+        updateMqttUI(false);
+      }
     }
 
     // ── Loading overlay ──
@@ -234,6 +240,9 @@
       if (item.dataset.page === 'status' && state.connected) {
         const activeTabBtn = document.querySelector('#page-status .tab-btn.active');
         if (activeTabBtn) activeTabBtn.click();
+      }
+      if (item.dataset.page === 'monitor') {
+        initMonitorPage();
       }
       if (item.dataset.page === 'cellular' && state.connected) {
         const activeTabBtn = document.querySelector('#page-cellular .tab-btn.active');
@@ -346,11 +355,13 @@
             $.statusLabel.style.color = 'var(--text-muted)';
           }
         } else if (connType === 'ethernet' && selectedPort) {
+          const username = $.connectionUsername?.value?.trim() || null;
+          const password = $.connectionPassword?.value?.trim() || null;
           $.statusLabel.textContent = `正在连接 ${selectedPort}...`;
           showLoading(`正在连接 ${selectedPort}...`, '建立 WebSocket 连接');
           addTerminalLine(`[连接] 正在通过网关 ${selectedPort}:8888 连接模组...`, 'info');
           try {
-            await invoke('connect_websocket', { host: selectedPort, port: 8888 });
+            await invoke('connect_websocket', { host: selectedPort, port: 8888, username, password });
             state.connected = true;
             state.idle = false;
             state.connectedPort = selectedPort;
@@ -415,6 +426,8 @@
       const connType = document.getElementById('connectionType');
       if (connType) connType.disabled = false;
       $.connectionParams.disabled = connected;
+      if ($.connectionUsername) $.connectionUsername.disabled = connected;
+      if ($.connectionPassword) $.connectionPassword.disabled = connected;
       const icon = document.getElementById('statusDot');
       if (connected) {
         $.connectBtn.textContent = '断开';
@@ -499,7 +512,7 @@
         if (regEl) { regEl.textContent = regText; regEl.className = regGood ? 'info-value good' : 'info-value'; }
         const connEl = document.getElementById('connStatus');
         if (connEl) { connEl.textContent = s.connStatus || '--'; connEl.className = s.connStatus === '已连接' ? 'info-value good' : 'info-value'; }
-        setTextData('imei', noSim ? '--' : (s.imei || '--'));
+        setTextData('imei', s.imei || '--');
         setTextData('iccid', noSim ? '--' : (s.iccid || '--'));
         setTextData('operator', noSim ? '--' : (s.operator || '--'));
         setTextData('networkType', noSim ? '--' : (s.networkType || '--'));
@@ -508,7 +521,7 @@
         setTextData('arfcn', noSim ? '--' : (s.arfcn || '--'));
         setTextData('band', noSim ? '--' : (s.band || '--'));
         setTextData('bandwidth', noSim ? '--' : (s.bandwidth || '--'));
-        setTextData('rsrp', noSim ? '--' : (s.rsrp || '--'));
+        setTextData('rsrp', noSim ? '--' : formatRsrpFrontend(s.rsrp));
         setTextData('rsrq', noSim ? '--' : (s.rsrq || '--'));
         setTextData('sinr', noSim ? '--' : (s.sinr || '--'));
         setTextData('txPower', noSim ? '--' : (s.txPower || '--'));
@@ -1536,7 +1549,7 @@
         return;
       }
       document.getElementById('lteNeighborBody').innerHTML = rows.map(r =>
-        `<tr><td>${escapeHtml(r.pci || '--')}</td><td>${escapeHtml(r.rsrp || '--')}</td><td>${escapeHtml(r.rsrq || '--')}</td><td>${escapeHtml(r.earfcn || '--')}</td></tr>`
+        `<tr><td>${escapeHtml(r.pci || '--')}</td><td>${escapeHtml(formatRsrpFrontend(r.rsrp) || '--')}</td><td>${escapeHtml(r.rsrq || '--')}</td><td>${escapeHtml(r.earfcn || '--')}</td></tr>`
       ).join('');
     }
 
@@ -1546,7 +1559,7 @@
         return;
       }
       document.getElementById('nrNeighborBody').innerHTML = rows.map(r =>
-        `<tr><td>${escapeHtml(r.pci || '--')}</td><td>${escapeHtml(r.rsrp || '--')}</td><td>${escapeHtml(r.rsrq || '--')}</td><td>${escapeHtml(r.sinr || '--')}</td><td>${escapeHtml(r.arfcn || '--')}</td></tr>`
+        `<tr><td>${escapeHtml(r.pci || '--')}</td><td>${escapeHtml(formatRsrpFrontend(r.rsrp) || '--')}</td><td>${escapeHtml(r.rsrq || '--')}</td><td>${escapeHtml(r.sinr || '--')}</td><td>${escapeHtml(r.arfcn || '--')}</td></tr>`
       ).join('');
     }
 
@@ -1650,6 +1663,19 @@
               break;
             }
           }
+        } else if (state.chipVendor === 'asr') {
+          // ASR: AT+QCFG="lanip" → +QCFG: "lanip","<gw>","<mask>","<start>","<end>",<lease_time>
+          const resp = await invoke('send_raw_at', { command: 'AT+QCFG="lanip"' });
+          for (const line of (resp || '').split('\n')) {
+            const m5 = line.match(/\+QCFG:\s*"lanip",\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?(?:,\s*"?([^",\s]+)"?)?/i);
+            if (m5) {
+              document.getElementById('lanGw').value     = m5[1];
+              document.getElementById('lanMask').value   = m5[2];
+              document.getElementById('dhcpStart').value = m5[3];
+              document.getElementById('dhcpEnd').value   = m5[4];
+              break;
+            }
+          }
         } else {
           // UniSoc: AT+QCFG="lanip_ex" → +QCFG: "lanip_ex","<gw>","<mask>","<start>","<end>"
           const resp = await invoke('send_raw_at', { command: 'AT+QCFG="lanip_ex"' });
@@ -1676,7 +1702,63 @@
       } finally {
         loadingEl.style.display = 'none';
         formEl.style.display    = '';
+        // Bind gateway IP change event to auto-update DHCP range
+        const gwInput = document.getElementById('lanGw');
+        if (gwInput && !gwInput._dhcpAutoUpdateBound) {
+          gwInput.addEventListener('change', updateDhcpRangeFromGateway);
+          gwInput._dhcpAutoUpdateBound = true;
+        }
       }
+    }
+
+    // Helper: Parse IP to array of integers
+    function parseIp(ip) {
+      const parts = ip.split('.');
+      if (parts.length !== 4) return null;
+      const nums = parts.map(Number);
+      if (nums.some(n => isNaN(n) || n < 0 || n > 255)) return null;
+      return nums;
+    }
+
+    // Helper: Convert IP array back to string
+    function ipToString(parts) {
+      return parts.join('.');
+    }
+
+    // Auto-update DHCP range when gateway IP changes
+    function updateDhcpRangeFromGateway() {
+      const gwInput = document.getElementById('lanGw');
+      const dhcpStartInput = document.getElementById('dhcpStart');
+      const dhcpEndInput = document.getElementById('dhcpEnd');
+      
+      if (!gwInput || !dhcpStartInput || !dhcpEndInput) return;
+      
+      const gwParts = parseIp(gwInput.value.trim());
+      if (!gwParts) return; // Invalid IP, don't update
+      
+      // Keep the same last octet pattern for DHCP range
+      // If current DHCP start ends with .2, new start should be <gw_prefix>.2
+      // If current DHCP end ends with .254, new end should be <gw_prefix>.254
+      const currentStartParts = parseIp(dhcpStartInput.value.trim());
+      const currentEndParts = parseIp(dhcpEndInput.value.trim());
+      
+      // Default: start at .2, end at .254
+      let startLastOctet = 2;
+      let endLastOctet = 254;
+      
+      if (currentStartParts && currentStartParts[3] !== undefined) {
+        startLastOctet = currentStartParts[3];
+      }
+      if (currentEndParts && currentEndParts[3] !== undefined) {
+        endLastOctet = currentEndParts[3];
+      }
+      
+      // Build new DHCP addresses with same subnet as gateway
+      const newStartParts = [gwParts[0], gwParts[1], gwParts[2], startLastOctet];
+      const newEndParts = [gwParts[0], gwParts[1], gwParts[2], endLastOctet];
+      
+      dhcpStartInput.value = ipToString(newStartParts);
+      dhcpEndInput.value = ipToString(newEndParts);
     }
 
     async function applyLanConfig() {
@@ -1689,13 +1771,18 @@
       const isQualcomm = state.chipVendor === 'qualcomm';
       try {
         showLoading('正在设置 LAN 配置...');
-        // Qualcomm QMAP order: start,end,gw  (no mask field)
-        // UniSoc QCFG order:  gw,mask,start,end
-        const cmd = isQualcomm
-          ? `AT+QMAP="LANIP",${start},${end},${gw}`
-          : (mask
-              ? `AT+QCFG="lanip_ex","${gw}","${mask}","${start}","${end}"`
-              : `AT+QCFG="lanip_ex","${gw}","${start}","${end}"`);
+        let cmd;
+        if (isQualcomm) {
+          cmd = `AT+QMAP="LANIP",${start},${end},${gw}`;
+        } else if (state.chipVendor === 'asr') {
+          cmd = mask
+            ? `AT+QCFG="lanip","${gw}","${mask}","${start}","${end}"`
+            : `AT+QCFG="lanip","${gw}","${start}","${end}"`;
+        } else {
+          cmd = mask
+            ? `AT+QCFG="lanip_ex","${gw}","${mask}","${start}","${end}"`
+            : `AT+QCFG="lanip_ex","${gw}","${start}","${end}"`;
+        }
         await invoke('send_raw_at', { command: cmd });
         await flushAtLog();
         hideLoading();
@@ -1924,21 +2011,28 @@
           state.model = hw.model;
           document.getElementById('logoText').textContent = hw.model;
           const isQualcomm = isQualcommModel(hw.model);
+          const isAsr = hw.model.toUpperCase().includes('RG255');
 
           const unisocBtn = document.getElementById('tabBtnUnisoc');
           const qualcommBtn = document.getElementById('tabBtnQualcomm');
+          const asrBtn = document.getElementById('tabBtnAsr');
           const unisocPanel = document.getElementById('hwtab-unisoc');
           const qualcommPanel = document.getElementById('hwtab-qualcomm');
+          const asrPanel = document.getElementById('hwtab-asr');
+
+          // Disable all tabs first
+          if (unisocBtn) unisocBtn.classList.add('disabled');
+          if (qualcommBtn) qualcommBtn.classList.add('disabled');
+          if (asrBtn) asrBtn.classList.add('disabled');
 
           if (isQualcomm) {
-            if (unisocBtn) unisocBtn.classList.add('disabled');
             if (qualcommBtn) qualcommBtn.classList.remove('disabled');
-            if (unisocPanel) unisocPanel.classList.remove('active');
             switchHardwareTab('qualcomm', qualcommBtn);
+          } else if (isAsr) {
+            if (asrBtn) asrBtn.classList.remove('disabled');
+            switchHardwareTab('asr', asrBtn);
           } else {
-            if (qualcommBtn) qualcommBtn.classList.add('disabled');
             if (unisocBtn) unisocBtn.classList.remove('disabled');
-            if (qualcommPanel) qualcommPanel.classList.remove('active');
             switchHardwareTab('unisoc', unisocBtn);
           }
         }
@@ -2123,6 +2217,11 @@
           const off = document.getElementById('toggle' + key + '_off');
           if (on) on.classList.toggle('active', val);
           if (off) off.classList.toggle('active', !val);
+          // Also update ASR tab buttons
+          const onAsr = document.getElementById('toggle' + key + 'Asr_on');
+          const offAsr = document.getElementById('toggle' + key + 'Asr_off');
+          if (onAsr) onAsr.classList.toggle('active', val);
+          if (offAsr) offAsr.classList.toggle('active', !val);
         };
         toggleBtn('Pcie', t.pcieMode);
         toggleBtn('Ethernet', t.ethernet);
@@ -2140,7 +2239,9 @@
       try {
         const mode = await invoke('get_usbnet_mode');
         const sel = document.getElementById('usbNetMode');
-        sel.value = String(mode);
+        if (sel) sel.value = String(mode);
+        const selAsr = document.getElementById('usbNetModeAsr');
+        if (selAsr) selAsr.value = String(mode);
       } catch (e) {
         console.warn('refreshUsbnet failed:', e);
       }
@@ -2512,6 +2613,9 @@
         }
       }
       const connType = document.getElementById('connectionType')?.value || 'serial';
+      if ($.connectionAuthRow) {
+        $.connectionAuthRow.style.display = connType === 'ethernet' ? '' : 'none';
+      }
       if (connType === 'serial') {
         await refreshPortList();
       } else if (connType === 'ethernet') {
@@ -2991,9 +3095,6 @@
       if (factoryItem) factoryItem.style.display = (s && s.valid && s.factory_mode) ? '' : 'none';
       if (firmwareItem) firmwareItem.style.display = (s && s.valid && s.firmware_download) ? '' : 'none';
     }
-    function escHtml(s) {
-      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
     {
       const listen = window.__TAURI__?.event?.listen;
       if (listen) {
@@ -3176,3 +3277,377 @@
         }
       }
     });
+
+    // ─── Online Signal Monitoring ───
+
+    function getThemeColor(varName, fallback) {
+      try {
+        const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+        return val || fallback;
+      } catch (_) {
+        return fallback;
+      }
+    }
+
+    function formatRsrpFrontend(rsrpStr) {
+      if (!rsrpStr || rsrpStr === '--') return '--';
+      const trimmed = rsrpStr.toString().trim();
+      if (trimmed.startsWith('-')) return trimmed;
+      const val = parseSignalValue(trimmed);
+      if (val !== null && val > 0) {
+        return '-' + trimmed;
+      }
+      return trimmed;
+    }
+
+    function parseSignalValue(str) {
+      if (!str) return null;
+      const match = str.match(/(-?\d+(?:\.\d+)?)/);
+      return match ? parseFloat(match[1]) : null;
+    }
+
+    class SignalChart {
+      constructor(canvasId, options = {}) {
+        this.canvasId = canvasId;
+        this.canvas = document.getElementById(canvasId);
+        if (!this.canvas) return;
+        this.ctx = this.canvas.getContext('2d');
+        this.options = Object.assign({
+          minY: -140,
+          maxY: -40,
+          gridCount: 5,
+          unit: 'dBm',
+          lineColor: '#06b6d4',
+          gradientStart: 'rgba(6, 182, 212, 0.25)',
+          gradientStop: 'rgba(6, 182, 212, 0)'
+        }, options);
+        this.data = []; // Array of { value: number, time: string }
+        this.resize();
+      }
+
+      resize() {
+        this.canvas = document.getElementById(this.canvasId);
+        if (!this.canvas) return;
+        this.ctx = this.canvas.getContext('2d');
+        const rect = this.canvas.parentNode.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = rect.width * dpr;
+        this.canvas.height = rect.height * dpr;
+        this.ctx.resetTransform();
+        this.ctx.scale(dpr, dpr);
+        this.draw();
+      }
+
+      addData(value, timeStr) {
+        this.data.push({ value, time: timeStr || new Date().toLocaleTimeString().slice(-8) });
+        if (this.data.length > 25) {
+          this.data.shift();
+        }
+        this.draw();
+      }
+
+      clear() {
+        this.data = [];
+        this.draw();
+      }
+
+      draw() {
+        if (!this.canvas || !this.ctx) return;
+        const ctx = this.ctx;
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Padding around the drawing area
+        const paddingLeft = 65;
+        const paddingRight = 20;
+        const paddingTop = 20;
+        const paddingBottom = 25;
+
+        const chartWidth = width - paddingLeft - paddingRight;
+        const chartHeight = height - paddingTop - paddingBottom;
+
+        if (chartWidth <= 0 || chartHeight <= 0) return;
+
+        // Get current theme colors
+        const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+        const textColor = getThemeColor('--text-secondary', '#94a3b8');
+        const gridColor = getThemeColor('--border-color', 'rgba(30, 41, 69, 0.6)');
+        
+        // Draw Y-axis grid and labels
+        const minY = this.options.minY;
+        const maxY = this.options.maxY;
+        const rangeY = maxY - minY;
+        const gridCount = this.options.gridCount;
+
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        for (let i = 0; i <= gridCount; i++) {
+          const yVal = minY + (rangeY * i) / gridCount;
+          const yPos = paddingTop + chartHeight - (chartHeight * i) / gridCount;
+
+          // Draw grid line
+          ctx.beginPath();
+          ctx.strokeStyle = gridColor;
+          ctx.lineWidth = 1;
+          ctx.moveTo(paddingLeft, yPos);
+          ctx.lineTo(width - paddingRight, yPos);
+          ctx.stroke();
+
+          // Draw label
+          ctx.fillStyle = textColor;
+          ctx.fillText(`${Math.round(yVal)}${this.options.unit}`, paddingLeft - 8, yPos);
+        }
+
+        // Draw X-axis line (at the bottom)
+        ctx.beginPath();
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.moveTo(paddingLeft, paddingTop + chartHeight);
+        ctx.lineTo(width - paddingRight, paddingTop + chartHeight);
+        ctx.stroke();
+
+        // Check if there is data to draw
+        if (this.data.length === 0) {
+          ctx.textAlign = 'center';
+          ctx.fillStyle = textColor;
+          ctx.font = '13px "Inter", sans-serif';
+          ctx.fillText(state.lang === 'zh' ? '暂无监控数据 (请开启开关)' : 'No data (turn on switch)', paddingLeft + chartWidth / 2, paddingTop + chartHeight / 2);
+          return;
+        }
+
+        // Calculate positions of data points
+        const points = [];
+        for (let i = 0; i < this.data.length; i++) {
+          const d = this.data[i];
+          // X-coord distributed evenly
+          const x = paddingLeft + (chartWidth * i) / Math.max(1, this.data.length - 1);
+          
+          // Y-coord based on value clamped to min/max
+          const clampedVal = Math.max(minY, Math.min(maxY, d.value));
+          const y = paddingTop + chartHeight - (chartHeight * (clampedVal - minY)) / rangeY;
+          points.push({ x, y, val: d.value, time: d.time });
+        }
+
+        // Draw area under curve (filled gradient)
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, paddingTop + chartHeight);
+        for (let i = 0; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.lineTo(points[points.length - 1].x, paddingTop + chartHeight);
+        ctx.closePath();
+
+        const gradient = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + chartHeight);
+        gradient.addColorStop(0, this.options.gradientStart);
+        gradient.addColorStop(1, this.options.gradientStop);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Draw line connecting points
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = this.options.lineColor;
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        // Draw point circles and latest pulse
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          
+          // Standard point dot
+          ctx.beginPath();
+          ctx.fillStyle = this.options.lineColor;
+          ctx.arc(p.x, p.y, i === points.length - 1 ? 5 : 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Outer border for dot to pop
+          ctx.beginPath();
+          ctx.strokeStyle = theme === 'light' ? '#ffffff' : '#101524';
+          ctx.lineWidth = 1.5;
+          ctx.arc(p.x, p.y, i === points.length - 1 ? 5 : 3.5, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // If it's the last point, draw a beautiful glow pulse
+          if (i === points.length - 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = this.options.lineColor;
+            ctx.lineWidth = 1;
+            ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+        // Draw X-axis timestamps (limit count to avoid overlapping)
+        ctx.fillStyle = textColor;
+        ctx.font = '9px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+
+        const step = Math.max(1, Math.floor(points.length / 5));
+        for (let i = 0; i < points.length; i += step) {
+          const p = points[i];
+          ctx.fillText(p.time, p.x, paddingTop + chartHeight + 6);
+        }
+        // Always draw the last timestamp if not already drawn
+        if ((points.length - 1) % step !== 0) {
+          const p = points[points.length - 1];
+          ctx.fillText(p.time, p.x, paddingTop + chartHeight + 6);
+        }
+      }
+    }
+
+    let rsrpChart = null;
+    let sinrChart = null;
+    let monitorTimer = null;
+
+    window.redrawCharts = function() {
+      if (!rsrpChart || !sinrChart) return;
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      
+      rsrpChart.options.lineColor = getThemeColor('--cyan', '#06b6d4');
+      rsrpChart.options.gradientStart = isLight ? 'rgba(8, 145, 178, 0.2)' : 'rgba(6, 182, 212, 0.25)';
+      
+      sinrChart.options.lineColor = getThemeColor('--accent', '#f97316');
+      sinrChart.options.gradientStart = isLight ? 'rgba(234, 88, 12, 0.15)' : 'rgba(249, 115, 22, 0.25)';
+      
+      rsrpChart.resize();
+      sinrChart.resize();
+    };
+
+    window.initMonitorPage = function() {
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      if (!rsrpChart) {
+        rsrpChart = new SignalChart('rsrpChartCanvas', {
+          minY: -140,
+          maxY: -40,
+          gridCount: 5,
+          unit: ' dBm',
+          lineColor: getThemeColor('--cyan', '#06b6d4'),
+          gradientStart: isLight ? 'rgba(8, 145, 178, 0.2)' : 'rgba(6, 182, 212, 0.25)',
+          gradientStop: 'rgba(6, 182, 212, 0)'
+        });
+      }
+      if (!sinrChart) {
+        sinrChart = new SignalChart('sinrChartCanvas', {
+          minY: -20,
+          maxY: 40,
+          gridCount: 6,
+          unit: ' dB',
+          lineColor: getThemeColor('--accent', '#f97316'),
+          gradientStart: isLight ? 'rgba(234, 88, 12, 0.15)' : 'rgba(249, 115, 22, 0.25)',
+          gradientStop: 'rgba(249, 115, 22, 0)'
+        });
+      }
+      
+      window.redrawCharts();
+    };
+
+    async function fetchMonitorData() {
+      if (!state.connected) {
+        // Disconnected, auto shut down
+        const sw = document.getElementById('monitorToggleSwitch');
+        if (sw && sw.checked) {
+          sw.checked = false;
+          toggleMonitorState(false);
+          showToast(state.lang === 'zh' ? '模组已断开，监控关闭' : 'Modem disconnected, monitoring stopped', 'err');
+        }
+        return;
+      }
+
+      try {
+        const s = await invoke('get_modem_status');
+        const timeStr = new Date().toLocaleTimeString().slice(-8);
+
+        const formattedRsrp = formatRsrpFrontend(s.rsrp);
+        const rsrpVal = parseSignalValue(formattedRsrp);
+        const sinrVal = parseSignalValue(s.sinr);
+
+        const rsrpBadge = document.getElementById('monitorRsrpBadge');
+        const sinrBadge = document.getElementById('monitorSinrBadge');
+
+        if (rsrpVal !== null) {
+          if (rsrpChart) rsrpChart.addData(rsrpVal, timeStr);
+          if (rsrpBadge) rsrpBadge.textContent = formattedRsrp;
+        } else {
+          if (rsrpBadge) rsrpBadge.textContent = '--';
+        }
+
+        if (sinrVal !== null) {
+          if (sinrChart) sinrChart.addData(sinrVal, timeStr);
+          if (sinrBadge) sinrBadge.textContent = s.sinr;
+        } else {
+          if (sinrBadge) sinrBadge.textContent = '--';
+        }
+      } catch (e) {
+        console.error('Failed to query signal status:', e);
+        addTerminalLine('[监控] 获取信号失败: ' + (e.message || String(e)), 'err');
+      }
+    }
+
+    function toggleMonitorState(active) {
+      if (monitorTimer) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+      }
+
+      if (active) {
+        const intervalSelect = document.getElementById('monitorIntervalSelect');
+        const intervalSec = intervalSelect ? parseInt(intervalSelect.value) || 10 : 10;
+        
+        // Fetch once immediately
+        fetchMonitorData();
+        
+        monitorTimer = setInterval(fetchMonitorData, intervalSec * 1000);
+      }
+    }
+
+    function initMonitorEvents() {
+      const sw = document.getElementById('monitorToggleSwitch');
+      if (sw) {
+        sw.addEventListener('change', (e) => {
+          if (e.target.checked) {
+            if (!state.connected) {
+              showToast(state.lang === 'zh' ? '请先连接模组' : 'Please connect the modem first', 'err');
+              e.target.checked = false;
+              return;
+            }
+            toggleMonitorState(true);
+          } else {
+            toggleMonitorState(false);
+          }
+        });
+      }
+
+      const select = document.getElementById('monitorIntervalSelect');
+      if (select) {
+        select.addEventListener('change', () => {
+          const sw = document.getElementById('monitorToggleSwitch');
+          if (sw && sw.checked && state.connected) {
+            // Restart timer with new interval
+            toggleMonitorState(true);
+          }
+        });
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initMonitorEvents);
+    } else {
+      initMonitorEvents();
+    }
+
+    window.addEventListener('resize', () => {
+      if (rsrpChart && sinrChart && document.getElementById('page-monitor').classList.contains('active')) {
+        rsrpChart.resize();
+        sinrChart.resize();
+      }
+    });
+

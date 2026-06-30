@@ -8,58 +8,6 @@ use modem_hal::ModemFactory;
 
 use crate::{wrap_transport, AppState};
 
-// ── Connection in-flight guard ─────────────────────────────────────────────
-//
-// Prevents concurrent connect_serial / auto_connect_at / connect_tcp /
-// connect_websocket from racing on AppState.transport. Uses CAS (compare-and-
-// swap) so only one caller can observe the transition false → true.
-//
-// The guard is RAII: Drop clears the flag even if the connection task panics,
-// so a crashed connect path can never wedge the AppState into "connecting
-// forever".
-pub(crate) struct ConnectionGuard {
-    state: AppState,
-}
-
-impl ConnectionGuard {
-    /// Try to acquire the connection lock. Returns Err if another call is
-    /// already in progress. Uses CAS to guarantee atomicity without blocking.
-    pub(crate) fn try_acquire(state: AppState) -> Result<Self, String> {
-        if state
-            .connecting
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-            .is_ok()
-        {
-            Ok(Self { state })
-        } else {
-            Err("连接正在进行中，请稍候".to_string())
-        }
-    }
-}
-
-impl Drop for ConnectionGuard {
-    fn drop(&mut self) {
-        self.state.connecting.store(false, Ordering::SeqCst);
-    }
-}
-
-/// Clone AppState Arcs and acquire the connection guard. Extracted so all
-/// four connect entry points share one line of boilerplate.
-fn acquire_connect_guard(state: &tauri::State<'_, AppState>) -> Result<ConnectionGuard, String> {
-    let state_clone = AppState {
-        transport: state.transport.clone(),
-        vendor: state.vendor.clone(),
-        data_cid: state.data_cid.clone(),
-        connected_port: state.connected_port.clone(),
-        at_command_log: state.at_command_log.clone(),
-        mqtt_task: state.mqtt_task.clone(),
-        license: state.license.clone(),
-        disconnecting: state.disconnecting.clone(),
-        connecting: state.connecting.clone(),
-    };
-    ConnectionGuard::try_acquire(state_clone)
-}
-
 // ── Port listing helpers ──
 
 #[cfg(target_os = "windows")]
@@ -303,8 +251,8 @@ where
 pub(crate) async fn auto_connect_at(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let _guard = acquire_connect_guard(&state)?;
-    let ports = serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
+    let ports =
+        serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
     let win_info = get_windows_all_port_info();
 
@@ -449,7 +397,6 @@ pub(crate) async fn connect_serial(
     baud_rate: u32,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
@@ -497,7 +444,6 @@ pub(crate) async fn connect_tcp(
     port: u16,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
@@ -514,8 +460,9 @@ pub(crate) async fn connect_tcp(
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        // Lock order MUST be transport -> vendor -> connected_port to match
-        // disconnect / connect_serial / auto_connect_at and avoid ABBA deadlock.
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *transport_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? =
@@ -525,10 +472,6 @@ pub(crate) async fn connect_tcp(
         *vendor_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
-
-        *conn_port_state
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -541,45 +484,28 @@ pub(crate) async fn connect_tcp(
 pub(crate) async fn disconnect(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    // Mark disconnecting FIRST so the heartbeat thread backs off and doesn't
-    // touch the transport we're about to tear down (or emit duplicate events).
-    state.disconnecting.store(true, Ordering::SeqCst);
-    let result = cleanup_connection(&state).await;
-    state.disconnecting.store(false, Ordering::SeqCst);
-    result
-}
-
-/// Shared teardown used by both the explicit `disconnect` IPC and the
-/// heartbeat/USB-monitor auto-disconnect path.
-///
-/// Acquires transport + vendor + connected_port locks in a fixed order
-/// (transport → vendor → connected_port) to match `connect_*` / `disconnect`
-/// and avoid ABBA deadlock. Uses `force_shutdown` (non-blocking) instead of
-/// `close()` so a dead transport (USB unplug / WS gateway gone) cannot hang
-/// the disconnect path.
-async fn cleanup_connection(state: &AppState) -> Result<String, String> {
-    // 1. Take the transport out of the Mutex so we own it exclusively.
-    let transport_g = state.transport.clone();
-    let vendor_g = state.vendor.clone();
-    let port_g = state.connected_port.clone();
-    let data_cid_g = state.data_cid.clone();
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    let connected_port = state.connected_port.clone();
+    let data_cid = state.data_cid.clone();
 
     tokio::task::spawn_blocking(move || {
-        let mut tg = transport_g
+        let mut t = transport
             .lock()
-            .map_err(|e| format!("Lock poisoned: {e}"))?;
-        // force_shutdown is non-blocking; the subsequent `*tg = None` drops it.
-        if let Some(ref mut t) = *tg {
-            t.force_shutdown();
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
+        if let Some(ref mut transport) = *t {
+            transport.close();
         }
-        *tg = None;
-        *vendor_g.lock().map_err(|e| format!("Lock poisoned: {e}"))? = None;
-        *port_g.lock().map_err(|e| format!("Lock poisoned: {e}"))? = None;
-        data_cid_g.store(1, Ordering::Relaxed);
+        *t = None;
+        *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *connected_port
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        data_cid.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
     .await
-    .map_err(|e| format!("Task error: {e}"))?
+    .map_err(|e| format!("Task error: {}", e))?
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -695,7 +621,6 @@ pub(crate) async fn connect_websocket(
     password: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let _guard = acquire_connect_guard(&state)?;
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
@@ -705,9 +630,6 @@ pub(crate) async fn connect_websocket(
     let user_clone = username.clone();
     let pass_clone = password.clone();
 
-    // AGENTS.md: "敏感信息禁止公开默认值" — WS 凭据必须由调用方提供，
-    // 不允许 fallback 到硬编码的 "admin"。将 None 透传给
-    // WebSocketTransport，由它决定是否匿名连接或报错。
     tokio::task::spawn_blocking(move || {
         let mut transport = modem_hal::transport::WebSocketTransport::new(
             &host_clone,
@@ -724,8 +646,9 @@ pub(crate) async fn connect_websocket(
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        // Lock order MUST be transport -> vendor -> connected_port to match
-        // disconnect / connect_serial / auto_connect_at and avoid ABBA deadlock.
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *transport_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? =
@@ -736,16 +659,14 @@ pub(crate) async fn connect_websocket(
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
 
-        *conn_port_state
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
-
-        let user_label = user_clone
-            .as_deref()
-            .map(|u| format!(" as {u}"))
-            .unwrap_or_default();
         log::info!(
-            "Connected to WebSocket {host_clone}:{port}{user_label}"
+            "Connected to WebSocket {}:{}{}",
+            host_clone,
+            port,
+            user_clone
+                .as_deref()
+                .map(|user| format!(" as {}", user))
+                .unwrap_or_default()
         );
         Ok(id)
     })

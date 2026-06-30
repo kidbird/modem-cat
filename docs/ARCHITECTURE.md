@@ -16,7 +16,10 @@ src/desktop/
         ▼
 src-tauri/src/
   main.rs      ← 入口（NO_PROXY）
-  lib.rs       ← live IPC / AppState / queue / monitor / tray / handler 注册
+  lib.rs       ← Tauri 装配 / AppState / handler 注册 / tray / window lifecycle
+  handlers.rs  ← live 业务 IPC（状态/配置/数据/AT/MQTT）
+  connection.rs← 串口/TCP/WebSocket 连接 IPC
+  monitor.rs   ← usb-monitor / heartbeat 后台线程
   mqtt.rs      ← 可选 MQTT 后台状态上报
   license.rs   ← License 加载 / 校验 / IPC
   factory.rs   ← 工厂模式 HTTP 设备通信 / 本地持久化 / IPC
@@ -53,6 +56,7 @@ src-tauri/src/
 - `AppState.transport` 是当前唯一 live AT 队列 owner。
 - `send_raw_at` 也必须走同一把 `transport` 锁，不能成为第二条直连路径。
 - `mqtt.rs` 已改为复用同一把 `transport` 锁，并按 `transport -> vendor` 顺序取锁。
+- 所有 live 查询（如 feature toggle / NAT / 设备认证状态）失败时必须直接报错，不得伪装成 `false` / `0` / 空值。
 - `factory.rs` 的 HTTP 请求和 `dloader.rs` 的 sidecar 不是 AT 路径，不得反向引入第二条 modem AT 队列。
 
 ## 3. 单一真相源
@@ -61,7 +65,7 @@ src-tauri/src/
 
 - 当前前端是 **plain script 顺序加载**，不是 bundler，也不是 ES Modules。
 - 前端唯一状态 owner 是 `state`。
-- `localStorage` 只应用于 UI 偏好和少量非 live 记忆项；任何 live modem 状态镜像都视为技术债。
+- `localStorage` 只应用于 UI 偏好和少量非 live 记忆项；任何 live modem 状态镜像都视为技术债。MQTT 开关等 live 状态必须回读后端 owner。
 
 ### 3.2 后端
 
@@ -92,36 +96,55 @@ src-tauri/src/
 - live IPC handler 注册
 - `AppState`
 - `LoggingTransport`
-- 自动连接 / 连接管理
-- USB 监控与心跳线程
 - 菜单 / 窗口行为
 
-### 4.2 `src-tauri/src/mqtt.rs`
+### 4.2 `src-tauri/src/handlers.rs`
+
+- live 业务 IPC handler
+- `data_cid` / feature toggle / NAT / AT / MQTT 状态入口
+- 所有 live 查询必须返回真实结果或明确错误
+
+### 4.3 `src-tauri/src/connection.rs`
+
+- 串口 / TCP / WebSocket 连接
+- 自动连接、端口筛选、网卡枚举
+- WebSocket 认证只接受显式提供的凭据；禁止公开默认值
+
+### 4.4 `src-tauri/src/monitor.rs`
+
+- `usb-monitor`
+- `connection-heartbeat`
+- 后台检测只发事件，不得旁路 live AT 队列
+
+### 4.5 `src-tauri/src/mqtt.rs`
 
 - 可选 MQTT 状态上报循环
 - 只能复用 live AT 队列和固定锁顺序
 - 不能自建第二条 modem I/O 路径
+- broker / port / 认证信息必须来自显式配置（环境变量），不得硬编码生产默认值
 
-### 4.3 `src-tauri/src/license.rs`
+### 4.6 `src-tauri/src/license.rs`
 
 - 启动时加载 `license.dat`
 - 校验 License 并更新 `AppState.license`
 - 暴露 `get_license_status` / `load_license_file`
 - 通过 `license-changed` 事件通知前端
 
-### 4.4 `src-tauri/src/factory.rs`
+### 4.7 `src-tauri/src/factory.rs`
 
 - 工厂模式本地配置读写
 - 设备 HTTP 通信
 - SN / 记录 / 产品配置 IPC
 - 不直接参与 AT 队列，但会与前端 License 可见性联动
+- 运行时锁错误必须返回错误，不得 panic
 
-### 4.5 `src-tauri/src/dloader.rs`
+### 4.8 `src-tauri/src/dloader.rs`
 
 - PAC 选择 / 信息解析
 - `r26-cli` sidecar 管理
 - `firmware-event` 事件转发
 - 不直接参与 AT 队列
+- sidecar 句柄清理失败只能记录日志 / 返回错误，不能因锁 `unwrap()` 直接 panic
 
 ## 5. HAL 结构
 

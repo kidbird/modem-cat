@@ -1,11 +1,12 @@
 # build.ps1 — Modem Cat 多变体构建脚本 (PowerShell)
 # 入口脚本, 取代 build.bat 让脚本也能在 PowerShell 环境下直接运行
 #
-# 产出:
-#   dist\installer\Modem Cat_<ver>_webview_*.msi/.exe
-#   dist\installer\Modem Cat_<ver>_nowebview_*.msi/.exe
-#   dist\portable\Modem Cat_<ver>_portable\  (modem-cat.exe + r26-cli sidecar)
-#   dist\license-gen.exe
+# 产出 (全部在 dist/ 根目录):
+#   dist\Modem Cat_<ver>_webview_*.msi/.exe        (Webview 安装包)
+#   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (无 Webview 安装包)
+#   dist\modem-cat.exe                              (便携版主程序)
+#   dist\r26-cli-x86_64-pc-windows-msvc.exe         (固件下载 sidecar)
+#   dist\license-gen.exe                            (许可证生成器)
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -29,11 +30,11 @@ Write-Host ""
 Write-Host " ==================================================="
 Write-Host "  Modem Cat  -  Multi-Variant Build"
 Write-Host ""
-Write-Host "  installer  ->  dist\installer\Modem Cat_*_webview_*.msi/.exe"
-Write-Host "                 dist\installer\Modem Cat_*_nowebview_*.msi/.exe"
-Write-Host "  portable   ->  dist\portable\Modem Cat_*_portable\"
-Write-Host "                    (modem-cat.exe + r26-cli sidecar)"
-Write-Host "  license    ->  dist\license-gen.exe"
+Write-Host "  所有产物统一输出到 dist/ 根目录:"
+Write-Host "    MSI/NSIS 安装包 -> dist\\Modem Cat_*_[webview|nowebview]_*.msi/.exe"
+Write-Host "    便携版          -> dist\\modem-cat.exe"
+Write-Host "    Sidecar         -> dist\\r26-cli-x86_64-pc-windows-msvc.exe"
+Write-Host "    License 工具    -> dist\\license-gen.exe"
 Write-Host " ==================================================="
 Write-Host ""
 
@@ -104,18 +105,18 @@ $env:RUSTFLAGS = ""
 
 $cfg = Get-Content "$root\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
 $ver = $cfg.version
-$pfDir = Join-Path $distDir "portable\Modem Cat_${ver}_portable"
-if (-not (Test-Path $pfDir)) { New-Item -ItemType Directory -Path $pfDir -Force | Out-Null }
+$distDir = Join-Path $root "dist"
+if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
 
-Copy-Item -LiteralPath "$root\target\release\modem-cat.exe" -Destination (Join-Path $pfDir "modem-cat.exe") -Force
-Write-Host "       $pfDir\modem-cat.exe"
+Copy-Item -LiteralPath "$root\target\release\modem-cat.exe" -Destination (Join-Path $distDir "modem-cat.exe") -Force
+Write-Host "       dist\modem-cat.exe"
 
 # Sidecar must keep its target-triple suffix
 $sidecarSrc = Join-Path $root "src-tauri\binaries\r26-cli-x86_64-pc-windows-msvc.exe"
-$sidecarDst = Join-Path $pfDir "r26-cli-x86_64-pc-windows-msvc.exe"
+$sidecarDst = Join-Path $distDir "r26-cli-x86_64-pc-windows-msvc.exe"
 if (Test-Path $sidecarSrc) {
     Copy-Item -LiteralPath $sidecarSrc -Destination $sidecarDst -Force
-    Write-Host "       $sidecarDst"
+    Write-Host "       dist\r26-cli-x86_64-pc-windows-msvc.exe"
 } else {
     Write-Warning "       sidecar not found at $sidecarSrc"
 }

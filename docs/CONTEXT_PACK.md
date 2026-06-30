@@ -18,6 +18,8 @@
 3. `docs/REVIEW.md`
 4. 涉及具体命令语义时再读 `docs/AT_COMMANDS.md`
 
+> 当前执行面不只在 `lib.rs`。实际 live 代码分散在 `src-tauri/src/lib.rs`（装配）、`handlers.rs`（业务 IPC）、`connection.rs`（连接 IPC）、`monitor.rs`（后台线程）、`mqtt.rs`（后台上报）。
+
 ### HAL / Parser / Vendor / Transport
 
 1. `docs/AT_COMMANDS.md`
@@ -43,7 +45,7 @@
 - `docs/AT_COMMANDS.md`
   说明正式 AT 合同、平台差异、禁止复制的历史 fallback。
 - `docs/CODE_MAP.md`
-  说明前端触发点、IPC 名称、后端 live handler 映射。
+  说明前端触发点、IPC 名称、后端 live handler 映射（含 `handlers.rs` / `connection.rs` / `license.rs` / `factory.rs` / `dloader.rs`）。
 - `docs/CALL_FLOW.md`
   说明主要 UI → IPC → HAL 调用链。
 - `docs/REVIEW.md`
@@ -51,7 +53,7 @@
 - `docs/BUILD.md`
   说明构建命令、平台注意事项、产物路径。
 - `docs/TECH_STACK.md`
-  说明当前技术栈、依赖、运行方式。
+  说明当前技术栈、依赖、运行方式、显式配置项（如 MQTT / WebSocket 认证边界）。
 
 ## 3. On-Demand Lookup Rules
 

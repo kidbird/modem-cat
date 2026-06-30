@@ -14,7 +14,7 @@
       {
         "title": "Modem Cat",
         "width": 1200,
-        "height": 780,
+        "height": 720,
         "resizable": true,
         "fullscreen": false,
         "minWidth": 900,
@@ -47,7 +47,8 @@
         "language": "zh-CN"
       },
       "webviewInstallMode": {
-        "type": "offlineInstaller"
+        "type": "fixedRuntime",
+        "path": "../webview2-runtime"
       }
     }
   }

@@ -8,7 +8,7 @@
 
 - **Tauri 2**
   - 前端通过 `window.__TAURI__.core.invoke` / `event.listen` 与后端通信
-  - Tray、窗口行为、IPC 注册集中在 `src-tauri/src/lib.rs`
+  - `src-tauri/src/lib.rs` 负责装配；实际执行面分散在 `handlers.rs`、`connection.rs`、`monitor.rs`、`license.rs`、`factory.rs`、`dloader.rs`
 
 ### 1.2 前端
 
@@ -32,6 +32,7 @@
   - 串口 transport
 - **rumqttc**
   - 可选 MQTT 后台上报
+  - broker / port / 认证信息必须显式提供，不能硬编码默认生产值
 - **reqwest**
   - 工厂模式设备 HTTP 通信
 - **chrono**
@@ -83,8 +84,10 @@ src-tauri/src/dloader.rs
   - serial
   - tcp
   - websocket
+- WebSocket 网关允许匿名接入；若目标网关要求认证，用户名/密码必须由用户显式提供，禁止补默认值
 - `mqtt.rs` 是可选后台上报模块，不是第二条业务主路径
 - `factory.rs` 和 `dloader.rs` 是辅助业务模块，不得绕过 HAL 新建 AT 队列
+- MQTT 仅在显式设置 `MODEM_CAT_MQTT_HOST`、`MODEM_CAT_MQTT_PORT`，以及可选的 `MODEM_CAT_MQTT_USERNAME` / `MODEM_CAT_MQTT_PASSWORD` 后才允许启用
 
 ## 4. 设计约束与技术栈关系
 

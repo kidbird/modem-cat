@@ -2,7 +2,6 @@
 // 格式: { unisoc: [...], qualcomm: [...] }
 // 每个条目: { cmd, category, desc, syntax, response, params[], example, note }
 window.AT_DB = {
-    const AT_DB = {
       unisoc: [
         { cmd:'AT', category:'通用命令', desc:'测试 AT 串口通信是否正常',
           syntax:'AT',
@@ -314,7 +313,7 @@ window.AT_DB = {
             {name:'gw',desc:'网关 IP',values:'如 "192.168.8.1"'},
             {name:'start',desc:'地址池起始 IP',values:'如 "192.168.8.2"'},
             {name:'end',desc:'地址池结束 IP',values:'如 "192.168.8.254"'}],
-          example:'AT+QCFG="lanip_ex"\n+QCFG: "lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254"\nOK', note:'展锐平台可能支持 4 字段（含子网掩码）。修改后需重启生效，且需确保不与其他网段冲突。' },
+          example:'AT+QCFG="lanip_ex"\n+QCFG: "lanip_ex","192.168.8.1","192.168.8.2","192.168.8.254"\nOK', note:'展锐平台可能支持 4 字段（含子网掩码）。修改后需重启生效，且需确保不与其他网段冲突。ASR 平台使用 AT+QCFG="lanip"（无 _ex 后缀），响应格式：+QCFG: "lanip","<gw>","<mask>","<start>","<end>",<lease_time>。' },
         { cmd:'AT+QCFG="5glan"', category:'接口配置', desc:'查询或设置 5GLAN（5G 局域网）功能',
           syntax:'AT+QCFG="5glan"\nAT+QCFG="5glan",<cid>,<state>,1',
           response:'+QCFG: "5glan",<cid>,<state>\nOK',

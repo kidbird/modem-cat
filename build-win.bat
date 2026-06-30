@@ -110,6 +110,7 @@ echo ─────────────────────────
 echo.
 
 cd src-tauri
+set NO_PROXY=go.microsoft.com,*.microsoft.com
 cargo tauri build
 if errorlevel 1 (
     echo.

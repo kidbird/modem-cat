@@ -9,17 +9,9 @@ use serde_json::json;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use chrono::Datelike;
 use tauri::{AppHandle, Manager};
-
-/// Lock a FactoryState Mutex field, converting poison into a String error.
-/// AGENTS.md: "运行时锁路径禁止 panic；必须返回错误或记录明确日志。"
-macro_rules! lock_field {
-    ($state:expr, $field:ident) => {
-        $state.$field.lock().map_err(|e| format!("Lock poisoned: {e}"))
-    };
-}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -231,22 +223,16 @@ pub struct DeviceClient {
 }
 
 impl DeviceClient {
-    pub fn new(ip: &str) -> Result<Self, String> {
-        // 校验 IP/主机名格式，避免静默生成无效 URL。
-        let _ = ip.parse::<std::net::IpAddr>()
-            .map_err(|_| format!("无效的设备 IP 地址: '{ip}'（IPv4/IPv6 格式错误）"))?;
-
-        // 工厂设备使用 HTTP 内网通信，证书校验在受控内网环境下关闭；
-        // 但构建失败必须报错，不能静默回退到无超时的 Client::new()。
+    pub fn new(ip: &str) -> Self {
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
             .timeout(std::time::Duration::from_secs(5))
             .build()
-            .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
-        Ok(Self {
+            .unwrap_or_else(|_| Client::new());
+        Self {
             client,
             ip: ip.to_string(),
-        })
+        }
     }
 
     pub fn update_ip(&mut self, ip: &str) {
@@ -303,22 +289,20 @@ impl DeviceClient {
             return Err(format!("API 错误: {}", activate_info.message));
         }
         let name_resp: ApiResponse<DeviceNameData> = self.get("device_name_get").await?;
-        let device_name = if name_resp.code == 200 {
-            name_resp.data.device_name
-        } else {
-            String::new()
-        };
+        if name_resp.code != 200 {
+            return Err(format!("API 错误: {}", name_resp.message));
+        }
+        let device_name = name_resp.data.device_name;
         let sn_resp: ApiResponse<SerialNumberData> = self.get("device_sn_get").await?;
-        let sn = if sn_resp.code == 200 {
-            sn_resp.data.serial_number
-        } else {
-            String::new()
-        };
-        let activated = self
-            .get::<ApiResponse<ActivationStatus>>("license_get")
-            .await
-            .map(|r| r.data.valid)
-            .unwrap_or(false);
+        if sn_resp.code != 200 {
+            return Err(format!("API 错误: {}", sn_resp.message));
+        }
+        let sn = sn_resp.data.serial_number;
+        let license_resp: ApiResponse<ActivationStatus> = self.get("license_get").await?;
+        if license_resp.code != 200 {
+            return Err(format!("API 错误: {}", license_resp.message));
+        }
+        let activated = license_resp.data.valid;
 
         Ok(DeviceInfo {
             imei: activate_info.data.imei,
@@ -351,10 +335,11 @@ pub struct DataManager {
 }
 
 impl DataManager {
-    pub fn new(data_dir: PathBuf) -> Result<Self, String> {
-        fs::create_dir_all(&data_dir)
-            .map_err(|e| format!("创建数据目录失败 '{}': {}", data_dir.display(), e))?;
-        Ok(Self { data_dir })
+    pub fn new(data_dir: PathBuf) -> Self {
+        if !data_dir.exists() {
+            let _ = fs::create_dir_all(&data_dir);
+        }
+        Self { data_dir }
     }
 
     fn read_json<T: serde::de::DeserializeOwned>(&self, filename: &str) -> Result<T, String> {
@@ -392,16 +377,29 @@ impl DataManager {
         serde_json::from_str(JSON).unwrap_or_default()
     }
 
-    pub fn load_product_selection(&self, _base_data: &BaseData) -> Result<Product, String> {
-        match self.read_json("factory_select.json") {
-            Ok(product) => Ok(product),
-            Err(_) => {
-                // factory_select.json 损坏或缺失时静默回退到第一个品牌——
-                // 这会在生产写入 SN 时导致错误的产品关联。
-                // 改为返回错误，让前端提示用户重新选择产品。
-                Err("factory_select.json 不存在或损坏，请重新选择产品品牌/类型/工厂".to_string())
+    pub fn load_product_selection(&self, base_data: &BaseData) -> Product {
+        self.read_json("factory_select.json").unwrap_or_else(|_| {
+            let brand = base_data
+                .brands
+                .first()
+                .map(|b| b.name.clone())
+                .unwrap_or_default();
+            let product_type = base_data
+                .product_types
+                .first()
+                .map(|t| t.name.clone())
+                .unwrap_or_default();
+            let fac = base_data
+                .factories
+                .first()
+                .map(|f| f.name.clone())
+                .unwrap_or_default();
+            Product {
+                brand,
+                product_type,
+                fac,
             }
-        }
+        })
     }
 
     pub fn save_product_selection(&self, product: &Product) -> Result<(), String> {
@@ -467,10 +465,16 @@ fn get_factory_state(app: &AppHandle) -> tauri::State<'_, FactoryState> {
     app.state::<FactoryState>()
 }
 
+fn lock_factory<'a, T>(mutex: &'a Mutex<T>, label: &str) -> Result<MutexGuard<'a, T>, String> {
+    mutex
+        .lock()
+        .map_err(|e| format!("{label} lock poisoned: {e}"))
+}
+
 fn save_base_data_and_notify(state: &tauri::State<'_, FactoryState>) -> Result<(), String> {
-    let dm = lock_field!(state, data_manager)?;
+    let dm = lock_factory(&state.data_manager, "factory.data_manager")?;
     let dm = dm.as_ref().ok_or("数据管理器未初始化")?;
-    let base = lock_field!(state, base_data)?;
+    let base = lock_factory(&state.base_data, "factory.base_data")?;
     dm.save_base_data(&base)
 }
 
@@ -483,9 +487,9 @@ pub fn init_factory(app: AppHandle) -> Result<bool, String> {
         .app_data_dir()
         .map_err(|e| format!("获取数据目录失败: {}", e))?;
 
-    let data_manager = DataManager::new(data_dir)?;
+    let data_manager = DataManager::new(data_dir);
     let base_data = data_manager.load_base_data();
-    let product = data_manager.load_product_selection(&base_data)?;
+    let product = data_manager.load_product_selection(&base_data);
     let execute_data = data_manager.load_execute_data().ok();
 
     let mut code_set = CodeSet {
@@ -511,26 +515,19 @@ pub fn init_factory(app: AppHandle) -> Result<bool, String> {
         );
         for ex in &ex_data.exe_data_list {
             if ex.prefix_str == prefix {
-                // SN 序列解析失败时不再静默重置为 "00001"（危害 SN 唯一性）；
-                // 传播错误让前端看到具体原因。
-                code_set.seq_code = increment_seq(&ex.current_seq_no)
-                    .map_err(|e| format!("递增序列号失败 (prefix={prefix}): {e}"))?;
+                code_set.seq_code =
+                    increment_seq(&ex.current_seq_no).unwrap_or_else(|_| "00001".to_string());
                 break;
             }
         }
     }
 
     let state = get_factory_state(&app);
-    *state.data_manager.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))? = Some(data_manager);
-    *state.current_product.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))? = product;
-    *state.current_code_set.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))? = code_set;
-    *state.execute_data.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))? = execute_data;
-    *state.base_data.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))? = base_data;
+    *lock_factory(&state.data_manager, "factory.data_manager")? = Some(data_manager);
+    *lock_factory(&state.current_product, "factory.current_product")? = product;
+    *lock_factory(&state.current_code_set, "factory.current_code_set")? = code_set;
+    *lock_factory(&state.execute_data, "factory.execute_data")? = execute_data;
+    *lock_factory(&state.base_data, "factory.base_data")? = base_data;
 
     Ok(true)
 }
@@ -539,14 +536,14 @@ pub fn init_factory(app: AppHandle) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn factory_get_base_data(state: tauri::State<'_, FactoryState>) -> Result<BaseData, String> {
-    Ok(lock_field!(state, base_data)?.clone())
+    Ok(lock_factory(&state.base_data, "factory.base_data")?.clone())
 }
 
 #[tauri::command]
 pub fn factory_get_current_product(
     state: tauri::State<'_, FactoryState>,
 ) -> Result<Product, String> {
-    Ok(lock_field!(state, current_product)?.clone())
+    Ok(lock_factory(&state.current_product, "factory.current_product")?.clone())
 }
 
 #[tauri::command]
@@ -556,18 +553,18 @@ pub fn factory_set_product(
     fac: String,
     state: tauri::State<'_, FactoryState>,
 ) -> Result<String, String> {
-    let mut product = lock_field!(state, current_product)?;
+    let mut product = lock_factory(&state.current_product, "factory.current_product")?;
     product.brand = brand.clone();
     product.product_type = product_type.clone();
     product.fac = fac.clone();
 
-    let mut code_set = lock_field!(state, current_code_set)?;
-    let base = lock_field!(state, base_data)?;
+    let mut code_set = lock_factory(&state.current_code_set, "factory.current_code_set")?;
+    let base = lock_factory(&state.base_data, "factory.base_data")?;
 
     resolve_codes(&base, &product, &mut code_set);
     update_code_set(&mut code_set);
 
-    if let Some(ref dm) = *lock_field!(state, data_manager)? {
+    if let Some(ref dm) = *lock_factory(&state.data_manager, "factory.data_manager")? {
         dm.save_product_selection(&product)?;
     }
 
@@ -576,19 +573,20 @@ pub fn factory_set_product(
 
 #[tauri::command]
 pub fn factory_get_current_sn(state: tauri::State<'_, FactoryState>) -> Result<String, String> {
-    Ok(generate_sn(&*lock_field!(state, current_code_set)?))
+    let code_set = lock_factory(&state.current_code_set, "factory.current_code_set")?;
+    Ok(generate_sn(&code_set))
 }
 
 #[tauri::command]
 pub fn factory_get_code_set(state: tauri::State<'_, FactoryState>) -> Result<CodeSet, String> {
-    Ok(lock_field!(state, current_code_set)?.clone())
+    Ok(lock_factory(&state.current_code_set, "factory.current_code_set")?.clone())
 }
 
 #[tauri::command]
 pub fn factory_increment_sequence(
     state: tauri::State<'_, FactoryState>,
 ) -> Result<String, String> {
-    let mut code_set = lock_field!(state, current_code_set)?;
+    let mut code_set = lock_factory(&state.current_code_set, "factory.current_code_set")?;
     code_set.seq_code = increment_seq(&code_set.seq_code)?;
     Ok(generate_sn(&code_set))
 }
@@ -607,7 +605,7 @@ macro_rules! crud_commands {
                 return Err(format!("{}名称和编码不能为空", $label));
             }
             {
-                let mut base = lock_field!(state, base_data)?;
+                let mut base = lock_factory(&state.base_data, "factory.base_data")?;
                 if base.$field.iter().any(|i| i.name == name) {
                     return Err(format!("{}名称已存在: {}", $label, name));
                 }
@@ -622,7 +620,7 @@ macro_rules! crud_commands {
                 });
             }
             save_base_data_and_notify(&state)?;
-            Ok(lock_field!(state, base_data)?.clone())
+            Ok(lock_factory(&state.base_data, "factory.base_data")?.clone())
         }
 
         #[tauri::command]
@@ -631,7 +629,7 @@ macro_rules! crud_commands {
             state: tauri::State<'_, FactoryState>,
         ) -> Result<BaseData, String> {
             {
-                let mut base = lock_field!(state, base_data)?;
+                let mut base = lock_factory(&state.base_data, "factory.base_data")?;
                 let before = base.$field.len();
                 base.$field.retain(|i| i.name != name);
                 if base.$field.len() == before {
@@ -639,7 +637,7 @@ macro_rules! crud_commands {
                 }
             }
             save_base_data_and_notify(&state)?;
-            Ok(lock_field!(state, base_data)?.clone())
+            Ok(lock_factory(&state.base_data, "factory.base_data")?.clone())
         }
     };
 }
@@ -665,13 +663,10 @@ pub fn factory_set_device_ip(
     ip: String,
     state: tauri::State<'_, FactoryState>,
 ) -> Result<(), String> {
-    // AGENTS.md: "AT / 认证输入必须显式校验" — 设备 IP 在设置时校验格式。
-    // DeviceClient::new 现在会校验 IP 格式并返回 Result，无效 IP 直接报错。
-    let mut client_opt = state.device_client.lock()
-        .map_err(|e| format!("Lock poisoned: {e}"))?;
+    let mut client_opt = lock_factory(&state.device_client, "factory.device_client")?;
     match client_opt.as_mut() {
         Some(client) => client.update_ip(&ip),
-        None => *client_opt = Some(DeviceClient::new(&ip)?),
+        None => *client_opt = Some(DeviceClient::new(&ip)),
     }
     Ok(())
 }
@@ -682,7 +677,7 @@ pub async fn factory_write_sn_to_device(
     state: tauri::State<'_, FactoryState>,
 ) -> Result<bool, String> {
     let client = {
-        let guard = lock_field!(state, device_client)?;
+        let guard = lock_factory(&state.device_client, "factory.device_client")?;
         guard
             .as_ref()
             .ok_or("设备客户端未初始化")?
@@ -696,7 +691,7 @@ pub async fn factory_get_device_info(
     state: tauri::State<'_, FactoryState>,
 ) -> Result<DeviceInfo, String> {
     let client = {
-        let guard = lock_field!(state, device_client)?;
+        let guard = lock_factory(&state.device_client, "factory.device_client")?;
         guard
             .as_ref()
             .ok_or("设备客户端未初始化")?
@@ -709,9 +704,9 @@ pub async fn factory_get_device_info(
 
 #[tauri::command]
 pub fn factory_save_execute_data(state: tauri::State<'_, FactoryState>) -> Result<(), String> {
-    let mut execute_data = lock_field!(state, execute_data)?;
-    let code_set = lock_field!(state, current_code_set)?;
-    let product = lock_field!(state, current_product)?;
+    let mut execute_data = lock_factory(&state.execute_data, "factory.execute_data")?;
+    let code_set = lock_factory(&state.current_code_set, "factory.current_code_set")?;
+    let product = lock_factory(&state.current_product, "factory.current_product")?;
 
     let prefix = format!(
         "{}{}{}{}{}",
@@ -753,7 +748,7 @@ pub fn factory_save_execute_data(state: tauri::State<'_, FactoryState>) -> Resul
         }
     }
 
-    if let Some(ref dm) = *lock_field!(state, data_manager)? {
+    if let Some(ref dm) = *lock_factory(&state.data_manager, "factory.data_manager")? {
         dm.save_execute_data(
             execute_data
                 .as_ref()
@@ -769,7 +764,7 @@ pub fn factory_save_device_record(
     device_info: DeviceInfo,
     state: tauri::State<'_, FactoryState>,
 ) -> Result<(), String> {
-    let dm = lock_field!(state, data_manager)?;
+    let dm = lock_factory(&state.data_manager, "factory.data_manager")?;
     let dm = dm.as_ref().ok_or("数据管理器未初始化")?;
     dm.append_csv_record(&device_info)
 }

@@ -126,11 +126,21 @@ build-win.bat             # 在 Windows 机器上执行
 cargo check --workspace          # 最快，仅类型检查，不链接
 cargo build --workspace          # Debug 构建
 cargo test --workspace           # 运行所有 Rust 测试
+bash scripts/verify-docs.sh      # 文档 / 约束 / 护栏一致性检查
 ```
 
 ---
 
 ## 六、常见问题
+
+### MQTT 开关启用后立即报配置错误
+
+这是预期行为。当前代码禁止内置公开默认 broker / 凭据；若要启用 MQTT，需先显式设置：
+
+- `MODEM_CAT_MQTT_HOST`
+- `MODEM_CAT_MQTT_PORT`
+- `MODEM_CAT_MQTT_USERNAME`（可选）
+- `MODEM_CAT_MQTT_PASSWORD`（可选，但若设置用户名则必须同时设置）
 
 ### macOS: `cargo tauri build` 提示找不到 icon
 

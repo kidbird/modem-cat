@@ -469,15 +469,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--bg-tertiary);
       padding: 10px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-      transition: all 0.15s ease;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .info-row:last-child {
+      border-bottom: none;
     }
     .info-row:hover {
-      border-color: var(--accent);
-      box-shadow: 0 2px 8px var(--accent-glow);
+      background: var(--bg-tertiary);
     }
     .info-row .info-label {
       font-size: 12px;
@@ -498,12 +497,14 @@
     .info-value.data { color: var(--accent); font-weight: 700; }
 
     /* ── Settings page ── */
-    .settings-list { display: flex; flex-direction: column; gap: 2px; }
+    .settings-list-2col { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; }
+    .settings-list-2col > .settings-row:first-child { grid-column: 1 / -1; }
+    .settings-row-full { grid-column: 1 / -1; }
     .settings-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 14px 16px;
+      padding: 12px 14px;
       border-radius: 8px;
       background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
@@ -511,8 +512,8 @@
     .settings-label {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 14px;
+      gap: 8px;
+      font-size: 13px;
       font-weight: 600;
       color: var(--text-primary);
     }
@@ -1307,6 +1308,19 @@ body {
   background: var(--bg-primary) !important;
   border-color: var(--text-muted) !important;
 }
+.btn-flat {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-flat:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+  border-radius: 6px;
+}
 .btn-danger {
   background: transparent !important;
   border-color: var(--danger) !important;
@@ -1370,12 +1384,16 @@ body {
 .info-value.data { color: var(--accent) !important; font-weight: 600 !important; }
 
 .info-row {
-  border-radius: 10px !important;
+  border-radius: 0 !important;
   padding: 11px 14px !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+.info-row:last-child {
+  border-bottom: none !important;
 }
 .info-row:hover {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px var(--accent-glow) !important;
+  background: var(--bg-tertiary) !important;
+  box-shadow: none !important;
 }
 .info-row .info-label {
   font-size: 12.5px !important;
@@ -1417,6 +1435,8 @@ body {
   border-radius: 6px !important;
   font-weight: 500 !important;
   color: var(--text-muted) !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
   background: transparent !important;
   border: none !important;
 }
@@ -1429,8 +1449,8 @@ body {
 [data-theme="dark"] .toggle-btn.active { box-shadow: 0 1px 2px rgba(0,0,0,0.30) !important; }
 
 /* ── 10. Settings ────────────────────────────────────────── */
-.settings-row { border-radius: 10px !important; padding: 12px 14px !important; }
-.settings-icon { color: var(--accent) !important; opacity: 0.85 !important; }
+.settings-row { border-radius: 10px !important; padding: 11px 12px !important; }
+.settings-icon { color: var(--accent) !important; opacity: 0.85 !important; width: 15px !important; height: 15px !important; }
 .settings-select { border-radius: 8px !important; }
 
 /* ── 11. Terminal (AT 调试) ──────────────────────────────── */
@@ -1690,3 +1710,86 @@ body {
   font-size: 11px;
   color: var(--text-secondary);
 }
+
+/* ── Online Monitoring Dashboard ── */
+.monitor-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-start;
+}
+.monitor-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 20px;
+}
+.monitor-control-group label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.monitor-control-group span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.monitor-select {
+  padding: 4px 8px !important;
+  width: 90px !important;
+  height: 30px !important;
+  font-size: 13px !important;
+}
+.monitor-badges-container {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+.monitor-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.monitor-badge.rsrp {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  color: var(--cyan);
+}
+.monitor-badge.sinr {
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  color: var(--accent);
+}
+[data-theme="light"] .monitor-badge.rsrp {
+  background: rgba(8, 145, 178, 0.1);
+  border: 1px solid rgba(8, 145, 178, 0.25);
+}
+[data-theme="light"] .monitor-badge.sinr {
+  background: rgba(234, 88, 12, 0.1);
+  border: 1px solid rgba(234, 88, 12, 0.25);
+}
+.monitor-badge span {
+  font-family: 'JetBrains Mono', monospace;
+}
+.monitor-chart-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 280px;
+}
+.monitor-chart-panel .panel-header {
+  margin-bottom: 8px;
+}
+.monitor-chart-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 180px;
+  width: 100%;
+}
+.monitor-chart-wrapper canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+

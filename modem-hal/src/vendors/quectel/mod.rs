@@ -40,6 +40,23 @@ fn send_and_check(t: &mut dyn AtTransport, cmd: &str) -> Result<String, String> 
     }
 }
 
+fn query_required_qcfg_bool(
+    t: &mut dyn AtTransport,
+    command: &str,
+    key: &str,
+) -> Result<bool, String> {
+    let response = send_and_delay(t, command)?;
+    parse_qcfg_int(&response, key)
+        .map(|value| value == 1)
+        .ok_or_else(|| format!("Failed to parse live {} state from {}", key, response.trim()))
+}
+
+fn query_required_qcfg_usbcfg_adb(t: &mut dyn AtTransport) -> Result<bool, String> {
+    let response = t.send_at(r#"AT+QCFG="usbcfg""#)?;
+    parse_qcfg_usbcfg_adb(&response)
+        .ok_or_else(|| format!("Failed to parse live usbcfg state from {}", response.trim()))
+}
+
 /// Parse `AT+QNWLOCK` or `AT+QNWLOCKFREQ` response.
 /// Returns (arfcn, pci) pairs for each active lock entry.
 fn parse_qnwlock_response(resp: &str, prefix: &str) -> Vec<(String, String)> {
@@ -233,12 +250,18 @@ impl ModemVendor for QuectelModem {
         let (ap_baseline, cp_baseline) = parse_qbaseline(&baseline_resp);
 
         let temp_resp = t.send_at("AT+QTEMP")?;
-        let (soc_temp, pa_temp) = match self.chip {
-            QuectelChip::UniSoc => {
-                let info = parse_qtemp_unisoc(&temp_resp);
-                (info.soc_temp, info.pa_temp)
+        let is_asr = self.model.to_uppercase().contains("RG255");
+        let (soc_temp, pa_temp) = if is_asr {
+            let info = parse_qtemp_asr(&temp_resp);
+            (info.soc_temp, info.pa_temp)
+        } else {
+            match self.chip {
+                QuectelChip::UniSoc => {
+                    let info = parse_qtemp_unisoc(&temp_resp);
+                    (info.soc_temp, info.pa_temp)
+                }
+                QuectelChip::Qualcomm => parse_qtemp_rich(&temp_resp),
             }
-            QuectelChip::Qualcomm => parse_qtemp_rich(&temp_resp),
         };
 
         Ok(HardwareInfo {
@@ -254,9 +277,14 @@ impl ModemVendor for QuectelModem {
 
     fn query_temperature(&mut self, t: &mut dyn AtTransport) -> Result<TemperatureInfo, String> {
         let resp = send_and_delay(t, "AT+QTEMP")?;
-        match self.chip {
-            QuectelChip::UniSoc => Ok(parse_qtemp_unisoc(&resp)),
-            QuectelChip::Qualcomm => Ok(parse_qtemp(&resp)),
+        let is_asr = self.model.to_uppercase().contains("RG255");
+        if is_asr {
+            Ok(parse_qtemp_asr(&resp))
+        } else {
+            match self.chip {
+                QuectelChip::UniSoc => Ok(parse_qtemp_unisoc(&resp)),
+                QuectelChip::Qualcomm => Ok(parse_qtemp(&resp)),
+            }
         }
     }
 
@@ -419,41 +447,19 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_feature_toggles(&mut self, t: &mut dyn AtTransport) -> Result<FeatureToggles, String> {
-        let pcie_mode = match send_and_delay(t, r#"AT+QCFG="pcie/mode""#) {
-            Ok(r) => parse_qcfg_int(&r, "pcie/mode").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
-        let ethernet = match send_and_delay(t, r#"AT+QCFG="ethernet""#) {
-            Ok(r) => parse_qcfg_int(&r, "ethernet").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
-        let proxyarp = match send_and_delay(t, r#"AT+QCFG="proxyarp""#) {
-            Ok(r) => parse_qcfg_int(&r, "proxyarp").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
-        let uart_at = match send_and_delay(t, r#"AT+QCFG="uartat""#) {
-            Ok(r) => parse_qcfg_int(&r, "uartat").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
+        let pcie_mode = query_required_qcfg_bool(t, r#"AT+QCFG="pcie/mode""#, "pcie/mode")?;
+        let ethernet = query_required_qcfg_bool(t, r#"AT+QCFG="ethernet""#, "ethernet")?;
+        let proxyarp = query_required_qcfg_bool(t, r#"AT+QCFG="proxyarp""#, "proxyarp")?;
+        let uart_at = query_required_qcfg_bool(t, r#"AT+QCFG="uartat""#, "uartat")?;
         let eth_at = match self.chip {
-            QuectelChip::Qualcomm => match send_and_delay(t, r#"AT+QCFG="eth_at""#) {
-                Ok(r) => parse_qcfg_int(&r, "eth_at").unwrap_or(0) == 1,
-                Err(_) => false,
-            },
+            QuectelChip::Qualcomm => {
+                query_required_qcfg_bool(t, r#"AT+QCFG="eth_at""#, "eth_at")?
+            }
             QuectelChip::UniSoc => false,
         };
-        let adb = match t.send_at(r#"AT+QCFG="usbcfg""#) {
-            Ok(r) => parse_qcfg_usbcfg_adb(&r),
-            Err(_) => false,
-        };
-        let napt = match send_and_delay(t, r#"AT+QCFG="napt""#) {
-            Ok(r) => parse_qcfg_int(&r, "napt").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
-        let netmask = match send_and_delay(t, r#"AT+QCFG="netmask""#) {
-            Ok(r) => parse_qcfg_int(&r, "netmask").unwrap_or(0) == 1,
-            Err(_) => false,
-        };
+        let adb = query_required_qcfg_usbcfg_adb(t)?;
+        let napt = query_required_qcfg_bool(t, r#"AT+QCFG="napt""#, "napt")?;
+        let netmask = query_required_qcfg_bool(t, r#"AT+QCFG="netmask""#, "netmask")?;
 
         Ok(FeatureToggles {
             pcie_mode,
@@ -509,11 +515,15 @@ impl ModemVendor for QuectelModem {
                 let resp = t.send_at(r#"AT+QCFG="usbcfg""#)?;
                 for line in extract_data_lines(&resp) {
                     if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
-                        let mut parts: Vec<&str> = rest.split(',').collect();
+                        let mut parts: Vec<String> = rest.split(',').map(|s| s.to_string()).collect();
                         if parts.len() >= 2 {
+                            // Ensure correct VID/PID for this model
+                            let (vid, pid) = ChipsetVendor::usb_id_for_model(&self.model);
+                            parts[0] = format!("0x{:04X}", vid);
+                            parts[1] = format!("0x{:04X}", pid);
                             // ADB flag is the second-to-last parameter
                             let adb_idx = parts.len() - 2;
-                            parts[adb_idx] = if on { "1" } else { "0" };
+                            parts[adb_idx] = if on { "1".to_string() } else { "0".to_string() };
                             let cmd = format!(r#"AT+QCFG="usbcfg",{}"#, parts.join(","));
                             let resp2 = t.send_at(&cmd)?;
                             if !is_ok(&resp2) {
@@ -795,7 +805,8 @@ impl ModemVendor for QuectelModem {
 
     fn query_nat_mode(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
         let r = send_and_delay(t, r#"AT+QCFG="nat""#)?;
-        Ok(parse_qcfg_int(&r, "nat").unwrap_or(0))
+        parse_qcfg_int(&r, "nat")
+            .ok_or_else(|| format!("Failed to parse live nat state from {}", r.trim()))
     }
 
     fn set_nat_mode(&mut self, t: &mut dyn AtTransport, mode: i32) -> Result<(), String> {
@@ -917,18 +928,42 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_modem_status(&mut self, t: &mut dyn AtTransport) -> Result<ModemStatus, String> {
-        // ── Phase 1: AT I/O — send all commands back-to-back, no parsing in between ──
         let cpin_raw = t.send_at("AT+CPIN?")?;
         let imei_raw = t.send_at("AT+CGSN")?;
 
+        let sim_status = parse_cpin(&cpin_raw);
         let iccid_cmd = match self.chip {
             QuectelChip::Qualcomm => "AT+ICCID",
             QuectelChip::UniSoc => "AT+CCID",
         };
-        let iccid_raw = t.send_at(iccid_cmd)?;
-        let iccid = parse_iccid(&iccid_raw);
-        if iccid.is_empty() {
-            return Err(format!("{} returned no parsable ICCID", iccid_cmd));
+        // ICCID only makes sense with a usable SIM. Gate on READY so we don't
+        // send AT+ICCID/AT+CCID when there is no card (NO SIM, "SIM not
+        // inserted", SIM PIN, etc. — the latter can come back as a plain
+        // +CPIN data line that parse_cpin returns verbatim, not "NO SIM").
+        // An ICCID read failure must NOT abort the status query: IMEI,
+        // operator and registration are still valid and the frontend shows
+        // '--' for iccid when SIM is not READY. The strict contract lives in
+        // the dedicated query_iccid() command instead.
+        let iccid = if sim_status == "READY" {
+            match t.send_at(iccid_cmd) {
+                Ok(iccid_raw) => {
+                    let parsed = parse_iccid(&iccid_raw);
+                    if parsed.is_empty() {
+                        log::warn!(
+                            "SIM is READY but {} returned no parsable ICCID: {:?}",
+                            iccid_cmd,
+                            iccid_raw.trim()
+                        );
+                    }
+                    parsed
+                }
+                Err(e) => {
+                    log::warn!("{} failed, leaving ICCID empty: {}", iccid_cmd, e);
+                    String::new()
+                }
+            }
+        } else {
+            String::new()
         };
 
         let qeng_raw = t.send_at(r#"AT+QENG="servingcell""#)?;
@@ -956,7 +991,6 @@ impl ModemVendor for QuectelModem {
         };
 
         // ── Phase 2: parse — AT bus is free, all CPU work happens here ──
-        let sim_status = parse_cpin(&cpin_raw);
         let imei = parse_cgsn(&imei_raw);
 
         let qualcomm_bw = matches!(self.chip, QuectelChip::Qualcomm);
@@ -1262,5 +1296,124 @@ mod tests {
 
         assert!(modem.query_iccid(&mut transport).is_err());
         assert_eq!(transport.sent, vec!["AT+CCID"]);
+    }
+
+    /// UniSoc status query sequence responses (in send order), excluding the
+    /// optional ICCID slot which each test fills in or omits as needed.
+    ///
+    /// Order (mod.rs query_modem_status, UniSoc/ASR):
+    ///   AT+CPIN?  AT+CGSN  [AT+CCID]  AT+QENG="servingcell"
+    ///   AT+COPS?  AT+QANTRSSI?  AT+CGACT?
+    const NO_SIM_PREFIX: &[&str] = &["+CME ERROR: 10", "865123456789011"];
+    const NO_SIM_SUFFIX: &[&str] = &[
+        "+QENG: \"servingcell\",\"NOCONN\"",
+        "+COPS: 0",
+        "+QANTRSSI: 0,0,0,0",
+        "+CGACT: 1,0",
+    ];
+    const READY_PREFIX: &[&str] = &["+CPIN: READY", "865123456789011"];
+    const READY_SUFFIX: &[&str] = &[
+        "+QENG: \"servingcell\",\"NOCONN\"",
+        "+COPS: 0,2,\"46001\"",
+        "+QANTRSSI: 70,60,50,40",
+        "+CGACT: 1,1",
+    ];
+
+    #[test]
+    fn query_modem_status_skips_iccid_when_no_sim() {
+        // CPIN returns +CME ERROR → parse_cpin() => "NO SIM".
+        // ICCID must NOT be queried; IMEI / rest still returned.
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut responses: Vec<&str> = NO_SIM_PREFIX.to_vec();
+        responses.extend_from_slice(NO_SIM_SUFFIX);
+        let mut transport = MockTransport::new(responses);
+
+        let status = modem.query_modem_status(&mut transport).expect("ok");
+
+        assert_eq!(status.sim_status, "NO SIM");
+        assert!(!transport.sent.iter().any(|c| c == "AT+CCID"));
+        assert_eq!(status.imei, "865123456789011");
+        assert_eq!(status.iccid, "");
+    }
+
+    #[test]
+    fn query_modem_status_skips_iccid_when_sim_not_ready() {
+        // ASR/UniSoc report "no SIM" via a DATA line (not an ERROR line):
+        //   +CPIN: SIM not inserted
+        // parse_cpin() returns the literal string (not "NO SIM"), so the old
+        // `!= "NO SIM"` gate still attempted AT+CCID and failed. The new
+        // gate keys off READY, so ICCID is skipped.
+        let mut modem = QuectelModem::unisoc("RG255AA".to_string());
+        let mut responses: Vec<&str> = vec!["+CPIN: SIM not inserted", "865123456789011"];
+        responses.extend_from_slice(NO_SIM_SUFFIX);
+        let mut transport = MockTransport::new(responses);
+
+        let status = modem.query_modem_status(&mut transport).expect("ok");
+
+        assert_eq!(status.sim_status, "SIM not inserted");
+        assert!(!transport.sent.iter().any(|c| c == "AT+CCID"));
+        assert_eq!(status.imei, "865123456789011");
+        assert_eq!(status.iccid, "");
+    }
+
+    #[test]
+    fn query_modem_status_continues_when_iccid_fails_on_ready() {
+        // SIM READY but AT+CCID returns +CME ERROR (e.g. SIM rejected / not
+        // provisioned yet): ICCID failure must NOT abort the whole status
+        // query — IMEI/operator/registration are still returned.
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut responses: Vec<&str> = READY_PREFIX.to_vec();
+        responses.push("+CME ERROR: 10");
+        responses.extend_from_slice(READY_SUFFIX);
+        let mut transport = MockTransport::new(responses);
+
+        let status = modem.query_modem_status(&mut transport).expect("ok");
+
+        assert_eq!(status.sim_status, "READY");
+        assert_eq!(status.imei, "865123456789011");
+        assert_eq!(status.iccid, "");
+    }
+
+    #[test]
+    fn query_feature_toggles_errors_when_qcfg_parse_fails() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+QCFG: \"pcie/mode\",oops\nOK",
+        ]);
+
+        let err = modem
+            .query_feature_toggles(&mut transport)
+            .expect_err("invalid live toggle response must not become false");
+
+        assert!(err.contains("pcie/mode"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn query_feature_toggles_errors_when_live_read_fails() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec!["ERROR"]);
+
+        let err = modem
+            .query_feature_toggles(&mut transport)
+            .expect_err("live toggle query must not fall back to defaults");
+
+        assert!(
+            err.contains("pcie/mode") || err.contains("AT command failed"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn query_nat_mode_errors_when_qcfg_parse_fails() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+QCFG: \"nat\",oops\nOK",
+        ]);
+
+        let err = modem
+            .query_nat_mode(&mut transport)
+            .expect_err("invalid NAT response must not become 0");
+
+        assert!(err.contains("nat"), "unexpected error: {err}");
     }
 }

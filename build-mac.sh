@@ -69,6 +69,8 @@ echo ""
 
 START=$(date +%s)
 
+export NO_PROXY=go.microsoft.com,*.microsoft.com
+
 if $UNIVERSAL; then
   # 分别构建两架构，再用 lipo 合并 .app 内的可执行文件
   info "构建 aarch64-apple-darwin..."

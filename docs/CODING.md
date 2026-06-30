@@ -25,7 +25,7 @@ validate_raw_at_command(&command)?;
 ## 2. 敏感信息
 
 - 不允许给 PLMN lock、APN、HTTP auth、token 等敏感字段设置公开默认值。
-- 用户未传敏感字段时返回错误，不得 fallback 到 `"12345678"`、`"admin"`、空密码等默认值。
+- 用户未传敏感字段时返回错误或保持未配置，不得 fallback 到 `"12345678"`、`"admin"`、空密码、固定 MQTT broker 凭据等默认值。
 - 所有进入 AT 日志的命令必须经过 `redact_at_command`；新增敏感 AT 指令时同步补 redaction 测试。
 
 ## 3. 前端入口
@@ -37,6 +37,7 @@ validate_raw_at_command(&command)?;
 
 - 结构性改动后同步更新 `docs/ARCHITECTURE.md`、`docs/CODE_MAP.md`、`docs/CALL_FLOW.md`。
 - 安全/稳定性问题状态同步更新 `docs/REVIEW.md`。
+- 修改认证、MQTT、WebSocket 连接行为时同步更新 `docs/TECH_STACK.md`、`docs/ARCHITECTURE.md`、`scripts/verify-docs.sh`。
 - 提交前至少运行：
 
 ```bash

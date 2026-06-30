@@ -230,6 +230,14 @@ pub struct DloaderState {
     pub child: Arc<Mutex<Option<CommandChild>>>,
 }
 
+fn lock_child_slot<'a>(
+    child: &'a Arc<Mutex<Option<CommandChild>>>,
+) -> Result<std::sync::MutexGuard<'a, Option<CommandChild>>, String> {
+    child
+        .lock()
+        .map_err(|e| format!("dloader.child lock poisoned: {e}"))
+}
+
 /// Start the firmware download: analyze PAC, enforce policy, spawn sidecar.
 #[tauri::command]
 pub async fn start_firmware_download(
@@ -255,7 +263,7 @@ pub async fn start_firmware_download(
     let state = app.state::<DloaderState>();
     let child_slot = state.child.clone();
     let mut rx = {
-        let mut guard = state.child.lock().unwrap();
+        let mut guard = lock_child_slot(&state.child)?;
         if guard.is_some() {
             return Err("下载正在进行中".to_string());
         }
@@ -314,7 +322,10 @@ pub async fn start_firmware_download(
                     );
                 }
                 CommandEvent::Terminated(payload) => {
-                    *child_slot.lock().unwrap() = None;
+                    match lock_child_slot(&child_slot) {
+                        Ok(mut guard) => *guard = None,
+                        Err(e) => log::warn!("Failed to clear dloader child slot: {}", e),
+                    }
                     let _ = app_for_task.emit(
                         "firmware-event",
                         FirmwareEvent::Terminated { code: payload.code },
@@ -332,7 +343,7 @@ pub async fn start_firmware_download(
 /// Kill the running download sidecar, if any.
 #[tauri::command]
 pub fn stop_firmware_download(state: State<'_, DloaderState>) -> Result<(), String> {
-    if let Some(child) = state.child.lock().unwrap().take() {
+    if let Some(child) = lock_child_slot(&state.child)?.take() {
         child.kill().map_err(|e| format!("停止失败: {e}"))?;
     }
     Ok(())

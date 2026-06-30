@@ -2668,7 +2668,10 @@
 
     async function factoryConnectDevice() {
       const ipInput = document.getElementById('factoryDeviceIp');
-      const ip = ipInput?.value?.trim() || '192.168.42.1';
+      // AGENTS.md: "敏感信息禁止公开默认值" — 设备 IP 未提供时提示用户，
+      // 不再 fallback 到硬编码的 192.168.42.1。
+      const ip = ipInput?.value?.trim();
+      if (!ip) { showToast('请先输入设备 IP', 'err'); return; }
       const statusEl = document.getElementById('factoryConnectStatus');
       try {
         if (statusEl) { statusEl.textContent = '连接中...'; statusEl.style.color = 'var(--warning)'; }

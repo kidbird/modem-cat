@@ -155,10 +155,11 @@ invoke('get_modem_status')
 ## 5. 数据连接流程
 
 ```
-invoke('connect_data', { cid: 1 })
+invoke('connect_data')
   │
-  └─→ lib.rs::connect_data  [with_vendor_cid! 宏]
+  └─→ lib.rs::connect_data  [spawn_blocking, inline transport+vendor+cid lock]
           │
+          └─→ current_data_cid(&data_cid)  (AtomicI32, lock-free load)
           └─→ vendor.connect_data(&mut transport, cid)
                   │
                   ├─ QuectelModem (Qualcomm) → qualcomm::connect_data
@@ -171,7 +172,7 @@ invoke('connect_data', { cid: 1 })
 ## 6. IP 查询流程
 
 ```
-invoke('get_ip_info', { cid: 1 })
+invoke('get_ip_info')
   │
   └─→ lib.rs::get_ip_info  [with_vendor_cid! 宏]
           │

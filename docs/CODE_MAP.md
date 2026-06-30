@@ -122,7 +122,7 @@
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
 | 进入时并发预读 | loadScenePage | `get_feature_toggles` + `get_nat_mode` + `get_usbnet_mode` |
-| 激活场景 | activateScene | `set_nat_mode` + `set_feature_toggle` × 3 + `set_usbnet_mode` |
+| 激活场景 | activateScene | `set_nat_mode` + `set_feature_toggle` × 2 + `set_usbnet_mode` |
 
 ### 2.7 系统设置页（`#page-settings`）
 

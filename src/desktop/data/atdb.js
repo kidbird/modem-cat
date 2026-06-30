@@ -274,8 +274,8 @@ window.AT_DB = {
           syntax:'AT+QCFG="nat"\nAT+QCFG="nat",<mode>',
           response:'+QCFG: "nat",<mode>\nOK',
           params:[
-            {name:'mode',desc:'网卡拨号模式',values:'0=网卡模式, 1=路由模式（NAT）, 2=网桥模式（手册§3.3.2）'}],
-          example:'AT+QCFG="nat",1\nOK', note:'网卡模式(0)为透传，路由模式(1)进行 NAT 转换，网桥模式(2)做二层桥接。切换后需重启生效，参数自动保存。与 napt 不同：nat 控制网卡拨号模式，napt 控制 NAT 转发开关。' },
+            {name:'mode',desc:'网卡拨号模式',values:'0=桥接模式, 2=路由模式（NAT）⚠️ 以 scene.js 实时下发值为准：nat=2 路由 / nat=0 桥接'}],
+          example:'AT+QCFG="nat",2\nOK', note:'路由模式(2)进行 NAT 转换，桥接模式(0)做二层桥接。切换后需重启生效，参数自动保存。与 napt 不同：nat 控制网卡拨号模式，napt 控制 NAT 转发开关。⚠️ 本条目数值已与 scene.js 情景模式权威源对齐（nat=2=路由，nat=0=桥接）。' },
         { cmd:'AT+QCFG="proxyarp"', category:'接口配置', desc:'查询或设置 Proxy ARP 代理功能',
           syntax:'AT+QCFG="proxyarp"\nAT+QCFG="proxyarp",<state>',
           response:'+QCFG: "proxyarp",<state>\nOK',
@@ -288,6 +288,12 @@ window.AT_DB = {
           params:[
             {name:'state',desc:'状态',values:'0=关闭串口AT, 1=开启串口AT'}],
           example:'AT+QCFG="uartat",1\nOK', note:'关闭后无法通过串口发送 AT 指令。生产环境可关闭以释放串口资源。' },
+        { cmd:'AT+QCFG="ims"', category:'接口配置', desc:'查询或设置 IMS/VoLTE 语音（ UniSoc）；仅前端快捷 AT 直发',
+          syntax:'AT+QCFG="ims"\nAT+QCFG="ims",<enable>',
+          response:'+QCFG: "ims",<enable>\nOK',
+          params:[
+            {name:'enable',desc:'VoLTE 开关',values:'0=关闭, 1=开启'}],
+          example:'AT+QCFG="ims",1\nOK', note:'【UniSoc 平台】开启/关闭 VoLTE 语音。查询响应 +QCFG: "ims",<enable>。当前由前端通过 send_raw_at 直发，HAL 命令层未实现专用 IPC。' },
         { cmd:'AT+QCFG="usbnet"', category:'接口配置', desc:'查询或设置 USB 网卡工作模式（手册§3.3.1）',
           syntax:'AT+QCFG="usbnet"\nAT+QCFG="usbnet",<mode>',
           response:'+QCFG: "usbnet",<mode>\nOK',
@@ -674,6 +680,13 @@ window.AT_DB = {
           params:[
             {name:'state',desc:'状态',values:'0=关闭, 1=开启'}],
           example:'AT+QCFG="eth_at",1\nOK', note:'开启后可通过以太网口发送 AT 指令，无需串口。仅高通平台支持。' },
+        { cmd:'AT+QCFG="ims"', category:'接口配置', desc:'查询或设置 IMS/VoLTE 语音（Qualcomm）；仅前端快捷 AT 直发',
+          syntax:'AT+QCFG="ims"\nAT+QCFG="ims",<mode>,<volte_cap>',
+          response:'+QCFG: "ims",<mode>,<volte_cap>\nOK',
+          params:[
+            {name:'mode',desc:'IMS 配置',values:'1=启用 IMS 配置'},
+            {name:'volte_cap',desc:'VoLTE 能力',values:'0=关闭 VoLTE, 1=开启 VoLTE'}],
+          example:'AT+QCFG="ims",1,1\nOK', note:'【Qualcomm 平台】开启 VoLTE 语音: AT+QCFG="ims",1,1；关闭: AT+QCFG="ims",2,0。查询响应 +QCFG: "ims",<mode>,<volte_cap>，第三个参数为实际开关。当前由前端通过 send_raw_at 直发，HAL 命令层未实现专用 IPC。' },
         { cmd:'AT+QCFG="data_interface"', category:'接口配置', desc:'查询或设置数据接口通信方式（PCIe/USB）',
           syntax:'AT+QCFG="data_interface"\nAT+QCFG="data_interface",<net_port>,<diag_port>',
           response:'+QCFG: "data_interface",<net_port>,<diag_port>\nOK',

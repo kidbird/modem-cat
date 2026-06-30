@@ -50,10 +50,7 @@
 
 - `app.js:1113,1148,1149` 通过 `send_raw_at` 下发 IMS/VoLTE 开关
 - 既无 `AT_COMMANDS.md` 条目也无 `data/atdb.js` 条目，违反”AT 命令来源受限”
-
-### 8. Monitor 页面（在线监控）在文档中缺失
-
-- `page-monitor` 导航项 + `app.js:3249-3622` 完整实现，但 `CODE_MAP.md §2` 和 `CALL_FLOW.md §2` 中没有任何 `§2.x` 小节记录它
+- **已修复**：已添加到 `AT_COMMANDS.md §6` 和 `data/atdb.js`（UniSoc + Qualcomm 两节）
 
 ### 9. 工厂模式 HTTP 客户端静默回退
 

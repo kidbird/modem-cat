@@ -51,47 +51,48 @@ echo
 
 # ── 1. 文件 / 行数 断言（防止 doc 写错 wc -l）─────────────────────────
 echo "[1] 文件行数"
-count_eq "lib.rs 行数 1142 (含 raw AT / PLMN 安全修复)" "src-tauri/src/lib.rs" 1142 "^"
-count_eq "commands.rs 行数 504" "src-tauri/src/commands.rs"  504 "^"
-count_eq "app.js 行数 1556"     "src/desktop/app.js"        1556 "^"
-count_eq "index.html 行数 6479" "src/desktop/index.html"    6479 "^"
-count_eq "types.rs 行数 252"    "modem-hal/src/types.rs"     252 "^"
-count_eq "main.rs 行数 7"       "src-tauri/src/main.rs"        7 "^"
+count_eq "lib.rs 行数 459 (refactored: handlers split to handlers.rs)" "src-tauri/src/lib.rs" 459 "^"
+count_eq "handlers.rs 行数 489" "src-tauri/src/handlers.rs" 489 "^"
+count_eq "app.js 行数 3149"     "src/desktop/app.js"        3149 "^"
+count_eq "index.html 行数 1774" "src/desktop/index.html"    1774 "^"
+count_eq "types.rs 行数 249"    "modem-hal/src/types.rs"     249 "^"
+count_eq "main.rs 行数 9"       "src-tauri/src/main.rs"        9 "^"
 
-# ── 2. IPC 命令数（活 52 / 死 30 / 前端 30）────────────────────────────
+# ── 2. IPC 命令数（活 52 / 死 0 / 前端 70）────────────────────────────
 echo "[2] IPC 命令数"
-# 活数: lib.rs 中 #[tauri::command] 注解总数
-count_eq "lib.rs #[tauri::command] 注解数 = 52"     "src-tauri/src/lib.rs"      52 "tauri::command"
-count_eq "commands.rs 死代码 30 个 #[tauri::command]" "src-tauri/src/commands.rs" 30 "tauri::command"
+# 活数: handlers.rs 中 #[tauri::command] 注解总数（lib.rs 只注册，不再定义）
+count_eq "handlers.rs #[tauri::command] 注解数 = 49" "src-tauri/src/handlers.rs" 49 "tauri::command"
 # 前端唯一 invoke 名字数（直接 eval 绕过 bash 转义陷阱）
-fe_count=$(grep -oE "invoke\('[a-z_]+'" src/desktop/app.js | sort -u | wc -l | tr -d ' ')
-if [ "$fe_count" = "32" ]; then
-    echo "  ✓ 前端 app.js 唯一 invoke 数 = 32 ($fe_count)"
+_invoke_pat="invoke\\('[a-z_]+'"
+fe_count=$(grep -oE "$_invoke_pat" src/desktop/app.js | sort -u | wc -l | tr -d '\r' | tr -d ' ')
+if [ "$fe_count" = "70" ]; then
+    echo "  ✓ 前端 app.js 唯一 invoke 数 = 70 ($fe_count)"
     pass=$((pass + 1))
 else
-    echo "  ✗ 前端 app.js 唯一 invoke 数: 期望 32, 实际 $fe_count"
+    echo "  ✗ 前端 app.js 唯一 invoke 数: 期望 70, 实际 $fe_count"
     fail=$((fail + 1))
 fi
-index_fe_count=$(grep -oE "invoke\('[a-z_]+'" src/desktop/index.html | sort -u | wc -l | tr -d ' ')
-if [ "$index_fe_count" = "44" ]; then
-    echo "  ✓ 实际入口 index.html 唯一 invoke 数 = 44 ($index_fe_count)"
+# index.html 不再直接包含 invoke() 调用（全部通过 app.js onclick 绑定）
+# git-bash 上对 index.html 跑 grep -c 会无输出挂起；改用 node 一次性统计
+index_fe_count=$(node -e "const fs=require('fs');const t=fs.readFileSync('src/desktop/index.html','utf8');process.stdout.write(String((t.match(/invoke\(/g)||[]).length))" 2>/dev/null || echo 0)
+if [ "$index_fe_count" = "0" ]; then
+    echo "  ✓ index.html 无直接 invoke 调用（由 app.js 绑定）= 0 ($index_fe_count)"
     pass=$((pass + 1))
 else
-    echo "  ✗ 实际入口 index.html 唯一 invoke 数: 期望 44, 实际 $index_fe_count"
+    echo "  ✗ index.html 直接 invoke 数: 期望 0, 实际 $index_fe_count"
     fail=$((fail + 1))
 fi
 
 # ── 3. 死代码 / 安全断言 ─────────────────────────────────────────────
-echo "[3] commands.rs 死代码"
-count_eq "commands.rs .unwrap() 数 = 64" "src-tauri/src/commands.rs" 64 "\\.unwrap\\(\\)"
-check    "commands.rs 0 caller (无 'mod commands')" \
-         "! grep -rn 'mod commands' src-tauri/src/ src/desktop/"
+echo "[3] 安全断言"
 check    "send_raw_at 使用完整 AT 校验器（不是参数校验器）" \
-         "grep -q 'validate_raw_at_command(&command)' src-tauri/src/lib.rs"
+         "grep -q 'validate_raw_at_command(&command)' src-tauri/src/handlers.rs"
 check    "PLMN password 进入 AT 前必须校验" \
-         "grep -A6 'async fn set_plmn_lock' src-tauri/src/lib.rs | grep -q 'validate_at_string(&pw)' && grep -A5 'async fn clear_plmn_lock' src-tauri/src/lib.rs | grep -q 'validate_at_string(&pw)'"
+         "grep -A15 'async fn set_plmn_lock' src-tauri/src/handlers.rs | grep -q 'validate_at_string..pw.' && grep -A10 'async fn clear_plmn_lock' src-tauri/src/handlers.rs | grep -q 'validate_at_string..pw.'"
 check    "前端 PLMN 锁不再通过 send_raw_at 硬编码 QSIMLOCK 密码" \
          "! grep -rn \"invoke('send_raw_at'.*QSIMLOCK\" src/desktop/app.js src/desktop/index.html"
+check    "handlers.rs 无生产代码 .unwrap() 在 Mutex 锁路径上" \
+         "! grep -E '^\s*\*\s*\w+\.lock\(\)\.unwrap\(\)' src-tauri/src/handlers.rs"
 
 # ── 4. 厂商检测关键字 (modem_factory.rs 是 source of truth) ────────────
 echo "[4] 厂商检测关键字（顺序敏感）"
@@ -119,9 +120,9 @@ check "AT+QNETDEVCTL 用 cid 在首位" \
 
 # ── 7. 页面 / 容器数 ─────────────────────────────────────────────────
 echo "[7] 页面 / 容器"
-count_eq "index.html page 容器数 = 8" "src/desktop/index.html" 8 'id="page-'
-check    "doc 不再写 '9 个 page'" \
-         "! grep -rn '9 个 page\\|9 page' docs/ CLAUDE.md AGENTS.md"
+count_eq "index.html page 容器数 = 10" "src/desktop/index.html" 10 'id="page-'
+check    "doc 不再写 '8 个 page\\|9 个 page'" \
+         "! grep -rn '8 个 page\\|9 个 page' docs/ CLAUDE.md AGENTS.md"
 
 # ── 8. spec_bands 函数不存在（防止 ARCHITECTURE 又写）────────────────
 echo "[8] spec_bands 状态"
@@ -130,8 +131,8 @@ check "spec_bands_for_model 已删除（不应在代码中）" \
 
 # ── 9. Stale app.js 行号（最大问题——所有 :NNNN 必须 < 当前行数或语义化）──
 echo "[9] Stale 行号"
-# 任意形如 app.js:NNNN 且 NNNN>=1557 的引用即视作漂移（app.js 现 1556 行）
-stale=$(grep -rnE "app\.js:[0-9]{4,}" docs/ CLAUDE.md AGENTS.md 2>/dev/null | awk -F: '{n=$NF+0; if(n>=1557) print}' || true)
+# 任意形如 app.js:NNNN 且 NNNN>=3150 的引用即视作漂移（app.js 现 3149 行）
+stale=$(grep -rnE "app\.js:[0-9]{4,}" docs/ CLAUDE.md AGENTS.md 2>/dev/null | awk -F: '{n=$NF+0; if(n>=3150) print}' || true)
 if [ -z "$stale" ]; then
     echo "  ✓ 无 app.js 行号 ≥ 1557 的引用（漂移已清）"
     pass=$((pass + 1))

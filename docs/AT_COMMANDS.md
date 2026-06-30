@@ -124,6 +124,7 @@
 | NAPT | `AT+QCFG="napt"` | `AT+QCFG="napt",{0/1}` | |
 | Netmask | `AT+QCFG="netmask"` | `AT+QCFG="netmask",{0/1}` | |
 | USB 网卡模式 | `AT+QCFG="usbnet"` | `AT+QCFG="usbnet",{mode}` | |
+| IMS / VoLTE | `AT+QCFG="ims"` | Qualcomm: `AT+QCFG="ims",<mode>,<enable>` (开=`,1,1` 关=`,2,0`)；UniSoc: `AT+QCFG="ims",<enable>` | 仅前端快捷 AT 直发（`send_raw_at`）；HAL 命令层未实现专用 IPC |
 
 ## 7. 高通专用配置（仅 Qualcomm 平台）
 

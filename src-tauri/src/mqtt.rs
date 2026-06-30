@@ -111,8 +111,12 @@ pub async fn run_mqtt_loop(
                         .as_secs(),
                 });
 
-                // Fetch latest status if the modem is connected
-                let mut status_fetched = false;
+                // Fetch latest status if the modem is connected.
+                //
+                // AGENTS.md: "实时状态禁止 fallback" — 当 try_query_modem_status 因锁争用
+                // 返回 Ok(None) 时，不能将"无法读取"与"调制解调器离线"混为一谈。
+                // 只有在真正能拿到 OK/Err 结果时，才设置 modemConnected。
+                let mut modem_connected = None; // None = could not read (lock contention)
                 match try_query_modem_status(&publish_transport, &publish_vendor) {
                     Ok(Some(status)) => {
                         if let Ok(status_val) = serde_json::to_value(&status) {
@@ -123,20 +127,22 @@ pub async fn run_mqtt_loop(
                                     }
                                 }
                             }
-                            status_fetched = true;
+                            modem_connected = Some(true);
                         }
                     }
-                    Ok(None) => {}
-                    Err(e) => log::warn!("MQTT: Failed to query modem status for publish: {}", e),
+                    Ok(None) => {
+                        // Lock contention — transport busy. Leave modemConnected unset
+                        // so consumer can distinguish offline from unreachable.
+                    }
+                    Err(e) => {
+                        log::warn!("MQTT: Failed to query modem status for publish: {e}");
+                        modem_connected = Some(false);
+                    }
                 }
 
-                if !status_fetched {
+                if let Some(connected) = modem_connected {
                     if let Some(obj) = payload.as_object_mut() {
-                        obj.insert("modemConnected".to_string(), json!(false));
-                    }
-                } else {
-                    if let Some(obj) = payload.as_object_mut() {
-                        obj.insert("modemConnected".to_string(), json!(true));
+                        obj.insert("modemConnected".to_string(), json!(connected));
                     }
                 }
 

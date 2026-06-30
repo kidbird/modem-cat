@@ -387,11 +387,14 @@ window.AT_DB = {
           response:'OK',
           params:[],
           example:'AT+CFUN=1,1\nOK', note:'模组执行软重启，约 10-30 秒后重新上线。重启期间串口不可用。修改大部分配置后需重启生效。' },
-        { cmd:'AT+QFACT=0', category:'系统控制', desc:'恢复出厂设置',
-          syntax:'AT+QFACT=0',
+        // ⚠️ AT+QFACT 非当前合同命令。正式合同（AT_COMMANDS.md §8）按芯片分支下发：
+        //    Qualcomm → AT&F ；UniSoc → AT+QPRTPARA=3。
+        // 本手册不再提供 AT+QFACT 条目，避免用户误用非合同命令。
+        { cmd:'AT&F', category:'系统控制', desc:'恢复出厂设置 (Qualcomm)',
+          syntax:'AT&F',
           response:'OK',
           params:[],
-          example:'AT+QFACT=0\nOK', note:'清除所有用户配置（APN、频段、功能开关等），恢复出厂默认值。执行后需 AT+CFUN=1,1 重启生效。此操作不可撤销！' },
+          example:'AT&F\nOK', note:'【Qualcomm 平台】清除所有用户配置（APN、频段、功能开关等），恢复出厂默认值。执行后需 AT+CFUN=1,1 重启生效。此操作不可撤销！UniSoc 平台请使用 AT+QPRTPARA=3。' },
         { cmd:'AT+QUIMSLOT?', category:'系统控制', desc:'查询当前激活的 SIM 卡槽',
           syntax:'AT+QUIMSLOT?',
           response:'+QUIMSLOT: <slot>\nOK',
@@ -829,11 +832,14 @@ window.AT_DB = {
           response:'OK',
           params:[],
           example:'AT+CFUN=1,1\nOK', note:'约 10-30 秒后重新上线。大部分配置修改后需重启生效。' },
-        { cmd:'AT+QFACT=0', category:'系统控制', desc:'恢复出厂设置',
-          syntax:'AT+QFACT=0',
+        // ⚠️ AT+QFACT 非当前合同命令。正式合同（AT_COMMANDS.md §8）按芯片分支下发：
+        //    Qualcomm → AT&F ；UniSoc → AT+QPRTPARA=3。
+        // 本手册不再提供 AT+QFACT 条目，避免用户误用非合同命令。
+        { cmd:'AT&F', category:'系统控制', desc:'恢复出厂设置 (Qualcomm)',
+          syntax:'AT&F',
           response:'OK',
           params:[],
-          example:'AT+QFACT=0\nOK', note:'清除所有用户配置，恢复出厂默认值。此操作不可撤销！执行后需 AT+CFUN=1,1 重启。' },
+          example:'AT&F\nOK', note:'【Qualcomm 平台】清除所有用户配置（APN、频段、功能开关等），恢复出厂默认值。执行后需 AT+CFUN=1,1 重启生效。此操作不可撤销！UniSoc 平台请使用 AT+QPRTPARA=3。' },
         { cmd:'AT+QUIMSLOT?', category:'系统控制', desc:'查询当前激活的 SIM 卡槽',
           syntax:'AT+QUIMSLOT?',
           response:'+QUIMSLOT: <slot>\nOK',

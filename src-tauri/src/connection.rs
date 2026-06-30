@@ -460,9 +460,8 @@ pub(crate) async fn connect_tcp(
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *conn_port_state
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        // Lock order MUST be transport -> vendor -> connected_port to match
+        // disconnect / connect_serial / auto_connect_at and avoid ABBA deadlock.
         *transport_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? =
@@ -472,6 +471,10 @@ pub(crate) async fn connect_tcp(
         *vendor_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
+
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
 
         log::info!("Connected to TCP {}:{}", host_clone, port);
         Ok(id)
@@ -630,15 +633,15 @@ pub(crate) async fn connect_websocket(
     let user_clone = username.clone();
     let pass_clone = password.clone();
 
+    // AGENTS.md: "敏感信息禁止公开默认值" — WS 凭据必须由调用方提供，
+    // 不允许 fallback 到硬编码的 "admin"。将 None 透传给
+    // WebSocketTransport，由它决定是否匿名连接或报错。
     tokio::task::spawn_blocking(move || {
-        let user = user_clone.as_deref().unwrap_or("admin");
-        let pass = pass_clone.as_deref().unwrap_or("admin");
-
         let mut transport = modem_hal::transport::WebSocketTransport::new(
             &host_clone,
             port,
-            Some(user),
-            Some(pass),
+            user_clone.as_deref(),
+            pass_clone.as_deref(),
         )?;
 
         let vendor = ModemFactory::create(&mut transport);
@@ -649,9 +652,8 @@ pub(crate) async fn connect_websocket(
             Err(e) => return Err(format!("连接成功但无法识别模组型号: {}", e)),
         };
 
-        *conn_port_state
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        // Lock order MUST be transport -> vendor -> connected_port to match
+        // disconnect / connect_serial / auto_connect_at and avoid ABBA deadlock.
         *transport_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? =
@@ -662,11 +664,16 @@ pub(crate) async fn connect_websocket(
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = Some(v);
 
+        *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+
+        let user_label = user_clone
+            .as_deref()
+            .map(|u| format!(" as {u}"))
+            .unwrap_or_default();
         log::info!(
-            "Connected to WebSocket {}:{} as {}",
-            host_clone,
-            port,
-            user
+            "Connected to WebSocket {host_clone}:{port}{user_label}"
         );
         Ok(id)
     })

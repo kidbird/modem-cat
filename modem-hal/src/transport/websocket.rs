@@ -30,10 +30,10 @@ impl WebSocketTransport {
         if let (Some(u), Some(p)) = (username, password) {
             let auth = format!("{}:{}", u, p);
             let auth_base64 = BASE64_STANDARD.encode(auth.as_bytes());
-            request.headers_mut().insert(
-                AUTHORIZATION,
-                format!("Basic {}", auth_base64).parse().unwrap(),
-            );
+            let auth_value = format!("Basic {}", auth_base64)
+                .parse()
+                .map_err(|e| format!("Invalid WS auth header value: {e}"))?;
+            request.headers_mut().insert(AUTHORIZATION, auth_value);
         }
 
         // 3. Connect TCP Stream with a 5-second timeout
@@ -58,36 +58,40 @@ impl WebSocketTransport {
         let (mut socket, _response) = client(request, tcp_stream)
             .map_err(|e| format!("WebSocket handshake failed: {}", e))?;
 
-        // 5. Interactive terminal/console authentication fallback
+        // 5. Interactive terminal/console authentication fallback.
         // If the server doesn't use Basic Auth but presents a login prompt over the WebSocket stream,
         // we wait briefly and respond if requested.
-        let _ = socket
-            .get_ref()
-            .set_read_timeout(Some(Duration::from_millis(200)));
-        if let Ok(msg) = socket.read() {
-            if let Message::Text(ref text) = msg {
-                let lower = text.to_lowercase();
-                if lower.contains("login") || lower.contains("username") || lower.contains("user:")
-                {
-                    // Send username
-                    let user_to_send = username.unwrap_or("admin");
-                    socket
-                        .send(Message::Text(format!("{}\r\n", user_to_send).into()))
-                        .map_err(|e| format!("Failed to send username: {}", e))?;
+        //
+        // AGENTS.md: "敏感信息禁止公开默认值 / WebSocket 凭据不得偷补公开默认值" —
+        // 若用户未提供 WS 凭据，则跳过交互式认证分支，让服务器拒绝未认证连接。
+        // 不再 fallback 到硬编码的 "admin"。
+        if let (Some(user_provided), Some(pass_provided)) = (username, password) {
+            let _ = socket
+                .get_ref()
+                .set_read_timeout(Some(Duration::from_millis(200)));
+            if let Ok(msg) = socket.read() {
+                if let Message::Text(ref text) = msg {
+                    let lower = text.to_ascii_lowercase();
+                    if lower.contains("login") || lower.contains("username") || lower.contains("user:")
+                    {
+                        // Send username
+                        socket
+                            .send(Message::Text(format!("{}\r\n", user_provided).into()))
+                            .map_err(|e| format!("Failed to send username: {e}"))?;
 
-                    // Wait and read password prompt
-                    let _ = socket
-                        .get_ref()
-                        .set_read_timeout(Some(Duration::from_millis(200)));
-                    if let Ok(msg2) = socket.read() {
-                        if let Message::Text(ref text2) = msg2 {
-                            let lower2 = text2.to_lowercase();
-                            if lower2.contains("password") || lower2.contains("pwd:") {
-                                // Send password
-                                let pass_to_send = password.unwrap_or("admin");
-                                socket
-                                    .send(Message::Text(format!("{}\r\n", pass_to_send).into()))
-                                    .map_err(|e| format!("Failed to send password: {}", e))?;
+                        // Wait and read password prompt
+                        let _ = socket
+                            .get_ref()
+                            .set_read_timeout(Some(Duration::from_millis(200)));
+                        if let Ok(msg2) = socket.read() {
+                            if let Message::Text(ref text2) = msg2 {
+                                let lower2 = text2.to_ascii_lowercase();
+                                if lower2.contains("password") || lower2.contains("pwd:") {
+                                    // Send password
+                                    socket
+                                        .send(Message::Text(format!("{}\r\n", pass_provided).into()))
+                                        .map_err(|e| format!("Failed to send password: {e}"))?;
+                                }
                             }
                         }
                     }

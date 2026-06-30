@@ -85,17 +85,10 @@ pub fn parse_cgmm(response: &str) -> String {
     String::new()
 }
 
-pub fn parse_cops(response: &str) -> String {
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+COPS:") {
-            let parts: Vec<&str> = rest.split(',').collect();
-            if parts.len() >= 3 {
-                return parts[2].trim().trim_matches('"').to_string();
-            }
-        }
-    }
-    String::new()
-}
+// NOTE: parse_cops is intentionally REMOVED (dead code). The live path uses
+// parse_cops_with_act() which also returns the access-technology field needed
+// by query_operator(). No caller references this function — confirmed via
+// codegraph callers analysis (0 callers).
 
 pub fn format_rsrp(val: &str) -> String {
     if val.is_empty() || val == "0" {

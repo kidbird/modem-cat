@@ -87,13 +87,19 @@ pub fn update_license_state(
 }
 
 /// IPC: Return the current license status to the frontend.
+///
+/// Returns `Result` instead of panicking on a poisoned lock, so a concurrent
+/// `load_license_file` panic cannot take down every subsequent IPC call
+/// (AGENTS.md: "运行时锁路径禁止 panic").
 #[tauri::command]
-pub fn get_license_status(state: tauri::State<'_, AppState>) -> LicenseStatus {
+pub fn get_license_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<LicenseStatus, String> {
     let guard = state
         .license
         .lock()
-        .expect("license lock poisoned");
-    status_from_payload(&*guard)
+        .map_err(|e| format!("license lock poisoned: {e}"))?;
+    Ok(status_from_payload(&*guard))
 }
 
 /// IPC: Load and verify a license file from a user-selected path.

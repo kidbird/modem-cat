@@ -179,6 +179,14 @@ impl AtTransport for WebSocketTransport {
         let _ = self.socket.close(None);
     }
 
+    fn force_shutdown(&mut self) {
+        // Close the underlying TCP stream directly without sending a WS close
+        // frame. shutdown(Both) sends FIN immediately — non-blocking — so this
+        // never hangs even if the gateway is gone (USB-serial gateway unplugged).
+        // The kernel reclaims the fd; Drop then drops the now-dead socket.
+        let _ = self.socket.get_ref().shutdown(std::net::Shutdown::Both);
+    }
+
     fn is_alive(&self) -> bool {
         if let Ok(stream) = self.socket.get_ref().try_clone() {
             stream.set_nonblocking(true).ok();

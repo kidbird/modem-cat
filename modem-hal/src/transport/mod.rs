@@ -16,6 +16,16 @@ pub trait AtTransport: Send {
     fn is_alive(&self) -> bool {
         true
     }
+    /// Non-blocking graceful shutdown for disconnect paths.
+    ///
+    /// Default implementation delegates to `close()`. Transports whose `close()`
+    /// may block (e.g. WebSocket waiting for server close frame) should override
+    /// this to perform a best-effort, non-blocking teardown. The caller will
+    /// `drop()` the transport immediately after this returns, so any lingering
+    /// resources will be reclaimed by the OS.
+    fn force_shutdown(&mut self) {
+        self.close();
+    }
 }
 
 pub struct MockTransport {

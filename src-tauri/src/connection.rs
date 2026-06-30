@@ -487,28 +487,45 @@ pub(crate) async fn connect_tcp(
 pub(crate) async fn disconnect(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let transport = state.transport.clone();
-    let vendor = state.vendor.clone();
-    let connected_port = state.connected_port.clone();
-    let data_cid = state.data_cid.clone();
+    // Mark disconnecting FIRST so the heartbeat thread backs off and doesn't
+    // touch the transport we're about to tear down (or emit duplicate events).
+    state.disconnecting.store(true, Ordering::SeqCst);
+    let result = cleanup_connection(&state).await;
+    state.disconnecting.store(false, Ordering::SeqCst);
+    result
+}
+
+/// Shared teardown used by both the explicit `disconnect` IPC and the
+/// heartbeat/USB-monitor auto-disconnect path.
+///
+/// Acquires transport + vendor + connected_port locks in a fixed order
+/// (transport → vendor → connected_port) to match `connect_*` / `disconnect`
+/// and avoid ABBA deadlock. Uses `force_shutdown` (non-blocking) instead of
+/// `close()` so a dead transport (USB unplug / WS gateway gone) cannot hang
+/// the disconnect path.
+async fn cleanup_connection(state: &AppState) -> Result<String, String> {
+    // 1. Take the transport out of the Mutex so we own it exclusively.
+    let transport_g = state.transport.clone();
+    let vendor_g = state.vendor.clone();
+    let port_g = state.connected_port.clone();
+    let data_cid_g = state.data_cid.clone();
 
     tokio::task::spawn_blocking(move || {
-        let mut t = transport
+        let mut tg = transport_g
             .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
-        if let Some(ref mut transport) = *t {
-            transport.close();
+            .map_err(|e| format!("Lock poisoned: {e}"))?;
+        // force_shutdown is non-blocking; the subsequent `*tg = None` drops it.
+        if let Some(ref mut t) = *tg {
+            t.force_shutdown();
         }
-        *t = None;
-        *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        *connected_port
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
-        data_cid.store(1, Ordering::Relaxed);
+        *tg = None;
+        *vendor_g.lock().map_err(|e| format!("Lock poisoned: {e}"))? = None;
+        *port_g.lock().map_err(|e| format!("Lock poisoned: {e}"))? = None;
+        data_cid_g.store(1, Ordering::Relaxed);
         Ok("Disconnected".to_string())
     })
     .await
-    .map_err(|e| format!("Task error: {}", e))?
+    .map_err(|e| format!("Task error: {e}"))?
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

@@ -1,8 +1,8 @@
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use modem_hal::transport::AtTransport;
+use crate::AppState;
 use tauri::Emitter;
 
 #[derive(Clone, serde::Serialize)]
@@ -79,8 +79,7 @@ pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
 
 pub(crate) fn start_connection_heartbeat(
     app_handle: tauri::AppHandle,
-    transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
-    connected_port: Arc<Mutex<Option<String>>>,
+    state: AppState,
 ) {
     std::thread::Builder::new()
         .name("connection-heartbeat".into())
@@ -88,25 +87,43 @@ pub(crate) fn start_connection_heartbeat(
             loop {
                 std::thread::sleep(Duration::from_secs(4));
 
-                let port_name = match connected_port.try_lock() {
+                // If a disconnect is already in progress (user clicked or
+                // USB-monitor detected), back off — don't race.
+                if state.disconnecting.load(Ordering::Relaxed) {
+                    continue;
+                }
+
+                let port_name = match state.connected_port.try_lock() {
                     Ok(g) => g.clone(),
                     Err(_) => continue,
                 };
                 let Some(port) = port_name else { continue };
 
-                let alive = match transport.try_lock() {
-                    Ok(g) => match g.as_deref() {
-                        Some(t) => t.is_alive(),
-                        None => continue,
-                    },
+                let alive = match state.transport.try_lock() {
+                    Ok(g) => g.as_ref().map(|t| t.is_alive()).unwrap_or(false),
                     Err(_) => continue,
                 };
 
                 if !alive {
                     log::warn!("[心跳] 检测到硬件断连，端口: {}", port);
-                    if let Ok(mut g) = connected_port.try_lock() {
-                        *g = None;
+                    // Coordinate with other disconnect paths.
+                    state.disconnecting.store(true, Ordering::SeqCst);
+                    // Best-effort: fully tear down transport + vendor + port.
+                    // We can't .await across threads, so do it inline.
+                    if let (Ok(mut tg), Ok(mut vg), Ok(mut pg)) = (
+                        state.transport.lock(),
+                        state.vendor.lock(),
+                        state.connected_port.lock(),
+                    ) {
+                        if let Some(ref mut t) = *tg {
+                            t.force_shutdown();
+                        }
+                        *tg = None;
+                        *vg = None;
+                        *pg = None;
                     }
+                    state.disconnecting.store(false, Ordering::SeqCst);
+
                     if let Err(e) = app_handle.emit(
                         "port-changed",
                         PortChangeEvent {

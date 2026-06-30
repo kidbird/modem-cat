@@ -11,11 +11,13 @@
 - 风险：上层 parser 会把链路抖动误判成真实状态
 - 处理原则：实时状态读取应把”不完整响应”视为错误，而不是伪成功
 
-### 2. 非 Windows 网卡列表仍返回 mock 数据
+### 2. ~~非 Windows 网卡列表仍返回 mock 数据~~ ✅ 已修复 (2026-06-30)
 
-- 前端会把返回的 gateway 当成真实 WebSocket 目标
-- 风险：UI 展示为可连接，实际上目标地址是伪造值
-- 处理原则：要么返回真实枚举，要么明确不支持，不要伪造 live 输入
+- **原问题**：前端会把返回的 mock gateway 当成真实 WebSocket 目标。
+- **当前实现**：`connection.rs:610-612` 非 Windows 返回 `Ok(vec![])`
+  （空列表 = 明确"不支持"，符合"不要伪造 live 输入"原则）。
+- **如需真实枚举**：macOS 用 `ifconfig`/`route get default`，Linux 用 `ip route`/`netlink`，
+  但空列表已足够让 UI 展示"无可用网卡"，不产生误导连接。
 
 ### 5. 前端 30+ 个 IPC catch 错误未使用 `e.message` 模式
 

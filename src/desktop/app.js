@@ -276,9 +276,19 @@
             addTerminalLine('[数据] 挂断拨号失败: ' + e, 'err');
           }
         }
+        // 断开串口：加超时保护。如果后端 transport.close() 卡住（fd 坏死 /
+        // WebSocket 远端无响应），3 秒后前端强制标记断开并更新 UI。
+        // 后端已 force_shutdown (非-blocking)，正常情况下 <500ms 返回。
         try {
-          await invoke('disconnect');
-        } catch (e) { /* ignore */ }
+          await Promise.race([
+            invoke('disconnect'),
+            new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时(3s)，已强制标记断开')), 3000)),
+          ]);
+        } catch (e) {
+          addTerminalLine('[连接] ' + e, 'warn');
+        }
+        // ALWAYS update local state regardless of whether the IPC completed,
+        // so the UI port is never stuck in "连接中" / disabled state.
         state.connected = false;
         state.dataConnected = false;
         state.dataApn = '';
@@ -287,11 +297,15 @@
         state.model = '';
         state.chipVendor = '';
         state.currentBand = '';
+        state.transport = undefined; // 阻止后续 IPC 复用死 transport
         updateConnectionUI(false);
         updateDataConnectionUI();
         clearData();
         updateVlanPanelAccess();
         updateCellLockUI();
+        $.connectBtn.disabled = false;
+        $.connectBtn.textContent = '连接';
+        $.connectBtn.className = 'btn btn-primary';
         addTerminalLine('[连接] 已断开', 'cmd');
       } else {
         // 连接
@@ -2316,25 +2330,40 @@
       listen('port-changed', (event) => {
         const { added, removed } = event.payload;
 
-        // Connected port was physically removed → force disconnect
-        if (state.connected && state.connectedPort && removed.includes(state.connectedPort)) {
+        // Connected port was physically removed → force disconnect.
+        // Match by exact name OR by basename (handles /dev/ttyUSB0 vs ttyUSB0
+        // discrepancies across serialport versions / ASR platforms).
+        const portBasename = state.connectedPort ? state.connectedPort.replace(/^.*[\\/]/, '') : '';
+        const removedBasenames = removed.map(r => r.replace(/^.*[\\/]/, ''));
+        const portRemoved = state.connected && state.connectedPort && (
+          removed.includes(state.connectedPort) ||
+          removedBasenames.includes(portBasename)
+        );
+
+        if (portRemoved) {
           console.log('[USB] Connected port removed, disconnecting');
           addTerminalLine('[USB] AT端口已拔出，断开连接', 'cmd');
           if (state.dataConnected) {
             invoke('disconnect_data').catch(() => {});
           }
-          invoke('disconnect').catch(() => {});
+          // 后端 force_shutdown 非阻塞，正常情况下 <500ms 返回；
+          // 加 3s 超时保护防止 UI 永远挂起。
+          Promise.race([
+            invoke('disconnect'),
+            new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时')), 3000)),
+          ]).catch(() => {});
           state.connected = false;
           state.dataConnected = false;
           state.dataApn = '';
           state.connectedPort = '';
           state.idle = true;
+          state.transport = undefined;
           updateConnectionUI(false);
           updateDataConnectionUI();
           clearData();
           const label = document.getElementById('statusLabel');
-          label.textContent = '待机中';
-          label.style.color = 'var(--text-muted)';
+        label.textContent = '待机中';
+        label.style.color = 'var(--text-muted)';
         }
 
         // Always refresh port list to reflect actual hardware state

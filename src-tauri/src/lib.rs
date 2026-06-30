@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicI32;
+use std::sync::atomic::{AtomicBool, AtomicI32};
 use std::sync::{Arc, Mutex};
 
 use modem_hal::transport::AtTransport;
@@ -27,6 +27,10 @@ pub struct AppState {
     pub mqtt_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Loaded license payload (None = unlicensed or invalid).
     pub license: Arc<Mutex<Option<modem_license::LicensePayload>>>,
+    /// Set while a disconnect is in progress (heartbeat / USB-monitor ↔ IPC).
+    /// Prevents the heartbeat from emitting duplicate `port-changed` and from
+    /// touching a transport that `disconnect` is tearing down.
+    pub disconnecting: Arc<AtomicBool>,
 }
 
 /// Transport wrapper that logs every sent AT command to a shared log.
@@ -247,6 +251,7 @@ pub fn run() {
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
             mqtt_task: Arc::new(Mutex::new(None)),
             license: Arc::new(Mutex::new(None)),
+            disconnecting: Arc::new(AtomicBool::new(false)),
         })
         .manage(factory::FactoryState::new())
         .manage(dloader::DloaderState::default())
@@ -288,11 +293,18 @@ pub fn run() {
             monitor::start_port_monitor(app.handle().clone());
 
             let state = app.state::<AppState>();
-            monitor::start_connection_heartbeat(
-                app.handle().clone(),
-                state.transport.clone(),
-                state.connected_port.clone(),
-            );
+            // Clone the Arc handles the heartbeat needs; AppState fields are Arc.
+            let hb_state = AppState {
+                transport: state.transport.clone(),
+                vendor: state.vendor.clone(),
+                data_cid: state.data_cid.clone(),
+                connected_port: state.connected_port.clone(),
+                at_command_log: state.at_command_log.clone(),
+                mqtt_task: state.mqtt_task.clone(),
+                license: state.license.clone(),
+                disconnecting: state.disconnecting.clone(),
+            };
+            monitor::start_connection_heartbeat(app.handle().clone(), hb_state);
 
             let show_item =
                 tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;

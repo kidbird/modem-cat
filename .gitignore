@@ -11,6 +11,9 @@ dist/
 build/
 out/
 
+# WebView2 fixed runtime (downloaded on demand)
+webview2-runtime/
+
 # Tauri
 src-tauri/target/
 src-tauri/release/
@@ -93,3 +96,4 @@ worktree-patch/
 
 # Orphaned lockfile (workspace root Cargo.lock is authoritative)
 src-tauri/Cargo.lock
+.worktrees/

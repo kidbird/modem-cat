@@ -2,6 +2,14 @@
 
 > 最近更新：2026-06-30（worktree `fix/review-high-priority`）
 > 只记录当前主线仍然存在的 live 技术债与文档/代码偏差；历史已修问题不再在本文件重复维护。
+>
+> ## 已修复 & 已关闭（本 worktree，等待合入 main）
+>
+> - USB 拔插状态不更新 → heartbeat 全面清理 + `AppState.disconnecting` 协调标志
+> - 连接后断开按钮无响应 → `force_shutdown()` 非阻塞 + 前端 3s 超时保护
+> - 全部 MEDIUM 审查问题（M5-M12）+ 用户手动确认的网卡 mock 修复
+>
+> 未合入前仍视为"fix/review-high-priority"分支状态；合入后删除本段。
 
 ## High Priority
 

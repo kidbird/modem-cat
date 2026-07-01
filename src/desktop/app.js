@@ -2007,6 +2007,7 @@
         setTextData('hwCpBaseline', hw.cpBaseline || '--');
         setTextData('hwSocTemp', hw.socTemp || '--');
         setTextData('hwPaTemp', hw.paTemp || '--');
+        setTextData('hwSn', hw.serialNumber || '--');
         if (hw.model) {
           state.model = hw.model;
           document.getElementById('logoText').textContent = hw.model;
@@ -2463,11 +2464,15 @@
           updateDataConnectionUI();
           clearData();
           const label = document.getElementById('statusLabel');
-        label.textContent = '待机中';
-        label.style.color = 'var(--text-muted)';
+          label.textContent = '待机中';
+          label.style.color = 'var(--text-muted)';
         }
 
-        // Always refresh port list to reflect actual hardware state
+        // Always refresh port list to reflect actual hardware state.
+        // This runs regardless of connection status — even when connected,
+        // the user should see the port disappear from the dropdown so they
+        // know the hardware changed. refreshPortList re-enables the dropdown
+        // when state.connected is false (set above by portRemoved handling).
         if (added.length > 0 || removed.length > 0) {
           refreshPortList().catch(() => {});
         }
@@ -2550,6 +2555,14 @@
       }
       // 启动 USB 监控
       setupUsbMonitor();
+
+      // 定时轮询端口列表（兜底：即使 port-changed 事件丢失，也能在 5s 内
+      // 检测到端口变化）。仅在未连接时轮询，避免干扰 AT 操作。
+      setInterval(() => {
+        if (!state.connected) {
+          refreshPortList().catch(() => {});
+        }
+      }, 5000);
     }
 
     // Tauri v2: withGlobalTauri ensures window.__TAURI__ is available before scripts run
@@ -2629,6 +2642,32 @@
       const select = document.getElementById('connectionParams');
       try {
         const ports = await invoke('list_ports');
+        const portNames = ports.map(p => p.portName);
+
+        // Fallback disconnect detection: if we think we're connected but the
+        // connected port is no longer in the system port list, the USB device
+        // was removed. This catches cases where the USB-monitor's `removed`
+        // diff missed the port name (Windows COM enumeration delay / format
+        // mismatch) but list_ports now reflects reality.
+        if (state.connected && state.connectedPort && !portNames.includes(state.connectedPort)) {
+          console.log('[USB] Connected port vanished from list_ports, force-disconnecting');
+          addTerminalLine('[USB] 连接端口已消失，断开连接', 'cmd');
+          if (state.dataConnected) invoke('disconnect_data').catch(() => {});
+          Promise.race([
+            invoke('disconnect'),
+            new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时')), 3000)),
+          ]).catch(() => {});
+          state.connected = false;
+          state.dataConnected = false;
+          state.dataApn = '';
+          state.connectedPort = '';
+          state.idle = true;
+          state.transport = undefined;
+          updateConnectionUI(false);
+          updateDataConnectionUI();
+          clearData();
+        }
+
         select.innerHTML = '<option value="">-- 选择端口 --</option>';
         if (ports.length === 0) {
           select.innerHTML += '<option value="" disabled>未找到串口</option>';

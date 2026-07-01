@@ -102,7 +102,7 @@
 
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
-| 模组型号/固件/温度 | refreshHardwareInfo | `get_hardware_info` |
+| 模组型号/固件/温度/SN | refreshHardwareInfo | `get_hardware_info` |
 | Qualcomm 配置 | refreshQualcommConfig | `get_qualcomm_config` |
 | USB net / Data interface / PCIe / USB speed / IPPT | setQcXxxToggle | `set_qualcomm_config` |
 | ETH driver | saveQcEthDriver | `set_qualcomm_config` |

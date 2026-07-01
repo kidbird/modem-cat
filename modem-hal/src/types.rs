@@ -61,6 +61,10 @@ pub struct HardwareInfo {
     pub cp_baseline: String,
     pub soc_temp: String,
     pub pa_temp: String,
+    /// Modem serial number, read via `AT+EGMR=0,5`. Populated by
+    /// query_hardware_info; empty string if the command fails (not all
+    /// platforms/ firmware variants support it).
+    pub serial_number: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

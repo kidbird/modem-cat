@@ -1059,6 +1059,21 @@ pub fn parse_gmr(response: &str) -> String {
     String::new()
 }
 
+/// Parse `AT+EGMR=0,5` response to extract the modem serial number (SN).
+///
+/// The command `AT+EGMR=<mode>,<type>` with mode=0 (read) and type=5 (SN)
+/// returns a response like `+EGMR: "<serial_number>"`. The SN is a factory-
+/// provisioned identifier, distinct from the IMEI (which is a device type
+/// identifier). Both are useful for asset tracking and factory mode workflows.
+pub fn parse_egmr_sn(response: &str) -> String {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+EGMR:") {
+            return rest.trim().trim_matches('"').to_string();
+        }
+    }
+    String::new()
+}
+
 pub fn parse_cgact(response: &str) -> Vec<(i32, i32)> {
     let mut result = Vec::new();
     for line in extract_data_lines(response) {
@@ -1335,5 +1350,30 @@ OK"#;
         let (n2, a2) = parse_cops_with_act("+COPS: 0");
         assert_eq!(n2, "");
         assert_eq!(a2, "");
+    }
+
+    #[test]
+    fn parse_egmr_sn_extracts_quoted_serial_number() {
+        // Typical response: +EGMR: "ABCD1234EFGH"
+        assert_eq!(
+            parse_egmr_sn("+EGMR: \"ABCD1234EFGH\"\r\nOK"),
+            "ABCD1234EFGH"
+        );
+    }
+
+    #[test]
+    fn parse_egmr_sn_handles_prefix_variations() {
+        // Some firmware omit quotes or use different spacing
+        assert_eq!(parse_egmr_sn("+EGMR: SN1234567"), "SN1234567");
+        assert_eq!(parse_egmr_sn("+EGMR:  1A2B3C4D  "), "1A2B3C4D");
+    }
+
+    #[test]
+    fn parse_egmr_sn_returns_empty_on_failure() {
+        // CME ERROR or empty response
+        assert_eq!(parse_egmr_sn("+CME ERROR: 22"), "");
+        assert_eq!(parse_egmr_sn("ERROR"), "");
+        assert_eq!(parse_egmr_sn("OK"), "");
+        assert_eq!(parse_egmr_sn(""), "");
     }
 }

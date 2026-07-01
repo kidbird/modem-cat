@@ -264,6 +264,15 @@ impl ModemVendor for QuectelModem {
             }
         };
 
+        // SN read via AT+EGMR=0,5. Like ICCID, this is a modem-adjacent
+        // identifier that may be unsupported on some platforms/firmware.
+        // Failure must NOT abort the hardware-info query — IMEI, model,
+        // firmware remain valid even if this command fails.
+        let serial_number = t
+            .send_at("AT+EGMR=0,5")
+            .map(|resp| parse_egmr_sn(&resp))
+            .unwrap_or_default();
+
         Ok(HardwareInfo {
             model,
             manufacturer,
@@ -272,6 +281,7 @@ impl ModemVendor for QuectelModem {
             cp_baseline,
             soc_temp,
             pa_temp,
+            serial_number,
         })
     }
 

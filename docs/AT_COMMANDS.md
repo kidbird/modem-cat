@@ -34,6 +34,7 @@
 | ICCID（Qualcomm） | `AT+ICCID` | `parse_iccid()` | Qualcomm 首选 |
 
 > **ICCID 合同**：`query_modem_status()` 仅在 SIM 为 `READY` 时才下发 ICCID 命令；`NO SIM` / `SIM not inserted` / `SIM PIN` / `UNKNOWN` 等非就绪态一律跳过。ICCID 查询失败（transport 错误或无可解析 ICCID）**不中断整体状态读取**——IMEI / 运营商 / 注册状态等仍正常返回，ICCID 字段置空，前端按 `sim_status !== 'READY'` 显示 `--`。专用命令 `query_iccid()` 维持严格报错语义不变。
+| SN（序列号） | `AT+EGMR=0,5` | `parse_egmr_sn()` | 模组出厂序列号，区别于 IMEI；查询失败不中断硬件信息读取 |
 | 型号 | `AT+CGMM` | `parse_cgmm()` | 用于厂商检测 |
 | 厂商 | `AT+CGMI` | `parse_cgmm()` | |
 | 固件版本 | `AT+GMR` | `parse_gmr()` | |

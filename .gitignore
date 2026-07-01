@@ -97,3 +97,15 @@ worktree-patch/
 # Orphaned lockfile (workspace root Cargo.lock is authoritative)
 src-tauri/Cargo.lock
 .worktrees/
+
+# Agent/IDE tool caches (machine-local, not source)
+.codex/
+.graphify/
+.qoderignore
+.qoder/
+.codegraph/
+.agents/skills/graphify/
+
+# Temporary plan/spec files (historical tracked ones preserved)
+docs/superpowers/plans/
+docs/superpowers/specs/

@@ -2663,15 +2663,23 @@
         // was removed. This catches cases where the USB-monitor's `removed`
         // diff missed the port name (Windows COM enumeration delay / format
         // mismatch) but list_ports now reflects reality.
+        //
+        // Require 2 consecutive misses before disconnecting — Windows COM
+        // enumeration can briefly drop a port while it's busy with AT I/O.
         if (state.connected && state.connectedPort && !portNames.includes(state.connectedPort)) {
-          console.log('[USB] Connected port vanished from list_ports, force-disconnecting');
-          addTerminalLine('[USB] 连接端口已消失，断开连接', 'cmd');
-          if (state.dataConnected) invoke('disconnect_data').catch(() => {});
-          Promise.race([
-            invoke('disconnect'),
-            new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时')), 3000)),
-          ]).catch(() => {});
-          state.connected = false;
+          state._portMissCount = (state._portMissCount || 0) + 1;
+          if (state._portMissCount < 2) {
+            console.log('[USB] Port miss #' + state._portMissCount + ' (will retry)');
+          } else {
+            state._portMissCount = 0;
+            console.log('[USB] Connected port vanished from list_ports (confirmed), force-disconnecting');
+            addTerminalLine('[USB] 连接端口已消失，断开连接', 'cmd');
+            if (state.dataConnected) invoke('disconnect_data').catch(() => {});
+            Promise.race([
+              invoke('disconnect'),
+              new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时')), 3000)),
+            ]).catch(() => {});
+            state.connected = false;
           state.dataConnected = false;
           state.dataApn = '';
           state.connectedPort = '';
@@ -2680,6 +2688,9 @@
           updateConnectionUI(false);
           updateDataConnectionUI();
           clearData();
+        } else if (state.connected && state.connectedPort && portNames.includes(state.connectedPort)) {
+          // Port still present — reset miss counter.
+          state._portMissCount = 0;
         }
 
         select.innerHTML = '<option value="">-- 选择端口 --</option>';

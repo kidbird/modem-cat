@@ -240,6 +240,22 @@ fn spawn_adb_thread(
                 .parent()
                 .ok_or("ADB 路径无效，缺少父目录")?
                 .to_path_buf();
+
+            // Pre-start ADB server with CREATE_NO_WINDOW so the daemon process
+            // inherits the no-window flag. Without this, `adb shell` would
+            // internally fork `adb server` which pops up a console window.
+            #[cfg(windows)]
+            {
+                let _ = Command::new(&adb_path)
+                    .arg("start-server")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .current_dir(&adb_dir)
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .output();
+            }
+
             let mut command = Command::new(&adb_path);
             command
                 .arg("shell")

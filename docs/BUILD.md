@@ -92,6 +92,14 @@ git add -A && git commit -m "chore: bump version to v0.2.0"
 build-win.bat
 ```
 
+若要把 ADB 调试随 Windows 包交付，先把以下文件放到项目根目录的 `Sdk/`（或 `sdk/`）：
+
+- `adb.exe`
+- `AdbWinApi.dll`
+- `AdbWinUsbApi.dll`
+
+`scripts/build-release.ps1` 会在构建开始前自动把它们同步到 `src-tauri/resources/adb/`，再由 `tauri.conf.json > bundle.resources` 打进安装包；同时也会把这 3 个文件复制到 `dist/` 根目录，方便便携版直接运行。
+
 构建完成后脚本打印产物路径，例如：
 
 ```
@@ -160,3 +168,7 @@ bash scripts/verify-docs.sh      # 文档 / 约束 / 护栏一致性检查
 
 Windows 10 1803 以下版本需手动安装 WebView2 Runtime：
 https://developer.microsoft.com/microsoft-edge/webview2/
+
+### ADB 调试页提示未找到 ADB 组件
+
+检查项目根目录的 `Sdk/`（或 `sdk/`）是否已放入 `adb.exe`、`AdbWinApi.dll`、`AdbWinUsbApi.dll`，并重新执行 Windows 构建。

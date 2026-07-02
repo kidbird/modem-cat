@@ -11,8 +11,7 @@ use crate::{wrap_transport, AppState};
 // ── Port listing helpers ──
 
 #[cfg(target_os = "windows")]
-pub(crate) fn get_windows_all_port_info(
-) -> HashMap<String, (Option<String>, Option<String>)> {
+pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Option<String>)> {
     use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
 
@@ -64,8 +63,7 @@ pub(crate) fn get_windows_all_port_info(
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn get_windows_all_port_info(
-) -> HashMap<String, (Option<String>, Option<String>)> {
+pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Option<String>)> {
     HashMap::new()
 }
 
@@ -248,9 +246,7 @@ where
 }
 
 #[tauri::command]
-pub(crate) async fn auto_connect_at(
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let ports =
         serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
@@ -383,10 +379,7 @@ pub(crate) async fn auto_connect_at(
         }
     }
 
-    Err(format!(
-        "所有候选端口均无法打开: {:?}",
-        at_candidates
-    ))
+    Err(format!("所有候选端口均无法打开: {:?}", at_candidates))
 }
 
 // ── Connection management ──
@@ -481,9 +474,7 @@ pub(crate) async fn connect_tcp(
 }
 
 #[tauri::command]
-pub(crate) async fn disconnect(
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+pub(crate) async fn disconnect(state: tauri::State<'_, AppState>) -> Result<String, String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     let connected_port = state.connected_port.clone();

@@ -1,0 +1,244 @@
+Wed Oct 12 15:45:16 2022: sdcard is not exist
+Wed Oct 12 15:45:16 2022: Stop adbd...
+Wed Oct 12 15:45:16 2022: no adbd found; none killed
+Wed Oct 12 15:45:16 2022: /usr/bin/usbenum.sh: line 122: /sys/kernel/config/usb_gadget/g1/UDC: No such file or directory
+Wed Oct 12 15:45:16 2022: hwclock: RTC_RD_TIME: Invalid argument
+Wed Oct 12 15:45:16 2022: mount: mounting none on /sys/kernel/config failed: Device or resource busy
+Wed Oct 12 15:45:16 2022: /usr/bin/usbenum.sh: line 149: /dev/stty_lte30: No such device
+Wed Oct 12 15:45:16 2022: Wed Oct 12 07:45:16 UTC 2022
+Wed Oct 12 15:45:16 2022: mkdir: can't create directory '/sys/kernel/config/usb_gadget/g1/functions/uac2.gs0': No such file or directory
+Wed Oct 12 15:45:16 2022: chmod: /sys/kernel/config/usb_gadget/g1/functions/uac2.gs0: No such file or directory
+Wed Oct 12 15:45:16 2022: ln: /sys/kernel/config/usb_gadget/g1/configs/b.1/f8: No such file or directory
+Wed Oct 12 15:45:16 2022: Starting adbd...
+Wed Oct 12 15:45:16 2022: /etc/init.d/adbd-init: line 10: setprop: command not found
+Wed Oct 12 15:45:16 2022: mount: mounting none on /sys/kernel/config failed: Device or resource busy
+Wed Oct 12 15:45:16 2022: rm: can't remove '/tmp': Read-only file system
+Wed Oct 12 15:45:17 2022: rm: can't remove '/etc/resolv.conf': Read-only file system
+Wed Oct 12 15:45:17 2022: ln: /etc/resolv.conf: File exists
+Wed Oct 12 15:45:18 2022: modem property get: ro.debuggable
+Wed Oct 12 15:45:18 2022: modem property get: ro.vendor.modem.alive
+Wed Oct 12 15:45:18 2022: rcS:sysdump_switch_enable start
+Wed Oct 12 15:45:18 2022: INIT: Entering runlevel: 5
+Wed Oct 12 15:45:18 2022: Starting system message bus: dbus.
+Wed Oct 12 15:45:19 2022: Starting syslogd/klogd: done
+Wed Oct 12 15:45:19 2022: Starting watchdog: 
+Wed Oct 12 15:45:19 2022: 
+Wed Oct 12 15:45:19 2022: Starting atrouter-service
+Wed Oct 12 15:45:19 2022: 
+Wed Oct 12 15:45:19 2022:  modem_ctl: Modem alive 
+Wed Oct 12 15:45:19 2022: enter the normal
+Wed Oct 12 15:45:19 2022: Starting sprdrild
+Wed Oct 12 15:45:19 2022: Starting mbim-daemon
+Wed Oct 12 15:45:19 2022: startmbim = 0
+Wed Oct 12 15:45:19 2022: Starting ntpd: done
+Wed Oct 12 15:45:20 2022: Starting radvd: 
+Wed Oct 12 15:45:20 2022: * /etc/radvd.conf does not exist or is empty.
+Wed Oct 12 15:45:20 2022: * See /usr/share/doc/radvd/radvd.conf.example for a simple
+Wed Oct 12 15:45:20 2022: * configuration suitable for most systems, and radvd.conf(5)
+Wed Oct 12 15:45:20 2022: * for configuration file syntax. radvd will *not* be started.
+Wed Oct 12 15:45:20 2022: /etc/rc5.d/S30zram-init: line 9: echo: write error: Invalid argument
+Wed Oct 12 15:45:20 2022: Setting up swapspace version 1, size = 16773120 bytes
+Wed Oct 12 15:45:20 2022: Starting quec_ril_bridge
+Wed Oct 12 15:45:20 2022: Starting Lighttpd Web Server: lighttpd.
+Wed Oct 12 15:45:20 2022: Starting cp_diskserver
+Wed Oct 12 15:45:20 2022: Starting slogmodem&mlogservice
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.version
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.nv
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.fixnv_size
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.runnv_size
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.nvpacket_size
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.product.partitionpath
+Wed Oct 12 15:45:20 2022: modem property get: persist.vendor.modem.nvp
+Wed Oct 12 15:45:20 2022: modem property get: persist.vendor.modem.prefix
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.version
+Wed Oct 12 15:45:20 2022: modem property get: persist.vendor.sys.isfirstboot
+Wed Oct 12 15:45:20 2022: Starting refnotify
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.version
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.radio.modemtype
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.tty
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.version
+Wed Oct 12 15:45:20 2022: modem property get: ro.bootmode
+Wed Oct 12 15:45:20 2022: /etc/rc5.d/S90arixoScript: line 6: /home/user/config/iptables: No such file or directory
+Wed Oct 12 15:45:20 2022: /etc/rc5.d/S90arixoScript: line 9: syntax error near unexpected token `}'
+Wed Oct 12 15:45:20 2022: /etc/rc5.d/S90arixoScript: line 9: `}'
+Wed Oct 12 15:45:20 2022: Starting Connection Manager
+Wed Oct 12 15:45:20 2022: Starting customer-start
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.radio.modemtype
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.diag
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.log
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.log
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.diag
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.log
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.diag
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.log
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.diag
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.log
+Wed Oct 12 15:45:20 2022: modem property get: ro.vendor.modem.diag
+Wed Oct 12 15:45:21 2022: modem property get: ro.vendor.modem.tty
+Wed Oct 12 15:45:21 2022: Starting arixo-config
+Wed Oct 12 15:45:21 2022: modem property get: ro.vendor.modem.wcn.log
+Wed Oct 12 15:45:21 2022: modem property get: ro.vendor.modem.gnss.log
+Wed Oct 12 15:45:21 2022: modem property get: ro.vendor.sp.log
+Wed Oct 12 15:45:21 2022: Starting arixo-lanat
+Wed Oct 12 15:45:21 2022: Starting iot5g-test
+Wed Oct 12 15:45:22 2022: Starting start_quec_gadget_service
+Wed Oct 12 15:45:22 2022: Starting arixoUartServer
+Wed Oct 12 15:45:22 2022: Starting thermald
+Wed Oct 12 15:45:23 2022: Starting Telephony daemon
+Wed Oct 12 15:45:23 2022: Configuring network interfaces... done.
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth0.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: Starting orca-keyevent-init
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth0.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth1.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: enter the normal
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth1.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth2.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth2.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth3.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth3.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth4.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth4.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth5.router_solicitation_interval = 1
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth5.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:23 2022: /etc/CarrierConfig/assets/carrier_config_46004.xml:2: validity error : Validation failed: no DTD found !
+Wed Oct 12 15:45:23 2022: <carrier_config_list>
+Wed Oct 12 15:45:23 2022:                     ^
+Wed Oct 12 15:45:23 2022: net.ipv6.conf.sipa_eth6.router_solicitation_interval = 1
+Wed Oct 12 15:45:24 2022: net.ipv6.conf.sipa_eth6.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:24 2022: Starting quec-lan
+Wed Oct 12 15:45:24 2022: net.ipv6.conf.sipa_eth7.router_solicitation_interval = 1
+Wed Oct 12 15:45:24 2022: setting lan to tether mode!!
+Wed Oct 12 15:45:24 2022: enable ethernet
+Wed Oct 12 15:45:24 2022: net.ipv6.conf.sipa_eth7.router_solicitation_max_interval = 1
+Wed Oct 12 15:45:24 2022: net.core.rmem_max = 1835008
+Wed Oct 12 15:45:24 2022: net.core.rmem_default = 1835008
+Wed Oct 12 15:45:24 2022: net.core.wmem_max = 1048576
+Wed Oct 12 15:45:24 2022: net.core.wmem_default = 1048576
+Wed Oct 12 15:45:24 2022: net.ipv4.tcp_rmem = 2097152 4194304 8388608
+Wed Oct 12 15:45:24 2022: net.ipv4.tcp_wmem = 262144 524288 1048576
+Wed Oct 12 15:45:24 2022: 
+Wed Oct 12 15:45:24 2022:  CEREG register state:2 
+Wed Oct 12 15:45:24 2022: 
+Wed Oct 12 15:45:24 2022:  C5GREG register state:4 
+Wed Oct 12 15:45:24 2022: /etc/CarrierConfig/assets/carrier_config_46004.xml:2: validity error : Validation failed: no DTD found !
+Wed Oct 12 15:45:24 2022: <carrier_config_list>
+Wed Oct 12 15:45:24 2022:                     ^
+Wed Oct 12 15:45:24 2022: 
+Wed Oct 12 15:45:24 2022:  C5GREG register state:2 
+Wed Oct 12 15:45:25 2022: 
+Wed Oct 12 15:45:25 2022:  CEREG register state:1 
+Wed Oct 12 15:45:25 2022: 
+Wed Oct 12 15:45:25 2022:  C5GREG register state:1 
+Wed Oct 12 15:45:25 2022: sh: line 0: echo: write error: Device or resource busy
+Thu Oct 13 02:09:45 2022: Thu Oct 13 02:09:45 UTC 2022
+Thu Oct 13 02:09:45 2022: ATRouter2.0 RouterNum-0.2 Completes Init 
+Thu Oct 13 02:09:45 2022: ATRouter2.0 RouterNum-0.3 Completes Init 
+Thu Oct 13 02:09:45 2022: ATRouter2.0 RouterNum-0.0 Completes Init 
+Thu Oct 13 02:09:45 2022: ATRouter2.0 RouterNum-0.1 Completes Init 
+Thu Oct 13 02:09:45 2022: Thu Oct 13 02:09:45 UTC 2022
+Thu Oct 13 02:09:45 2022: ip: either "to" is duplicate, or "111" is garbage
+Thu Oct 13 02:09:45 2022: ip: RTNETLINK answers: No such file or directory
+Thu Oct 13 10:09:45 2022: Bad argument `SNAT'
+Thu Oct 13 10:09:45 2022: Try `iptables -h' or 'iptables --help' for more information.
+Thu Oct 13 10:09:45 2022: Error ethernet: Already enabled
+Thu Oct 13 10:09:45 2022: mode  =1
+Thu Oct 13 10:09:45 2022: bridge_mode_append bridge_mode= 1
+Thu Oct 13 10:09:45 2022: Set bridge_mode completed  
+Thu Oct 13 10:09:45 2022: Enabled tethering for ethernet
+Thu Oct 13 10:09:45 2022: enable usbnet
+Thu Oct 13 10:09:45 2022: Enabled gadget
+Thu Oct 13 10:09:45 2022: mode  =1
+Thu Oct 13 10:09:45 2022: bridge_mode_append bridge_mode= 1
+Thu Oct 13 10:09:45 2022: Set bridge_mode completed  
+Thu Oct 13 10:09:45 2022: Enabled tethering for gadget
+Thu Oct 13 10:09:45 2022: Starting reboot-service
+Thu Oct 13 10:09:45 2022: Starting test_entry
+Thu Oct 13 10:09:45 2022: /etc/rc5.d/S95test-init: line 7: /usr/bin/test_entry.sh: No such file or directory
+Thu Oct 13 10:09:45 2022: Starting engpc-init
+Thu Oct 13 10:09:45 2022: Starting start_quec_nic_service
+Thu Oct 13 10:09:46 2022:   [tid:3234]main...m_loglevel=0
+Thu Oct 13 10:09:46 2022: Starting OpenBSD Secure Shell server: sshd
+Thu Oct 13 10:09:46 2022: [nic_service]pcie param get failed
+Thu Oct 13 10:09:46 2022: [nic_service]Dbus conn init success.
+Thu Oct 13 10:09:46 2022:   generating ssh RSA key...
+Thu Oct 13 10:09:46 2022: debug_mode=1
+Thu Oct 13 10:09:46 2022: dummyflag=0
+Thu Oct 13 10:09:46 2022: restore_vol_nr_runtimenv1=1
+Thu Oct 13 10:09:46 2022: restore_vol_nr_runtimenv2=1
+Thu Oct 13 10:09:46 2022: update_recovery=0
+Thu Oct 13 10:09:46 2022: register_this_module_ext: wifi lib for bbat.register_this_module_ext: 2 - 2register_this_module enter :libcheckkeybox
+Thu Oct 13 10:09:46 2022: register_this_module_ext: 1 : 1register_this_module_ext : libgetuidfile:sprd_get_uid.c, func:register_this_module
+Thu Oct 13 10:09:46 2022: sed: /home/root/auto_reboot_conf: No such file or directory
+Thu Oct 13 10:09:46 2022: interval=
+Thu Oct 13 10:09:46 2022: sed: /home/root/auto_reboot_conf: No such file or directory
+Thu Oct 13 10:09:46 2022: cnt=
+Thu Oct 13 10:09:46 2022: /usr/sbin/reboot_test-init.sh: line 9: [: -gt: unary operator expected
+Thu Oct 13 10:09:47 2022: need customer to supply specific functions,in test case we get power mode to 0x0(Normal power on)
+Thu Oct 13 10:09:47 2022: need customer to supply specific functions,in test case we get power mode to 0x0(Normal power on)
+Thu Oct 13 10:09:47 2022: need customer to supply specific functions,in test case we get power mode to 0x0(Normal power on)
+Thu Oct 13 10:09:48 2022: pthread_attr_setstacksize ret 22
+Thu Oct 13 10:09:48 2022: @@@@HALO function[rpcChannelOpen]
+Thu Oct 13 10:09:48 2022:  
+Thu Oct 13 10:09:48 2022: @@@@HALO s_rpc_fd! already exist val[15]
+Thu Oct 13 10:09:48 2022: 
+Thu Oct 13 10:09:48 2022:   generating ssh ECDSA key...
+Thu Oct 13 10:09:48 2022:   generating ssh DSA key...
+Thu Oct 13 10:09:48 2022: 
+Thu Oct 13 10:09:48 2022: @@@@HALO function[rpcChannelOpen]
+Thu Oct 13 10:09:48 2022:  
+Thu Oct 13 10:09:48 2022: @@@@HALO s_rpc_fd! already exist val[15]
+Thu Oct 13 10:09:48 2022: 
+Thu Oct 13 10:09:49 2022:   generating ssh ED25519 key...
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[rpcChannelOpen]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO s_rpc_fd! already exist val[15]
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: modem property set: persist.vendor.sys.halostatus
+Thu Oct 13 10:09:49 2022: done.
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[rpcChannelOpen]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO s_rpc_fd! already exist val[15]
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[0] 65FC65D1 1 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[1] D68EB66C 2 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[2] E8EE6983 3 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[3] CAD9BEE1 4 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[4] BE5D8760 5 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[5] 821BA0A5 7 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[6] 8F3B4BFD 10 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: @@@@HALO function[halo_ctrl_get_featureList]
+Thu Oct 13 10:09:49 2022:  
+Thu Oct 13 10:09:49 2022: @@@@HALO FC_ptr[7] 8FAE5D1E 11 0
+Thu Oct 13 10:09:49 2022: 
+Thu Oct 13 10:09:49 2022: test_modem_send_ap_alreadyinit_once ret 1 [0]

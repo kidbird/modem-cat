@@ -3,6 +3,7 @@
 //! Communicates with the device via HTTP REST API (not AT commands).
 //! Data persisted in the Tauri app data directory.
 
+use chrono::Datelike;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -10,7 +11,6 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use chrono::Datelike;
 use tauri::{AppHandle, Manager};
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -311,9 +311,7 @@ impl DeviceClient {
             sw_version: activate_info.data.firmware_version,
             device_name,
             activated,
-            timestamp: chrono::Local::now()
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string(),
+            timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         })
     }
 
@@ -346,8 +344,7 @@ impl DataManager {
         let path = self.data_dir.join(filename);
         let content =
             fs::read_to_string(&path).map_err(|e| format!("读取 {} 失败: {}", filename, e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("解析 {} 失败: {}", filename, e))
+        serde_json::from_str(&content).map_err(|e| format!("解析 {} 失败: {}", filename, e))
     }
 
     fn write_json<T: Serialize>(&self, filename: &str, data: &T) -> Result<(), String> {
@@ -441,7 +438,11 @@ impl DataManager {
                 .map_err(|e| format!("写入表头失败 {}: {}", filename, e))?;
         }
 
-        let status = if record.activated { "已激活" } else { "未激活" };
+        let status = if record.activated {
+            "已激活"
+        } else {
+            "未激活"
+        };
 
         writeln!(
             file,
@@ -583,9 +584,7 @@ pub fn factory_get_code_set(state: tauri::State<'_, FactoryState>) -> Result<Cod
 }
 
 #[tauri::command]
-pub fn factory_increment_sequence(
-    state: tauri::State<'_, FactoryState>,
-) -> Result<String, String> {
+pub fn factory_increment_sequence(state: tauri::State<'_, FactoryState>) -> Result<String, String> {
     let mut code_set = lock_factory(&state.current_code_set, "factory.current_code_set")?;
     code_set.seq_code = increment_seq(&code_set.seq_code)?;
     Ok(generate_sn(&code_set))
@@ -678,10 +677,7 @@ pub async fn factory_write_sn_to_device(
 ) -> Result<bool, String> {
     let client = {
         let guard = lock_factory(&state.device_client, "factory.device_client")?;
-        guard
-            .as_ref()
-            .ok_or("设备客户端未初始化")?
-            .clone()
+        guard.as_ref().ok_or("设备客户端未初始化")?.clone()
     };
     client.set_device_sn(&sn).await
 }
@@ -692,10 +688,7 @@ pub async fn factory_get_device_info(
 ) -> Result<DeviceInfo, String> {
     let client = {
         let guard = lock_factory(&state.device_client, "factory.device_client")?;
-        guard
-            .as_ref()
-            .ok_or("设备客户端未初始化")?
-            .clone()
+        guard.as_ref().ok_or("设备客户端未初始化")?.clone()
     };
     client.get_device_info().await
 }
@@ -727,9 +720,7 @@ pub fn factory_save_execute_data(state: tauri::State<'_, FactoryState>) -> Resul
         let mut found = false;
         for ex in &mut ex_data.exe_data_list {
             if ex.prefix_str == prefix {
-                ex.date_str = chrono::Local::now()
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string();
+                ex.date_str = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
                 ex.current_seq_no = code_set.seq_code.clone();
                 ex.product_type = product.product_type.clone();
                 found = true;
@@ -738,9 +729,7 @@ pub fn factory_save_execute_data(state: tauri::State<'_, FactoryState>) -> Resul
         }
         if !found {
             ex_data.exe_data_list.push(ExecuteData {
-                date_str: chrono::Local::now()
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string(),
+                date_str: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
                 product_type: product.product_type.clone(),
                 prefix_str: prefix,
                 current_seq_no: code_set.seq_code.clone(),
@@ -749,11 +738,7 @@ pub fn factory_save_execute_data(state: tauri::State<'_, FactoryState>) -> Resul
     }
 
     if let Some(ref dm) = *lock_factory(&state.data_manager, "factory.data_manager")? {
-        dm.save_execute_data(
-            execute_data
-                .as_ref()
-                .ok_or("execute data 未初始化")?,
-        )?;
+        dm.save_execute_data(execute_data.as_ref().ok_or("execute data 未初始化")?)?;
     }
 
     Ok(())

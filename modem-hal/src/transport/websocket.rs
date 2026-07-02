@@ -1,6 +1,6 @@
 use crate::transport::AtTransport;
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use std::net::TcpStream;
 use std::time::{Duration, Instant};
 use tungstenite::client::IntoClientRequest;
@@ -99,7 +99,8 @@ impl WebSocketTransport {
                 if lower.contains("login") || lower.contains("username") || lower.contains("user:")
                 {
                     let creds = credentials.as_ref().ok_or_else(|| {
-                        "WebSocket gateway requested credentials, but none were provided".to_string()
+                        "WebSocket gateway requested credentials, but none were provided"
+                            .to_string()
                     })?;
                     // Send username
                     socket
@@ -237,7 +238,10 @@ mod tests {
     #[test]
     fn normalize_credentials_preserves_anonymous_mode() {
         let creds = normalize_credentials(None, None).expect("anonymous mode should be allowed");
-        assert!(creds.is_none(), "anonymous mode must not synthesize admin/admin");
+        assert!(
+            creds.is_none(),
+            "anonymous mode must not synthesize admin/admin"
+        );
     }
 
     #[test]

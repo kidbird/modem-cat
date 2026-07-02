@@ -1,11 +1,11 @@
 # Code Map
 
-> 最近更新：2026-06-22
+> 最近更新：2026-07-02
 > 覆盖：前端 UI 元素 → IPC 命令 → 后端 live handler 三列映射
 
 ## 1. 后端 live IPC 命令清单
 
-> 当前 live IPC 统一注册在 `src-tauri/src/lib.rs::generate_handler!`，但实际执行面分散在 `handlers.rs`、`connection.rs`、`license.rs`、`factory.rs`、`dloader.rs`。
+> 当前 live IPC 统一注册在 `src-tauri/src/lib.rs::generate_handler!`，但实际执行面分散在 `handlers.rs`、`connection.rs`、`debug_terminal.rs`、`dloader.rs`。
 
 - 连接类：`list_ports` / `auto_connect_at` / `connect_serial` / `connect_tcp` / `list_network_adapters` / `connect_websocket` / `disconnect`
 - 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
@@ -14,8 +14,7 @@
 - 锁网 / 小区锁：`query_cell_lock` / `set_cell_lock` / `clear_cell_lock` / `set_plmn_lock` / `clear_plmn_lock`
 - Qualcomm 5GLAN：`query_qualcomm_5glan_status` / `configure_qualcomm_5glan` / `enable_eth_pdu` / `connect_qualcomm_5glan`
 - AT / MQTT：`send_raw_at` / `pop_at_commands` / `set_mqtt_enabled` / `get_mqtt_enabled`
-- License：`get_license_status` / `load_license_file`
-- Factory：`init_factory` / `factory_get_base_data` / `factory_get_current_product` / `factory_set_product` / `factory_get_current_sn` / `factory_get_code_set` / `factory_increment_sequence` / `factory_set_device_ip` / `factory_write_sn_to_device` / `factory_get_device_info` / `factory_save_execute_data` / `factory_save_device_record` / `factory_add_brand` / `factory_remove_brand` / `factory_add_product_type` / `factory_remove_product_type` / `factory_add_factory` / `factory_remove_factory`
+- Debug Terminal：`get_debug_terminal_capabilities` / `list_debug_network_adapters` / `get_debug_terminal_prefs` / `save_debug_terminal_prefs` / `start_adb_session` / `start_ssh_session` / `write_debug_terminal_input` / `close_debug_terminal_session`
 - Firmware：`pick_pac_file` / `pac_info` / `start_firmware_download` / `stop_firmware_download`
 
 ## 2. 前端 UI → IPC 触发点
@@ -87,7 +86,33 @@
 | 命令输入 | sendAtCommand | `send_raw_at` |
 | 快捷 AT 按钮 | quickAt | `send_raw_at` |
 
-### 2.4 系统信息页（`#page-hardware`，2 个子 tab）
+### 2.4 ADB 调试页（`#page-adbdebug`）
+
+| UI 元素 | HTML ID | 触发函数 | IPC 命令 |
+|---|---|---|---|
+| 页面初始化 | `#adbDebugNav` | `initDebugTerminal` | `get_debug_terminal_capabilities` / `get_debug_terminal_prefs` |
+| 连接按钮 | `#adbDebugConnectBtn` | `connectAdbDebug` | `get_feature_toggles` → `start_adb_session` |
+| 输入框发送 | `#adbDebugInput` | `sendAdbDebugInput` | `write_debug_terminal_input` |
+| 断开按钮 | `#adbDebugDisconnectBtn` | `disconnectDebugTerminal` | `close_debug_terminal_session` |
+| 终端输出 | `#adbDebugTerminal` | `handleDebugOutputEvent` | `debug-terminal-output` 事件 |
+
+> 若系统信息页中的 ADB 开关未启用，前端不会自动代开，只提示“请先开启 ADB 并重启设备后重新连接”。
+
+### 2.5 SSH 调试页（`#page-sshdebug`）
+
+| UI 元素 | HTML ID | 触发函数 | IPC 命令 |
+|---|---|---|---|
+| 网卡下拉框 | `#sshAdapterSelect` | `refreshSshDebugAdapters` / `handleSshAdapterChange` | `list_debug_network_adapters` |
+| 用户名/最近 IP 回填 | `#sshUsername` / `#sshHost` | `loadDebugPrefs` | `get_debug_terminal_prefs` |
+| 保存偏好 | — | `saveDebugPrefs` | `save_debug_terminal_prefs` |
+| 连接按钮 | `#sshDebugConnectBtn` | `connectSshDebug` | `start_ssh_session` |
+| 输入框发送 | `#sshDebugInput` | `sendSshDebugInput` | `write_debug_terminal_input` |
+| 断开按钮 | `#sshDebugDisconnectBtn` | `disconnectDebugTerminal` | `close_debug_terminal_session` |
+| 终端输出 | `#sshDebugTerminal` | `handleDebugOutputEvent` | `debug-terminal-output` 事件 |
+
+> `list_debug_network_adapters` 只返回有线网卡；默认把设备 IP 填成所选网卡网关，用户仍可手改。当前仅保存用户名、上次网卡和上次 IP，不保存密码。
+
+### 2.6 系统信息页（`#page-hardware`，2 个子 tab）
 
 #### UniSoc 子 tab（`#hwtab-unisoc`）
 
@@ -107,7 +132,7 @@
 | USB net / Data interface / PCIe / USB speed / IPPT | setQcXxxToggle | `set_qualcomm_config` |
 | ETH driver | saveQcEthDriver | `set_qualcomm_config` |
 
-### 2.5 IP 信息页（`#page-ip`）
+### 2.7 IP 信息页（`#page-ip`）
 
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
@@ -119,52 +144,22 @@
 
 > WebSocket 网关连接当前由状态页连接区域触发：`toggleConnection()` 在 `connectionType=ethernet` 时调用 `connect_websocket`，并可选传递显式用户名/密码；未提供时保持匿名模式，不再自动填入默认凭据。
 
-### 2.6 情景模式页（`#page-scene`）
+### 2.8 情景模式页（`#page-scene`）
 
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
 | 进入时并发预读 | loadScenePage | `get_feature_toggles` + `get_nat_mode` + `get_usbnet_mode` |
 | 激活场景 | activateScene | `set_nat_mode` + `set_feature_toggle` × 2 + `set_usbnet_mode` |
 
-### 2.7 系统设置页（`#page-settings`）
+### 2.9 系统设置页（`#page-settings`）
 
 纯前端（语言 / 主题），无 IPC。
 
-### 2.8 AT 手册页（`#page-atmanual`）
+### 2.10 AT 手册页（`#page-atmanual`）
 
 纯前端（静态 AT_DB），无 IPC。
 
-### 2.9 工厂模式页（`#page-factory`，License 控制显示，3 个子 tab）
-
-#### 生产操作 tab
-
-| UI 元素 | HTML ID | 触发函数 | IPC 命令 |
-|---|---|---|---|
-| 设备 IP + 连接 | `#factoryDeviceIp` + 连接按钮 | factoryConnectDevice | `factory_set_device_ip` + `factory_get_device_info` |
-| 品牌/类型/工厂下拉 | `#factoryBrandSel` / `#factoryTypeSel` / `#factoryFacSel` | onFactoryProductChange | `factory_set_product` + `factory_get_current_sn` |
-| 写入 SN | `#factoryWriteSnBtn` | factoryWriteSn | `factory_write_sn_to_device` + `factory_save_execute_data` + `factory_get_device_info` + `factory_save_device_record` + `factory_increment_sequence` |
-| 获取设备信息 | `#factoryGetInfoBtn` | factoryGetDeviceInfo | `factory_get_device_info` |
-
-#### 产品配置 tab（3 个子面板：品牌/类型/工厂）
-
-| UI 元素 | 触发函数 | IPC 命令 |
-|---|---|---|
-| 添加品牌 | factoryAddBrand | `factory_add_brand` |
-| 删除品牌 | factoryRemoveBrand | `factory_remove_brand` |
-| 添加产品类型 | factoryAddType | `factory_add_product_type` |
-| 删除产品类型 | factoryRemoveType | `factory_remove_product_type` |
-| 添加工厂 | factoryAddFactory | `factory_add_factory` |
-| 删除工厂 | factoryRemoveFactory | `factory_remove_factory` |
-
-#### 生产记录 tab
-
-| UI 元素 | 触发函数 | 数据来源 |
-|---|---|---|
-| 记录表格 | factoryUpdateRecordsTab | 前端 state（写入 SN 时追加） |
-
-> 懒加载：首次点击工厂模式导航时调用 `init_factory` 初始化。
-
-### 2.10 固件下载页（`#page-firmware`，License 控制显示）
+### 2.11 固件下载页（`#page-firmware`）
 
 | UI 元素 | HTML ID | 触发函数 | IPC 命令 |
 |---|---|---|---|
@@ -180,10 +175,8 @@
 |---|---|---|---|
 | `port-changed` | usb-monitor 线程 + heartbeat 线程 | app.js `setupUsbMonitor` 函数 | `{ added, removed: string[] }`，触发自动重连 / 强制断开 |
 | `show-about` | Tauri 菜单 / 快捷键 | app.js `setupAboutListener` 函数 | `showAbout()` 显示关于对话框 |
+| `debug-terminal-output` | debug_terminal.rs | debug-terminal.js `handleDebugOutputEvent` | ADB / SSH 终端输出与系统状态回显 |
 | `firmware-event` | dloader.rs sidecar 事件转发 | app.js `fwListen` 回调 | Log/Progress/StateChange/Completed/Error/Terminated 等固件下载事件 |
-| `license-changed` | license 模块 | app.js license 监听器 | License 状态变更，更新导航可见性 |
-| `show-load-license` | Tauri 菜单 / 托盘菜单 | app.js license 监听器 | 打开 License 文件加载对话框 |
-| `show-license-status` | Tauri 托盘菜单 | app.js license 监听器 | 显示当前 License 状态信息 |
 
 ## 4. UI 元素 → AT 命令 → 解析函数（重点页面）
 
@@ -209,13 +202,13 @@
 
 - 全局唯一前端状态源：`state`
 - `$.dom` 在 `cacheDom()` 中缓存常用节点
-- 5GLAN / APN / 场景 / Factory 等页面可有局部 UI 数据，但不能替代 live 状态 owner
+- 5GLAN / APN / 场景 / Debug Terminal 等页面可有局部 UI 数据，但不能替代 live 状态 owner
 
 ## 6. 改前端需注意
 
 - **所有 IPC 必须有 `await`**：Tauri v2 Promise 化
 - **错误处理**：`invoke` 失败时 `catch` 拿到的对象是 `{ message: string }`，统一用 `e.message || String(e)` 兜底
-- **懒加载**：重页面（如 hardware / ip / scene / atmanual / factory / firmware）优先按需拉取，不要在启动时堆满同步请求
+- **懒加载**：重页面（如 hardware / ip / scene / atmanual / adbdebug / sshdebug / firmware）优先按需拉取，不要在启动时堆满同步请求
 - **Tauri 事件**：`listen` 必须在初始化阶段注册
 - **MQTT 状态回读后端**：UI 不得把 MQTT 开关写入 `localStorage` 充当 live 状态
 - **WebSocket 凭据显式输入**：允许匿名网关；若网关要求认证，必须由用户显式提供用户名/密码，禁止补默认值

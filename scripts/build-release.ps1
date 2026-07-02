@@ -21,6 +21,54 @@ $ProgressPreference = "SilentlyContinue"
 
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
+$sdkDir = if (Test-Path (Join-Path $root "Sdk")) {
+    Join-Path $root "Sdk"
+} else {
+    Join-Path $root "sdk"
+}
+$adbResourceDir = Join-Path $root "src-tauri\resources\adb"
+$adbFiles = @(
+    "adb.exe",
+    "AdbWinApi.dll",
+    "AdbWinUsbApi.dll"
+)
+
+function Stop-RunningDistApp {
+    param(
+        [string]$DistExePath
+    )
+
+    $normalized = [System.IO.Path]::GetFullPath($DistExePath)
+    $running = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and ([System.IO.Path]::GetFullPath($_.Path) -eq $normalized)
+    }
+
+    foreach ($proc in $running) {
+        Write-Host "  [INFO] Stopping running dist app: PID $($proc.Id)"
+        Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+        $proc.WaitForExit(5000) | Out-Null
+    }
+}
+
+function Copy-FileWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [int]$MaxAttempts = 5
+    )
+
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            Copy-Item $Source $Destination -Force
+            return
+        } catch {
+            if ($attempt -eq $MaxAttempts) {
+                throw
+            }
+            Start-Sleep -Milliseconds (500 * $attempt)
+        }
+    }
+}
 
 # == Read version from tauri.conf.json ==
 $cfg = Get-Content "$root\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
@@ -31,7 +79,8 @@ Write-Host "  root: $root"
 Write-Host ""
 
 # == Step 1: Clean dist/ ==
-Write-Host "[1/7] Cleaning dist/ ..."
+Write-Host "[1/8] Cleaning dist/ ..."
+Stop-RunningDistApp -DistExePath (Join-Path $dist "modem-cat.exe")
 if (Test-Path $dist) {
     # Dist files may be locked (e.g. portable exe running). Move-then-delete avoids
     # "access denied" on locked files.
@@ -45,8 +94,24 @@ if (Test-Path $dist) {
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Write-Host "  [OK] dist/ cleaned"
 
-# == Step 2: Toolchain checks ==
-Write-Host "[2/7] Toolchain checks ..."
+# == Step 2: Sync ADB resources from Sdk/ ==
+Write-Host "[2/8] Syncing ADB resources from Sdk/ ..."
+if (-not (Test-Path $sdkDir)) {
+    throw "Sdk directory not found: $sdkDir"
+}
+
+New-Item -ItemType Directory -Path $adbResourceDir -Force | Out-Null
+foreach ($file in $adbFiles) {
+    $src = Join-Path $sdkDir $file
+    if (-not (Test-Path $src)) {
+        throw "Required ADB runtime file not found in Sdk/: $file"
+    }
+    Copy-Item $src (Join-Path $adbResourceDir $file) -Force
+    Write-Host "  [OK] $file -> src-tauri/resources/adb/"
+}
+
+# == Step 3: Toolchain checks ==
+Write-Host "[3/8] Toolchain checks ..."
 
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
 if (-not $cargo) { throw "cargo not found. Install Rust: https://rustup.rs" }
@@ -76,8 +141,8 @@ if (-not (Test-Path $webview2)) {
 $wvCount = (Get-ChildItem $webview2 -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
 Write-Host "  [OK] webview2-runtime: $wvCount files"
 
-# == Step 3: Build Tauri ==
-Write-Host "[3/7] Building Tauri (portable + installers) ..."
+# == Step 4: Build Tauri ==
+Write-Host "[4/8] Building Tauri (portable + installers) ..."
 
 $vcvarsallPath = $vcvarsall -replace '"',''
 cmd /c "`"$vcvarsallPath`" x64 && set" | ForEach-Object {
@@ -96,8 +161,8 @@ try {
 }
 Write-Host "  [OK] Tauri build done"
 
-# == Step 4: r26-cli sidecar (pre-built expected) ==
-Write-Host "[4/7] Checking r26-cli sidecar ..."
+# == Step 5: r26-cli sidecar (pre-built expected) ==
+Write-Host "[5/8] Checking r26-cli sidecar ..."
 $r26Src = "$root\src-tauri\binaries\r26-cli-x86_64-pc-windows-msvc.exe"
 if (Test-Path $r26Src) {
     Write-Host "  [OK] sidecar found in binaries/"
@@ -105,8 +170,8 @@ if (Test-Path $r26Src) {
     Write-Warning "r26-cli sidecar not found in binaries/ — firmware download will not be available"
 }
 
-# == Step 5: Build license-gen ==
-Write-Host "[5/7] Building license-gen ..."
+# == Step 6: Build license-gen ==
+Write-Host "[6/8] Building license-gen ..."
 $licGenDir = Join-Path $root "tools\license-gen"
 if (Test-Path $licGenDir) {
     Push-Location $licGenDir
@@ -122,14 +187,24 @@ if (Test-Path $licGenDir) {
     Write-Warning "tools/license-gen not found"
 }
 
-# == Step 6: Copy artifacts to dist/ root ==
-Write-Host "[6/7] Copying artifacts to dist/ ..."
+# == Step 7: Copy artifacts to dist/ root ==
+Write-Host "[7/8] Copying artifacts to dist/ ..."
 
 # Portable exe
 $exeSrc = "$root\target\release\modem-cat.exe"
 if (Test-Path $exeSrc) {
-    Copy-Item $exeSrc (Join-Path $dist "modem-cat.exe") -Force
+    Stop-RunningDistApp -DistExePath (Join-Path $dist "modem-cat.exe")
+    Copy-FileWithRetry -Source $exeSrc -Destination (Join-Path $dist "modem-cat.exe")
     Write-Host "  [OK] modem-cat.exe"
+}
+
+# ADB runtime (flat dist/ root for portable runs)
+foreach ($file in $adbFiles) {
+    $src = Join-Path $adbResourceDir $file
+    if (Test-Path $src) {
+        Copy-FileWithRetry -Source $src -Destination (Join-Path $dist $file)
+        Write-Host "  [OK] $file"
+    }
 }
 
 # MSI installer
@@ -152,11 +227,11 @@ if (Test-Path $nsisDir) {
 
 # r26-cli sidecar
 if (Test-Path $r26Src) {
-    Copy-Item $r26Src (Join-Path $dist "r26-cli-x86_64-pc-windows-msvc.exe") -Force
+    Copy-FileWithRetry -Source $r26Src -Destination (Join-Path $dist "r26-cli-x86_64-pc-windows-msvc.exe")
     Write-Host "  [OK] r26-cli-x86_64-pc-windows-msvc.exe"
     $r26Ver = "$root\src-tauri\binaries\r26-cli.version.txt"
     if (Test-Path $r26Ver) {
-        Copy-Item $r26Ver (Join-Path $dist "r26-cli.version.txt") -Force
+        Copy-FileWithRetry -Source $r26Ver -Destination (Join-Path $dist "r26-cli.version.txt")
     }
 }
 
@@ -167,7 +242,7 @@ $licGenPaths = @(
 )
 foreach ($lg in $licGenPaths) {
     if (Test-Path $lg) {
-        Copy-Item $lg (Join-Path $dist "license-gen.exe") -Force
+        Copy-FileWithRetry -Source $lg -Destination (Join-Path $dist "license-gen.exe")
         Write-Host "  [OK] license-gen.exe"
         break
     }
@@ -180,7 +255,7 @@ Write-Host "  [OK] webview2-runtime/"
 
 # Create portable ZIP
 Write-Host ""
-Write-Host "[7/7] Creating portable ZIP ..."
+Write-Host "[8/8] Creating portable ZIP ..."
 $zipName = "ModemCat_v${ver}_portable.zip"
 $zipPath = Join-Path $dist $zipName
 $tempZip = Join-Path $env:TEMP "modem-cat-zip-temp"

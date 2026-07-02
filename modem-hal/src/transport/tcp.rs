@@ -1,5 +1,5 @@
-use crate::transport::AtTransport;
 use crate::transport::is_complete_response;
+use crate::transport::AtTransport;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::time::Duration;

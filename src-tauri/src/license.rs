@@ -92,9 +92,7 @@ pub fn update_license_state(
 /// `load_license_file` panic cannot take down every subsequent IPC call
 /// (AGENTS.md: "运行时锁路径禁止 panic").
 #[tauri::command]
-pub fn get_license_status(
-    state: tauri::State<'_, AppState>,
-) -> Result<LicenseStatus, String> {
+pub fn get_license_status(state: tauri::State<'_, AppState>) -> Result<LicenseStatus, String> {
     let guard = state
         .license
         .lock()

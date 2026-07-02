@@ -14,73 +14,68 @@ pub(crate) struct PortChangeEvent {
 pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("usb-monitor".into())
-        .spawn(move || {
-            loop {
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let mut previous_ports: HashSet<String> = serialport::available_ports()
-                        .map(|ps| ps.into_iter().map(|p| p.port_name).collect())
-                        .unwrap_or_default();
-                    loop {
-                        std::thread::sleep(Duration::from_secs(2));
+        .spawn(move || loop {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut previous_ports: HashSet<String> = serialport::available_ports()
+                    .map(|ps| ps.into_iter().map(|p| p.port_name).collect())
+                    .unwrap_or_default();
+                loop {
+                    std::thread::sleep(Duration::from_secs(2));
 
-                        let ports = match serialport::available_ports() {
-                            Ok(p) => p,
-                            Err(e) => {
-                                log::warn!("[USB监控] available_ports 失败: {}", e);
-                                continue;
-                            }
-                        };
-
-                        let current_names: HashSet<String> =
-                            ports.iter().map(|p| p.port_name.clone()).collect();
-
-                        let added: Vec<String> =
-                            current_names.difference(&previous_ports).cloned().collect();
-                        let removed: Vec<String> =
-                            previous_ports.difference(&current_names).cloned().collect();
-                        previous_ports = current_names;
-
-                        if added.is_empty() && removed.is_empty() {
+                    let ports = match serialport::available_ports() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            log::warn!("[USB监控] available_ports 失败: {}", e);
                             continue;
                         }
-
-                        log::info!(
-                            "[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}",
-                            added,
-                            removed
-                        );
-
-                        if let Err(e) = app_handle.emit(
-                            "port-changed",
-                            PortChangeEvent {
-                                added: added.clone(),
-                                removed: removed.clone(),
-                            },
-                        ) {
-                            log::warn!("[USB监控] 发送事件失败: {}", e);
-                        }
-                    }
-                }));
-                if let Err(e) = result {
-                    let msg = if let Some(s) = e.downcast_ref::<&str>() {
-                        s.to_string()
-                    } else if let Some(s) = e.downcast_ref::<String>() {
-                        s.clone()
-                    } else {
-                        "未知错误".to_string()
                     };
-                    log::error!("[USB监控] 线程崩溃: {}，5秒后重启", msg);
-                    std::thread::sleep(Duration::from_secs(5));
+
+                    let current_names: HashSet<String> =
+                        ports.iter().map(|p| p.port_name.clone()).collect();
+
+                    let added: Vec<String> =
+                        current_names.difference(&previous_ports).cloned().collect();
+                    let removed: Vec<String> =
+                        previous_ports.difference(&current_names).cloned().collect();
+                    previous_ports = current_names;
+
+                    if added.is_empty() && removed.is_empty() {
+                        continue;
+                    }
+
+                    log::info!(
+                        "[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}",
+                        added,
+                        removed
+                    );
+
+                    if let Err(e) = app_handle.emit(
+                        "port-changed",
+                        PortChangeEvent {
+                            added: added.clone(),
+                            removed: removed.clone(),
+                        },
+                    ) {
+                        log::warn!("[USB监控] 发送事件失败: {}", e);
+                    }
                 }
+            }));
+            if let Err(e) = result {
+                let msg = if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "未知错误".to_string()
+                };
+                log::error!("[USB监控] 线程崩溃: {}，5秒后重启", msg);
+                std::thread::sleep(Duration::from_secs(5));
             }
         })
         .expect("无法创建 USB 监控线程");
 }
 
-pub(crate) fn start_connection_heartbeat(
-    app_handle: tauri::AppHandle,
-    state: AppState,
-) {
+pub(crate) fn start_connection_heartbeat(app_handle: tauri::AppHandle, state: AppState) {
     std::thread::Builder::new()
         .name("connection-heartbeat".into())
         .spawn(move || {

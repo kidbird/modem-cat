@@ -32,5 +32,8 @@
       chipVendor: '',
       currentBand: '',
       vlanEnabled: false,
-      licenseStatus: null,
+      debugTerminal: {
+        activeKind: null,
+        capabilities: null,
+      },
     };

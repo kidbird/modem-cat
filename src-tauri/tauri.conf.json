@@ -41,6 +41,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "resources/adb/"
+    ],
     "externalBin": ["binaries/r26-cli"],
     "windows": {
       "wix": {

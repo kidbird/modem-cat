@@ -4,12 +4,12 @@
 //! self-contained 32-bit `r26-cli.exe` sidecar, decoding its JSON event
 //! output into Tauri `firmware-event`s for the UI.
 
-use std::sync::{Arc, Mutex, OnceLock};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
 
 // -- Sidecar version gate ----------------------------------------------------
 
@@ -152,16 +152,42 @@ pub fn plan_flash(report: &SafetyReportDto) -> FlashDecision {
 /// Local mirror of r26-cli's `EngineEvent`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FirmwareEvent {
-    Log { level: String, message: String },
-    Progress { port: u32, percent: f32, file_id: String },
-    StateChange { from: String, to: String },
-    Error { code: u32, message: String },
-    Completed { port: u32, result: DownloadResultDto },
-    SafetyReportReady { report: serde_json::Value },
-    SafetyViolation { violation: serde_json::Value },
-    SafetyConfirmed { category: String },
-    PacLoadProgress { percent: u32 },
-    Terminated { code: Option<i32> },
+    Log {
+        level: String,
+        message: String,
+    },
+    Progress {
+        port: u32,
+        percent: f32,
+        file_id: String,
+    },
+    StateChange {
+        from: String,
+        to: String,
+    },
+    Error {
+        code: u32,
+        message: String,
+    },
+    Completed {
+        port: u32,
+        result: DownloadResultDto,
+    },
+    SafetyReportReady {
+        report: serde_json::Value,
+    },
+    SafetyViolation {
+        violation: serde_json::Value,
+    },
+    SafetyConfirmed {
+        category: String,
+    },
+    PacLoadProgress {
+        percent: u32,
+    },
+    Terminated {
+        code: Option<i32>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,10 +266,7 @@ fn lock_child_slot<'a>(
 
 /// Start the firmware download: analyze PAC, enforce policy, spawn sidecar.
 #[tauri::command]
-pub async fn start_firmware_download(
-    app: AppHandle,
-    path: String,
-) -> Result<(), String> {
+pub async fn start_firmware_download(app: AppHandle, path: String) -> Result<(), String> {
     ensure_sidecar_version(&app).await?;
 
     // Re-analyze + policy gate (TOCTOU protection).
@@ -254,7 +277,11 @@ pub async fn start_firmware_download(
     };
 
     let mut args: Vec<String> = vec![
-        "download".into(), path, "--port".into(), "0".into(), "--json".into(),
+        "download".into(),
+        path,
+        "--port".into(),
+        "0".into(),
+        "--json".into(),
     ];
     for f in &allow_flags {
         args.push((*f).to_string());
@@ -318,7 +345,10 @@ pub async fn start_firmware_download(
                 CommandEvent::Error(err) => {
                     let _ = app_for_task.emit(
                         "firmware-event",
-                        FirmwareEvent::Error { code: 0, message: err },
+                        FirmwareEvent::Error {
+                            code: 0,
+                            message: err,
+                        },
                     );
                 }
                 CommandEvent::Terminated(payload) => {
@@ -363,9 +393,15 @@ mod tests {
     }
     fn report() -> SafetyReportDto {
         SafetyReportDto {
-            total_files: 0, safe_files: vec![], nv_files: vec![], rf_cali_files: vec![],
-            erase_files: vec![], phasecheck_files: vec![], has_risks: false,
-            touches_rf_calibration: false, summary: String::new(),
+            total_files: 0,
+            safe_files: vec![],
+            nv_files: vec![],
+            rf_cali_files: vec![],
+            erase_files: vec![],
+            phasecheck_files: vec![],
+            has_risks: false,
+            touches_rf_calibration: false,
+            summary: String::new(),
         }
     }
 
@@ -373,7 +409,9 @@ mod tests {
     fn safe_pac_proceeds_with_no_flags() {
         assert_eq!(
             plan_flash(&report()),
-            FlashDecision::Proceed { allow_flags: vec![] }
+            FlashDecision::Proceed {
+                allow_flags: vec![]
+            }
         );
     }
 
@@ -384,7 +422,9 @@ mod tests {
         r.nv_files = vec![risk("NV_NORFLASH")];
         assert_eq!(
             plan_flash(&r),
-            FlashDecision::Proceed { allow_flags: vec!["--allow-erase", "--allow-nv-write"] }
+            FlashDecision::Proceed {
+                allow_flags: vec!["--allow-erase", "--allow-nv-write"]
+            }
         );
     }
 
@@ -416,7 +456,11 @@ mod tests {
     fn firmware_event_parses_engine_event_json() {
         let line = r#"{"Progress":{"port":3,"percent":52.5,"file_id":"FDL2"}}"#;
         match serde_json::from_str::<FirmwareEvent>(line).unwrap() {
-            FirmwareEvent::Progress { port, percent, file_id } => {
+            FirmwareEvent::Progress {
+                port,
+                percent,
+                file_id,
+            } => {
                 assert_eq!(port, 3);
                 assert_eq!(file_id, "FDL2");
                 assert!((percent - 52.5).abs() < f32::EPSILON);

@@ -29,12 +29,14 @@ check "AGENTS 路由包含 handlers/connection/monitor" "grep -q 'handlers,conne
 check "ARCHITECTURE 记录 handlers.rs" "grep -q 'handlers.rs' docs/ARCHITECTURE.md"
 check "ARCHITECTURE 记录 connection.rs" "grep -q 'connection.rs' docs/ARCHITECTURE.md"
 check "ARCHITECTURE 记录 monitor.rs" "grep -q 'monitor.rs' docs/ARCHITECTURE.md"
+check "ARCHITECTURE 记录 debug_terminal.rs" "grep -q 'debug_terminal.rs' docs/ARCHITECTURE.md"
 check "CODE_MAP 说明执行面分散在模块文件中" "grep -q 'handlers.rs' docs/CODE_MAP.md && grep -q 'connection.rs' docs/CODE_MAP.md"
 check "CALL_FLOW 指向 connection.rs::auto_connect_at" "grep -q 'connection.rs::auto_connect_at' docs/CALL_FLOW.md"
 
 echo "[2] 死路径与过时引用"
 check "owner 文档不再引用已删除的 commands.rs" "! grep -n 'commands.rs' AGENTS.md CLAUDE.md docs/CONTEXT_PACK.md docs/ARCHITECTURE.md docs/AT_COMMANDS.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/REVIEW.md docs/BUILD.md docs/TECH_STACK.md docs/CODING.md docs/README.md 2>/dev/null"
 check "owner 文档不再写死旧行数 1142/1556/6479" "! grep -nE '1142|1556|6479' AGENTS.md CLAUDE.md docs/CONTEXT_PACK.md docs/ARCHITECTURE.md docs/AT_COMMANDS.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/REVIEW.md docs/BUILD.md docs/TECH_STACK.md docs/CODING.md docs/README.md 2>/dev/null"
+check "owner 文档不再描述最终用户 License / Factory 菜单入口" "! grep -nE 'show-load-license|show-license-status|#page-factory|factory_write_sn_to_device|get_license_status|load_license_file' docs/ARCHITECTURE.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/BUILD.md docs/TECH_STACK.md 2>/dev/null"
 
 echo "[3] 凭据与真相源"
 check "WebSocket 不再补 admin 默认凭据" "! grep -R -n 'unwrap_or(\"admin\")' src-tauri/src modem-hal/src 2>/dev/null"
@@ -51,6 +53,8 @@ echo "[5] 文档验证入口"
 check "BUILD 文档包含 verify-docs" "grep -q 'verify-docs.sh' docs/BUILD.md"
 check "CODING 文档包含 verify-docs" "grep -q 'verify-docs.sh' docs/CODING.md"
 check "AGENTS 验证基线包含 cargo test / cargo build / verify-docs" "grep -q 'cargo test --workspace' AGENTS.md && grep -q 'cargo build -p modem-hal' AGENTS.md && grep -q 'verify-docs.sh' AGENTS.md"
+check "CODE_MAP 记录 ADB / SSH 调试 IPC" "grep -q 'start_adb_session' docs/CODE_MAP.md && grep -q 'start_ssh_session' docs/CODE_MAP.md"
+check "BUILD 记录 ADB 资源目录" "grep -q 'src-tauri/resources/adb/' docs/BUILD.md && grep -q 'Sdk/' docs/BUILD.md"
 
 echo
 echo "=== 结果: $pass 通过 / $fail 失败 ==="

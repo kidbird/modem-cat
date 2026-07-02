@@ -97,10 +97,10 @@ mod tests {
     #[test]
     fn is_complete_response_rejects_truncated() {
         assert!(!is_complete_response(""));
-        assert!(!is_complete_response("+CPIN: READY"));           // missing OK
-        assert!(!is_complete_response("+QENG: \"servingcell\""));  // partial
+        assert!(!is_complete_response("+CPIN: READY")); // missing OK
+        assert!(!is_complete_response("+QENG: \"servingcell\"")); // partial
         assert!(!is_complete_response("some intermediate data"));
-        assert!(!is_complete_response("+COPS: 0,"));               // cut mid-line
+        assert!(!is_complete_response("+COPS: 0,")); // cut mid-line
     }
 
     #[test]

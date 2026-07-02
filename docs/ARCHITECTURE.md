@@ -81,12 +81,12 @@ src-tauri/src/
 
 此外还有两个独立受管状态：
 
-- `FactoryState`
-  工厂模式配置、当前产品、设备地址、流水号等
 - `DloaderState`
   固件下载 sidecar 运行句柄
+- `DebugTerminalState`
+  ADB / SSH 调试终端会话、偏好设置与输出转发
 
-禁止在这些 owner 之外再维护第二份 live 连接状态、CID、日志、License 或下载进程状态。
+禁止在这些 owner 之外再维护第二份 live 连接状态、CID、日志、调试会话或下载进程状态。
 
 ## 4. Live 后端模块
 
@@ -123,20 +123,17 @@ src-tauri/src/
 - 不能自建第二条 modem I/O 路径
 - broker / port / 认证信息必须来自显式配置（环境变量），不得硬编码生产默认值
 
-### 4.6 `src-tauri/src/license.rs`
+### 4.6 `src-tauri/src/debug_terminal.rs`
 
-- 启动时加载 `license.dat`
-- 校验 License 并更新 `AppState.license`
-- 暴露 `get_license_status` / `load_license_file`
-- 通过 `license-changed` 事件通知前端
+- ADB / SSH 调试终端 IPC
+- ADB 会话仅在 Windows 目标暴露，并优先从 Tauri `resources/adb/` 解析 `adb.exe`
+- SSH 会话通过 `ssh2` 直连，不复用 `AppState.transport`
+- 输出统一通过 `debug-terminal-output` 事件推送到前端终端页
 
-### 4.7 `src-tauri/src/factory.rs`
+### 4.7 `src-tauri/src/license.rs`
 
-- 工厂模式本地配置读写
-- 设备 HTTP 通信
-- SN / 记录 / 产品配置 IPC
-- 不直接参与 AT 队列，但会与前端 License 可见性联动
-- 运行时锁错误必须返回错误，不得 panic
+- 保留给非最终用户构建的 License 校验模块
+- 当前最终用户桌面构建不注册其 IPC，也不暴露激活入口
 
 ### 4.8 `src-tauri/src/dloader.rs`
 
@@ -208,10 +205,10 @@ pub trait AtTransport: Send {
 
 当前后端还包含两类辅助路径：
 
-- Factory：HTTP 设备管理
 - Firmware：sidecar 驱动刷机
+- Debug Terminal：ADB sidecar / SSH 会话
 
-无论 transport 类型如何变化，live modem I/O 仍必须复用同一条 `AppState.transport` 串行化路径。
+无论 transport 类型如何变化，live modem I/O 仍必须复用同一条 `AppState.transport` 串行化路径；ADB / SSH 调试路径不得反向接入该 AT 队列。
 
 ## 8. 后台线程与事件
 
@@ -223,8 +220,8 @@ pub trait AtTransport: Send {
   负责远端状态上报
 - `firmware-event`
   负责 sidecar 下载事件转发到前端
-- `license-changed`
-  负责 License 状态更新广播
+- `debug-terminal-output`
+  负责 ADB / SSH 终端输出广播到前端
 
 后台流程的核心约束只有两条：
 

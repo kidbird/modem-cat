@@ -8,7 +8,6 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
 use tauri::Manager;
 
-
 pub struct AppState {
     pub transport: Arc<Mutex<Option<Box<dyn AtTransport>>>>,
     pub vendor: Arc<Mutex<Option<Box<dyn ModemVendor>>>>,
@@ -25,7 +24,8 @@ pub struct AppState {
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,
     /// Handle of the active background MQTT connection loop task.
     pub mqtt_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
-    /// Loaded license payload (None = unlicensed or invalid).
+    /// Retained license payload state for non-end-user builds.
+    /// End-user desktop IPC no longer exposes activation or license menus.
     pub license: Arc<Mutex<Option<modem_license::LicensePayload>>>,
     /// Set while a disconnect is in progress (heartbeat / USB-monitor ↔ IPC).
     /// Prevents the heartbeat from emitting duplicate `port-changed` and from
@@ -137,12 +137,13 @@ macro_rules! with_vendor_cid {
 }
 
 mod connection;
+mod debug_terminal;
+pub mod dloader;
+pub mod factory;
 mod handlers;
+pub mod license;
 mod monitor;
 mod mqtt;
-pub mod license;
-pub mod factory;
-pub mod dloader;
 
 #[cfg(test)]
 mod tests {
@@ -258,41 +259,19 @@ pub fn run() {
             disconnecting: Arc::new(AtomicBool::new(false)),
             connecting: Arc::new(AtomicBool::new(false)),
         })
-        .manage(factory::FactoryState::new())
         .manage(dloader::DloaderState::default())
+        .manage(debug_terminal::DebugTerminalState::default())
         .setup(|app| {
-            // ── Load license ──
-            let state = app.state::<AppState>();
-            let license_payload = license::init_license(&app.handle());
-            license::update_license_state(&state.license, license_payload);
-
             // ── Build menu bar ──
             let about = MenuItemBuilder::with_id("about", "关于 Modem Cat").build(app)?;
-            let load_license =
-                MenuItemBuilder::with_id("load_license", "加载 License...").build(app)?;
-            let license_status =
-                MenuItemBuilder::with_id("license_status", "License 状态").build(app)?;
-            let help_menu = SubmenuBuilder::new(app, "帮助")
-                .item(&about)
-                .separator()
-                .item(&load_license)
-                .item(&license_status)
-                .build()?;
+            let help_menu = SubmenuBuilder::new(app, "帮助").item(&about).build()?;
             let menu = MenuBuilder::new(app).item(&help_menu).build()?;
             app.set_menu(menu)?;
-            app.on_menu_event(|handle, event| {
-                match event.id().as_ref() {
-                    "about" => {
-                        let _ = handle.emit("show-about", ());
-                    }
-                    "load_license" => {
-                        let _ = handle.emit("show-load-license", ());
-                    }
-                    "license_status" => {
-                        let _ = handle.emit("show-license-status", ());
-                    }
-                    _ => {}
+            app.on_menu_event(|handle, event| match event.id().as_ref() {
+                "about" => {
+                    let _ = handle.emit("show-about", ());
                 }
+                _ => {}
             });
 
             monitor::start_port_monitor(app.handle().clone());
@@ -369,6 +348,14 @@ pub fn run() {
             connection::disconnect,
             connection::list_network_adapters,
             connection::connect_websocket,
+            debug_terminal::get_debug_terminal_capabilities,
+            debug_terminal::list_debug_network_adapters,
+            debug_terminal::get_debug_terminal_prefs,
+            debug_terminal::save_debug_terminal_prefs,
+            debug_terminal::start_adb_session,
+            debug_terminal::start_ssh_session,
+            debug_terminal::write_debug_terminal_input,
+            debug_terminal::close_debug_terminal_session,
             // High-level queries
             handlers::get_modem_status,
             handlers::get_hardware_info,
@@ -421,28 +408,6 @@ pub fn run() {
             handlers::clear_plmn_lock,
             handlers::set_mqtt_enabled,
             handlers::get_mqtt_enabled,
-            // License
-            license::get_license_status,
-            license::load_license_file,
-            // Factory mode
-            factory::init_factory,
-            factory::factory_get_base_data,
-            factory::factory_get_current_product,
-            factory::factory_set_product,
-            factory::factory_get_current_sn,
-            factory::factory_get_code_set,
-            factory::factory_increment_sequence,
-            factory::factory_set_device_ip,
-            factory::factory_write_sn_to_device,
-            factory::factory_get_device_info,
-            factory::factory_save_execute_data,
-            factory::factory_save_device_record,
-            factory::factory_add_brand,
-            factory::factory_remove_brand,
-            factory::factory_add_product_type,
-            factory::factory_remove_product_type,
-            factory::factory_add_factory,
-            factory::factory_remove_factory,
             // Firmware download
             dloader::pick_pac_file,
             dloader::pac_info,

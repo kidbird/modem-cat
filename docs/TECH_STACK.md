@@ -1,6 +1,6 @@
 # 技术栈
 
-> 最近更新：2026-06-18
+> 最近更新：2026-07-02
 
 ## 1. 核心技术
 
@@ -20,6 +20,7 @@
   - `src/desktop/js/theme.js`
   - `src/desktop/js/scene.js`
   - `src/desktop/data/atdb.js`
+  - `src/desktop/js/debug-terminal.js`
   - `src/desktop/app.js`
 - 全局状态 owner：`state`
 
@@ -35,6 +36,8 @@
   - broker / port / 认证信息必须显式提供，不能硬编码默认生产值
 - **reqwest**
   - 工厂模式设备 HTTP 通信
+- **ssh2**
+  - SSH 调试终端会话
 - **chrono**
   - SN / 记录 / 时间处理
 - **winreg**
@@ -52,11 +55,15 @@
 ### 1.5 辅助模块
 
 - `modem-license`
-  - License 校验与状态建模
+  - License 校验与状态建模（当前最终用户桌面构建不暴露其 IPC）
 - `r26-cli` sidecar
   - PAC 解析与固件下载执行
   - 由 `src-tauri/src/dloader.rs` 管理
   - 真正刷机能力当前只随 Windows 二进制交付；非 Windows 目标保留占位 sidecar 以保证本地构建 / 测试可通过
+- `adb.exe` + `AdbWin*.dll`
+  - Windows ADB 调试 sidecar 资源
+  - 发布脚本从 `Sdk/` 自动同步到 `src-tauri/resources/adb/`
+  - 由 `src-tauri/src/debug_terminal.rs` 从 `src-tauri/resources/adb/` 打包目录解析
 
 ## 2. Live 依赖关系
 
@@ -65,6 +72,8 @@ src/desktop/*
   → invoke / listen
 src-tauri/src/lib.rs
   → AppState.transport / vendor / license
+src-tauri/src/debug_terminal.rs
+  → adb.exe sidecar / ssh2 shell
 modem-hal/src/*
   → AtTransport / ModemVendor
 serial / tcp / websocket transport
@@ -84,9 +93,12 @@ src-tauri/src/dloader.rs
   - serial
   - tcp
   - websocket
+- 最终用户调试能力额外包含：
+  - Windows ADB shell
+  - SSH shell
 - WebSocket 网关允许匿名接入；若目标网关要求认证，用户名/密码必须由用户显式提供，禁止补默认值
 - `mqtt.rs` 是可选后台上报模块，不是第二条业务主路径
-- `factory.rs` 和 `dloader.rs` 是辅助业务模块，不得绕过 HAL 新建 AT 队列
+- `debug_terminal.rs` 和 `dloader.rs` 是辅助业务模块，不得绕过 HAL 新建 AT 队列
 - MQTT 仅在显式设置 `MODEM_CAT_MQTT_HOST`、`MODEM_CAT_MQTT_PORT`，以及可选的 `MODEM_CAT_MQTT_USERNAME` / `MODEM_CAT_MQTT_PASSWORD` 后才允许启用
 
 ## 4. 设计约束与技术栈关系

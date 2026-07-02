@@ -332,76 +332,103 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
         toggleConnection()  ← 自动重连
 ```
 
-## 13. 工厂模式流程
+## 13. ADB 调试流程
 
-### 13.1 初始化
+### 13.1 页面进入与 ADB 开关检查
 
 ```
-[前端]  用户首次点击工厂模式导航
+[前端]  用户进入 ADB 调试页
   │
-  └─→ factoryInit()  [app.js]
+  └─→ initDebugTerminal()  [debug-terminal.js]
         │
-        ├─ invoke('init_factory')
-        │     └─→ factory.rs::init_factory
-        │           ├─ 加载/创建 factory_basecfg.json（嵌入式回退数据）
-        │           ├─ 加载/创建 factory_select.json（当前产品选择）
-        │           └─ 加载/创建 factory_execute.json（执行历史）
+        ├─ invoke('get_debug_terminal_capabilities')
+        │     └─→ debug_terminal.rs::get_debug_terminal_capabilities
+        │           └─ Windows 才返回 adb_supported=true
         │
-        ├─ invoke('factory_get_base_data')  → 品牌/类型/工厂配置
-        ├─ invoke('factory_get_current_product')  → 当前选中产品
-        ├─ invoke('factory_get_current_sn')  → 当前 SN
+        ├─ invoke('get_debug_terminal_prefs')
+        └─ handleDebugTerminalPageChange(...)
+              └─ ensureAdbEnabled()
+                    └─ invoke('get_feature_toggles')
+                          └─ adb=false → 仅提示“请先开启 ADB 并重启设备后重新连接”
+```
+
+### 13.2 建立 ADB shell 会话
+
+```
+[前端]  connectAdbDebug()
+  │
+  └─ invoke('start_adb_session')
+        └─→ debug_terminal.rs::start_adb_session
+              ├─ 检查当前无活动调试会话
+              ├─ 解析 Tauri `resourceDir()/adb/adb.exe`
+              ├─ Windows 下启动 `adb.exe shell`
+              └─ 后台线程循环读取 stdout/stderr
+                    └─ emit('debug-terminal-output', { kind: 'adb', stream, text })
+```
+
+### 13.3 ADB 命令输入 / 离开页面
+
+```
+[前端]  sendAdbDebugInput()
+  └─ invoke('write_debug_terminal_input', { input })
+        └─→ debug_terminal.rs::write_debug_terminal_input
+              └─ 写入 adb child stdin
+
+[前端]  离开 ADB/SSH 页
+  └─→ handleDebugTerminalPageChange(prev, next)
+        └─ invoke('close_debug_terminal_session')
+              └─→ 关闭活动调试子进程 / SSH channel
+```
+
+## 14. SSH 调试流程
+
+### 14.1 网卡枚举与默认 IP
+
+```
+[前端]  用户进入 SSH 调试页
+  │
+  └─→ refreshSshDebugAdapters()  [debug-terminal.js]
         │
-        └─ factoryRenderDropdowns() + factoryUpdateSnDisplay()
+        ├─ invoke('list_debug_network_adapters')
+        │     └─→ debug_terminal.rs::list_debug_network_adapters
+        │           └─ 复用 connection.rs::list_network_adapters()，再过滤掉 Wi-Fi / WLAN
+        │
+        ├─ 用 adapter.gateway 填充下拉框 value
+        └─ handleSshAdapterChange()
+              └─ 默认把 `#sshHost` 设为所选网卡网关
 ```
 
-### 13.2 写入 SN 完整流程
+### 14.2 建立 SSH shell 会话
 
 ```
-[前端]  factoryWriteSn()
+[前端]  connectSshDebug()
   │
-  ├─ 检查连接状态（未连接则提示）
+  ├─ invoke('save_debug_terminal_prefs')
+  │     └─ 仅保存用户名 / 上次网卡 / 上次 IP，不保存密码
   │
-  ├─ invoke('factory_write_sn_to_device', { sn })
-  │     └─→ factory.rs::factory_write_sn_to_device
-  │           └─→ DeviceClient::set_device_sn(sn)
-  │                 ├─ POST /api/device_sn_set  ← 写入 SN
-  │                 └─ GET /api/device_sn_get   ← 回读验证
-  │
-  ├─ invoke('factory_save_execute_data')  ← 递增序号，保存执行记录
-  │
-  ├─ invoke('factory_get_device_info')
-  │     └─→ factory.rs::factory_get_device_info
-  │           └─→ DeviceClient::get_device_info()
-  │                 ├─ GET /api/device_activate_info  → IMEI/ICCID/固件版本
-  │                 ├─ GET /api/device_name_get       → 设备名称
-  │                 └─ GET /api/license_get           → 激活状态
-  │
-  ├─ invoke('factory_save_device_record', { deviceInfo })
-  │     └─→ factory.rs::factory_save_device_record
-  │           └─→ DataManager::append_csv_record()  ← 写入 factory_YYYY-MM-DD.csv
-  │
-  ├─ invoke('factory_increment_sequence')  → 新 SN
-  │
-  └─ factoryUpdateSnDisplay() + factoryUpdateDeviceInfo() + factoryUpdateRecordsTab()
+  └─ invoke('start_ssh_session', { host, username, password })
+        └─→ debug_terminal.rs::start_ssh_session
+              ├─ TcpStream::connect(host:22)
+              ├─ ssh2::Session::handshake()
+              ├─ userauth_password()
+              ├─ channel_session().request_pty("xterm")
+              ├─ shell()
+              └─ 后台线程读取 channel 输出
+                    └─ emit('debug-terminal-output', { kind: 'ssh', stream, text })
 ```
 
-### 13.3 SN 生成算法
+### 14.3 SSH 命令输入 / 断开
 
 ```
-SN = brand_code + type_code + fac_code + year_code + month_code + seq_code
-
-示例：A0116C00001
-  A      ← 品牌代码（AL）
-  01     ← 类型代码（D100）
-  1      ← 工厂代码（北京5层）
-  6      ← 年代码（2026 → 6）
-  C      ← 月代码（12月 → C，十六进制大写）
-  00001  ← 序号（5 位零填充，00001 ~ 99999）
+[前端]  sendSshDebugInput()
+  └─ invoke('write_debug_terminal_input', { input })
+        └─→ debug_terminal.rs::write_debug_terminal_input
+              └─ 通过 channel stdin 写入远端 shell
 ```
 
-## 14. 固件下载流程
+## 15. 固件下载流程
 
-### 14.1 PAC 选择与分析
+### 15.1 PAC 选择与分析
 
 ```
 [前端]  点击"选择 PAC"按钮
@@ -420,7 +447,7 @@ SN = brand_code + type_code + fac_code + year_code + month_code + seq_code
                           └─→ r26-cli 解析 PAC 文件 → SafetyReportDto
 ```
 
-### 14.2 下载执行
+### 15.2 下载执行
 
 ```
 [前端]  点击"开始下载"按钮
@@ -458,7 +485,7 @@ SN = brand_code + type_code + fac_code + year_code + month_code + seq_code
                  })
 ```
 
-### 14.3 事件处理（前端）
+### 15.3 事件处理（前端）
 
 ```
 [前端]  fwListen('firmware-event', callback)
@@ -472,7 +499,7 @@ SN = brand_code + type_code + fac_code + year_code + month_code + seq_code
   └─ Terminated  → fwSetDownloading(false) + fwSetResult(异常退出/已停止)
 ```
 
-### 14.4 三层架构
+### 15.4 三层架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -499,29 +526,3 @@ SN = brand_code + type_code + fac_code + year_code + month_code + seq_code
                     DLFrame.dll (Unisoc ResearchDownload)
 ```
 
-## 15. License 控制流程
-
-```
-[应用启动]
-  │
-  └─→ lib.rs::setup()
-        └─ license::init_license()
-              ├─ 检查 license.dat 是否存在
-              ├─ 存在 → modem_license::verify() 验签
-              │     ├─ 有效 → LicenseStatus { valid: true, features: {...} }
-              │     └─ 无效/过期 → LicenseStatus { valid: false, ... }
-              └─ 不存在 → LicenseStatus { valid: false, ... }
-
-[前端导航可见性]
-  │
-  └─→ updateLicenseNavVisibility()
-        ├─ 工厂模式导航：valid && factory_mode → 显示
-        └─ 固件下载导航：valid && firmware_download → 显示
-
-[加载 License 文件]
-  │
-  └─ invoke('load_license_file', { path })
-        └─→ license.rs::load_license_file
-              ├─ modem_license::verify() 验签 + 解析
-              └─ 更新 AppState.license → emit('license-changed')
-```

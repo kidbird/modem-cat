@@ -1,5 +1,5 @@
-use crate::transport::AtTransport;
 use crate::transport::is_complete_response;
+use crate::transport::AtTransport;
 use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
@@ -88,7 +88,10 @@ impl SerialTransport {
                 // don't misinterpret truncated data as valid state.
                 let trimmed = response.trim();
                 if !trimmed.is_empty() && is_complete_response(trimmed) {
-                    log::debug!("read_response: got {} bytes (complete, edge of overall timeout)", response.len());
+                    log::debug!(
+                        "read_response: got {} bytes (complete, edge of overall timeout)",
+                        response.len()
+                    );
                     return Ok(trimmed.to_string());
                 }
                 log::warn!("read_response: overall timeout after {:?} (response incomplete, {} bytes discarded)", overall_timeout, response.len());

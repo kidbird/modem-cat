@@ -133,4 +133,8 @@
       document.getElementById('sceneRebootNotice').style.display = 'none';
     }
 
+    // Expose to window for inline onclick handlers
+    window.activateScene = activateScene;
+    window.dismissSceneReboot = dismissSceneReboot;
+
 

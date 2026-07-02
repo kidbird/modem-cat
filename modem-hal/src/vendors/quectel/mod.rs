@@ -48,7 +48,13 @@ fn query_required_qcfg_bool(
     let response = send_and_delay(t, command)?;
     parse_qcfg_int(&response, key)
         .map(|value| value == 1)
-        .ok_or_else(|| format!("Failed to parse live {} state from {}", key, response.trim()))
+        .ok_or_else(|| {
+            format!(
+                "Failed to parse live {} state from {}",
+                key,
+                response.trim()
+            )
+        })
 }
 
 fn query_required_qcfg_usbcfg_adb(t: &mut dyn AtTransport) -> Result<bool, String> {
@@ -462,9 +468,7 @@ impl ModemVendor for QuectelModem {
         let proxyarp = query_required_qcfg_bool(t, r#"AT+QCFG="proxyarp""#, "proxyarp")?;
         let uart_at = query_required_qcfg_bool(t, r#"AT+QCFG="uartat""#, "uartat")?;
         let eth_at = match self.chip {
-            QuectelChip::Qualcomm => {
-                query_required_qcfg_bool(t, r#"AT+QCFG="eth_at""#, "eth_at")?
-            }
+            QuectelChip::Qualcomm => query_required_qcfg_bool(t, r#"AT+QCFG="eth_at""#, "eth_at")?,
             QuectelChip::UniSoc => false,
         };
         let adb = query_required_qcfg_usbcfg_adb(t)?;
@@ -525,7 +529,8 @@ impl ModemVendor for QuectelModem {
                 let resp = t.send_at(r#"AT+QCFG="usbcfg""#)?;
                 for line in extract_data_lines(&resp) {
                     if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
-                        let mut parts: Vec<String> = rest.split(',').map(|s| s.to_string()).collect();
+                        let mut parts: Vec<String> =
+                            rest.split(',').map(|s| s.to_string()).collect();
                         if parts.len() >= 2 {
                             // Ensure correct VID/PID for this model
                             let (vid, pid) = ChipsetVendor::usb_id_for_model(&self.model);
@@ -1387,9 +1392,7 @@ mod tests {
     #[test]
     fn query_feature_toggles_errors_when_qcfg_parse_fails() {
         let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
-        let mut transport = MockTransport::new(vec![
-            "+QCFG: \"pcie/mode\",oops\nOK",
-        ]);
+        let mut transport = MockTransport::new(vec!["+QCFG: \"pcie/mode\",oops\nOK"]);
 
         let err = modem
             .query_feature_toggles(&mut transport)
@@ -1416,9 +1419,7 @@ mod tests {
     #[test]
     fn query_nat_mode_errors_when_qcfg_parse_fails() {
         let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
-        let mut transport = MockTransport::new(vec![
-            "+QCFG: \"nat\",oops\nOK",
-        ]);
+        let mut transport = MockTransport::new(vec!["+QCFG: \"nat\",oops\nOK"]);
 
         let err = modem
             .query_nat_mode(&mut transport)

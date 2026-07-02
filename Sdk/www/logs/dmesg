@@ -1,0 +1,717 @@
+[    0.033836] c0 Security Framework initialized
+[    0.038095] c0 SELinux:  Initializing.
+[    0.041978] c0 SELinux:  Starting in permissive mode
+[    0.046885] c0 Mount-cache hash table entries: 1024 (order: 1, 8192 bytes)
+[    0.053720] c0 Mountpoint-cache hash table entries: 1024 (order: 1, 8192 bytes)
+[    0.093818] c0 ASID allocator initialised with 32768 entries
+[    0.099467] c0 Hierarchical SRCU implementation.
+[    0.144081] c0 smp: Bringing up secondary CPUs ...
+[    0.194377] c1 Detected VIPT I-cache on CPU1
+[    0.194413] c1 GICv3: CPU1: found redistributor 100 region 0:0x0000000012060000
+[    0.194461] c1 CPU1: Booted secondary processor [411fd050]
+[    0.194581] c0 smp: Brought up 1 node, 2 CPUs
+[    0.215784] c0 SMP: Total of 2 processors activated.
+[    0.220815] c0 CPU features: detected feature: GIC system register CPU interface
+[    0.228178] c0 CPU features: detected feature: Privileged Access Never
+[    0.234709] c0 CPU features: detected feature: User Access Override
+[    0.240849] c0 CPU features: detected feature: 32-bit EL0 Support
+[    0.246935] c0 CPU features: detected feature: Kernel page table isolation (KPTI)
+[    0.258618] c0 CPU: All CPU(s) started at EL2
+[    0.262810] c0 alternatives: patching kernel code
+[    0.269022] c0 devtmpfs: initialized
+[    0.291387] c0 Registered cp15_barrier emulation handler
+[    0.296621] c0 Registered setend emulation handler
+[    0.301964] c0 clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.311904] c0 futex hash table entries: 512 (order: 4, 65536 bytes)
+[    0.318480] c0 pinctrl core: initialized pinctrl subsystem
+[    0.324888] c0 NET: Registered protocol family 16
+[    0.331333] c0 cpuidle: using governor menu
+[    0.335954] c0 vdso: 2 pages (1 code @ ffffff80088d7000, 1 data @ ffffff8008c64000)
+[    0.343436] c0 hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.350739] c0 DMA: preallocated 256 KiB pool for atomic allocations
+[    0.373106] c0 sprd_hwspinlock 64000000.hwspinlock: get hwspinlock clock failed!
+[    0.385857] c0 OF: amba_device_add() failed (-2) for /soc/ts@78009000
+[    0.452863] c0 usbcore: registered new interface driver usbfs
+[    0.458476] c0 usbcore: registered new interface driver hub
+[    0.464243] c0 usbcore: registered new device driver usb
+[    0.470423] c0 sprd_cpudvfs 63988000.cpudvfs-dev: No matched private driver data found
+[    0.478483] c0 sprd_hwdvfs_normal: total_cluster_num = 4
+[    0.484186] c0 sprd_hwdvfs_normal: Finish to parse cpu dvfs device
+[    0.490447] c0 sprd_hwdvfs_normal: cluster-0 does not need an i2c channel
+[    0.497489] c0 sprd_hwdvfs_normal: Finish to probe the sprd hardware dvfs device.
+[    0.505687] c0 mbox:mbox_init!
+[    0.508856] c0 mbox:ERR on line 295!
+[    0.514638] c0 smsg_ipc_create: sipc-pmsys
+[    0.518781] c0 smem_init: pool addr = 0x8400, size = 0x2000 added.
+[    0.524996] c0 smsg_ipc_create: sipc-lte
+[    0.528883] c0 smem_init: pool addr = 0x87800000, size = 0x300000 added.
+[    0.535679] c0 smsg_ipc_create: sipc-nr-phy
+[    0.539725] c0 smem_init: pool addr = 0x87b00000, size = 0x200000 added.
+[    0.546564] c0 smsg_ipc_create: sipc-v3-phy
+[    0.550611] c0 smem_init: pool addr = 0x87d00000, size = 0x200000 added.
+[    0.557463] c0 smsg_ipc_create: sipc-xc4500-0
+[    0.561674] c0 smem_init: pool addr = 0x87f00000, size = 0x80000 added.
+[    0.568354] c0 smsg_ipc_create: sipc-xc4500-1
+[    0.572607] c0 smem_init: pool addr = 0x87f80000, size = 0x80000 added.
+[    0.580164] c0 clocksource: Switched to clocksource arch_sys_counter
+[    0.586554] c0 VFS: Disk quotas dquot_6.6.0
+[    0.590625] c0 VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.610727] c0 thermal thermal_zone1: power_allocator: sustainable_power will be estimated
+[    0.619120] c0 thermal thermal_zone2: power_allocator: sustainable_power will be estimated
+[    0.627495] c0 thermal thermal_zone3: power_allocator: sustainable_power will be estimated
+[    0.635888] c0 thermal thermal_zone4: power_allocator: sustainable_power will be estimated
+[    0.644242] c0 thermal thermal_zone5: power_allocator: sustainable_power will be estimated
+[    0.652732] c0 thermal thermal_zone7: power_allocator: sustainable_power will be estimated
+[    0.661071] c0 thermal thermal_zone8: power_allocator: sustainable_power will be estimated
+[    0.669575] c0 NET: Registered protocol family 2
+[    0.674632] c0 TCP established hash table entries: 4096 (order: 3, 32768 bytes)
+[    0.681839] c0 TCP bind hash table entries: 4096 (order: 4, 65536 bytes)
+[    0.688587] c0 TCP: Hash tables configured (established 4096 bind 4096)
+[    0.695138] c0 UDP hash table entries: 256 (order: 1, 8192 bytes)
+[    0.701142] c0 UDP-Lite hash table entries: 256 (order: 1, 8192 bytes)
+[    0.707833] c0 NET: Registered protocol family 1
+[    0.712400] c0 PCI: CLS 0 bytes, default 128
+[    0.717972] c0 hw perfevents: no interrupt-affinity property for /pmu, guessing.
+[    0.725511] c0 hw perfevents: enabled with armv8_pmuv3 PMU driver, 7 counters available
+[    0.738924] c0 audit: initializing netlink subsys (disabled)
+[    0.744669] c1 audit: type=2000 audit(0.669:1): state=initialized audit_enabled=0 res=1
+[    0.745297] c0 workingset: timestamp_bits=46 max_order=16 bucket_order=0
+[    0.769181] c0 SELinux:  Registering netfilter hooks
+[    0.778833] c0 io scheduler noop registered
+[    0.783044] c0 io scheduler cfq registered (default)
+[    0.787916] c0 io scheduler mq-deadline registered
+[    0.792715] c0 io scheduler kyber registered
+[    0.811256] c0 gpiochip_find_base: found new base at 480
+[    0.816861] c0 gpio gpiochip0: (eic-debounce): added GPIO chardev (254:0)
+[    0.823755] c0 gpiochip_setup_dev: registered GPIOs 480 to 511 on device: gpiochip0 (eic-debounce)
+[    0.832916] c0 gpiochip_find_base: found new base at 448
+[    0.838458] c0 gpio gpiochip1: (eic-latch): added GPIO chardev (254:1)
+[    0.845046] c0 gpiochip_setup_dev: registered GPIOs 448 to 479 on device: gpiochip1 (eic-latch)
+[    0.853848] c0 gpiochip_find_base: found new base at 416
+[    0.859354] c0 gpio gpiochip2: (eic-async): added GPIO chardev (254:2)
+[    0.866013] c0 gpiochip_setup_dev: registered GPIOs 416 to 447 on device: gpiochip2 (eic-async)
+[    0.874806] c0 gpiochip_find_base: found new base at 384
+[    0.880330] c0 gpio gpiochip3: (eic-sync): added GPIO chardev (254:3)
+[    0.886714] c0 gpiochip_setup_dev: registered GPIOs 384 to 415 on device: gpiochip3 (eic-sync)
+[    0.896934] c0 gpiochip_find_base: found new base at 128
+[    0.902505] c0 gpio gpiochip4: (632d0000.gpio): added GPIO chardev (254:4)
+[    0.909421] c0 gpiochip_setup_dev: registered GPIOs 128 to 383 on device: gpiochip4 (632d0000.gpio)
+[    0.918986] c0 arixo_misc_probe: 1-enter.
+[    0.922850] c0 arixo_power_pinctrl_init: failed to get pinctrl
+[    0.928716] c0 arixo_misc_probe: Failed to init arixo power pinctrl.
+[    0.935082] c0 of_get_named_gpiod_flags: parsed 'arixo,wifi6_en' property of node '/arixo-misc[0]' - status (0)
+[    0.945063] c0 gpio_check_set_default: gpio [arixo_wifi6_en] is default 1, not to set.
+[    0.953024] c0 arixo_misc_probe: misc register arixo dev ..
+[    0.958797] c0 waitoff_board_led_thread: exit -----
+[    0.960205] c1 arixo_misc_probe: end sucessful.
+[    0.968105] c1 arixo_wait_init_gpioctl_thread: enter ..
+[    0.971498] c0 sprd-pcie 2b100000.pcie0: GPIO lookup for consumer ethernet
+[    0.973383] c1 arixo_wait_init_gpioctl_thread: exit -----
+[    0.980400] c0 sprd-pcie 2b100000.pcie0: using device tree for GPIO lookup
+[    0.992433] c0 of_get_named_gpiod_flags: parsed 'ethernet-gpios' property of node '/soc/ipa/pcie0@2b100000[0]' - status (0)
+[    1.003455] c0 sprd-pcie 2b100000.pcie0: property (sprd,pcie-startup-syscons) reg count is 14 :
+[    1.012266] c0 sprd-pcie 2b100000.pcie0:  0:reg[0x     584] mask[0x      ff] val[0x       0] result[0x 7000000]
+[    1.022209] c0 sprd-pcie 2b100000.pcie0:  1:reg[0x     800] mask[0x     3ff] val[0x       1] result[0x       1]
+[    1.032288] c0 sprd-pcie 2b100000.pcie0:  2:reg[0x     800] mask[0x   10000] val[0x   10000] result[0x   10001]
+[    1.042377] c0 sprd-pcie 2b100000.pcie0:  3:reg[0x      28] mask[0x    f000] val[0x    d000] result[0x    d000]
+[    1.052402] c0 sprd-pcie 2b100000.pcie0:  4:reg[0x       c] mask[0x       1] val[0x       1] result[0x       1]
+[    1.062469] c0 sprd-pcie 2b100000.pcie0:  5:reg[0x       8] mask[0xffff0000] val[0x   10000] result[0x   10000]
+[    1.072530] c0 sprd-pcie 2b100000.pcie0:  6:reg[0x     564] mask[0x     200] val[0x     200] result[0x     200]
+[    1.082600] c0 sprd-pcie 2b100000.pcie0:  7:reg[0x     394] mask[0x     200] val[0x       0] result[0x    2000]
+[    1.092691] c0 sprd-pcie 2b100000.pcie0:  8:reg[0x       0] mask[0x     200] val[0x       0] result[0x      60]
+[    1.102725] c0 sprd-pcie 2b100000.pcie0:  9:reg[0x       0] mask[0x      40] val[0x      40] result[0x      60]
+[    1.112789] c0 sprd-pcie 2b100000.pcie0: 10:reg[0x       0] mask[0x      20] val[0x      20] result[0x      60]
+[    1.122858] c0 sprd-pcie 2b100000.pcie0: 11:reg[0x     3a0] mask[0x      40] val[0x       0] result[0x      31]
+[    1.282962] c0 sprd-pcie 2b100000.pcie0: 12:reg[0x     3a0] mask[0x      10] val[0x      10] result[0x      31]
+[    1.294968] c0 sprd-pcie 2b100000.pcie0: 13:reg[0x     3a0] mask[0x      10] val[0x       0] result[0x      21]
+[    1.304890] c0 sprd-pcie 2b100000.pcie0: there isn't property sprd,pcie-aspml1p2-syscons in dts
+[    1.313769] c0 sprd-pcie 2b100000.pcie0: GPIO lookup for consumer pcie-wakeup
+[    1.320740] c0 sprd-pcie 2b100000.pcie0: using device tree for GPIO lookup
+[    1.327671] c0 of_get_named_gpiod_flags: can't parse 'pcie-wakeup-gpios' property of node '/soc/ipa/pcie0@2b100000[0]'
+[    1.338353] c0 of_get_named_gpiod_flags: can't parse 'pcie-wakeup-gpio' property of node '/soc/ipa/pcie0@2b100000[0]'
+[    1.348850] c0 sprd-pcie 2b100000.pcie0: using lookup tables for GPIO lookup
+[    1.355966] c0 sprd-pcie 2b100000.pcie0: lookup for GPIO pcie-wakeup failed
+[    1.362821] c0 sprd-pcie 2b100000.pcie0: Please set pcie-wakeup gpio in DTS
+[    1.369755] c0 OF: PCI: host bridge /soc/ipa/pcie0@2b100000 ranges:
+[    1.376029] c0 OF: PCI:    IO 0x206000000..0x206ffffff -> 0x00000000
+[    1.382442] c0 OF: PCI:   MEM 0x200000000..0x205ffffff -> 0x10000000
+[    1.390345] c0 sprd-pcie 2b100000.pcie0: Read PCI_VENDOR_ID successfully.
+[    1.396977] c0 sprd-pcie 2b100000.pcie0: link up by 0 times
+[    1.402732] c0 sprd-pcie 2b100000.pcie0: PCI host bridge to bus 0000:00
+[    1.409171] c0 pci_bus 0000:00: root bus resource [bus 00-0f]
+[    1.414916] c0 pci_bus 0000:00: root bus resource [io  0x0000-0xffffff]
+[    1.421521] c0 pci_bus 0000:00: root bus resource [mem 0x200000000-0x205ffffff] (bus address [0x10000000-0x15ffffff])
+[    1.432088] c0 pci_bus 0000:00: scanning bus
+[    1.436439] c0 pci 0000:00:00.0: [16c3:abcd] type 01 class 0x060400
+[    1.442614] c0 pci 0000:00:00.0: calling sprd_pcie_fix_class+0x0/0x88
+[    1.449063] c0 pci 0000:00:00.0: supports D1
+[    1.453351] c0 pci 0000:00:00.0: PME# supported from D0 D1 D3hot D3cold
+[    1.459848] c0 pci 0000:00:00.0: PME# disabled
+[    1.464613] c0 pci_bus 0000:00: fixups for bus
+[    1.468968] c0 pci 0000:00:00.0: scanning [bus 01-ff] behind bridge, pass 0
+[    1.476120] c0 pci_bus 0000:01: busn_res: can not insert [bus 01-ff] under [bus 00-0f] (conflicts with (null) [bus 00-0f])
+[    1.487095] c0 pci_bus 0000:01: scanning bus
+[    1.491392] c0 pci 0000:01:00.0: [10ec:8168] type 00 class 0x020000
+[    1.497579] c0 pci 0000:01:00.0: reg 0x10: [io  0x0000-0x00ff]
+[    1.503469] c0 pci 0000:01:00.0: reg 0x18: [mem 0x00000000-0x00000fff 64bit]
+[    1.510478] c0 pci 0000:01:00.0: reg 0x20: [mem 0x00000000-0x00003fff 64bit]
+[    1.517751] c0 pci 0000:01:00.0: supports D1 D2
+[    1.522121] c0 pci 0000:01:00.0: PME# supported from D0 D1 D2 D3hot D3cold
+[    1.529054] c0 pci 0000:01:00.0: PME# disabled
+[    1.533723] c0 pci_bus 0000:01: fixups for bus
+[    1.538076] c0 pci_bus 0000:01: bus scan returning with max=01
+[    1.543922] c0 pci 0000:00:00.0: scanning [bus 01-ff] behind bridge, pass 1
+[    1.550772] c0 pci_bus 0000:00: bus scan returning with max=ff
+[    1.556669] c0 pci 0000:00:00.0: BAR 8: assigned [mem 0x200000000-0x2000fffff]
+[    1.563871] c0 pci 0000:00:00.0: BAR 7: assigned [io  0x1000-0x1fff]
+[    1.570203] c0 pci 0000:01:00.0: BAR 4: assigned [mem 0x200000000-0x200003fff 64bit]
+[    1.577946] c0 pci 0000:01:00.0: BAR 2: assigned [mem 0x200004000-0x200004fff 64bit]
+[    1.585684] c0 pci 0000:01:00.0: BAR 0: assigned [io  0x1000-0x10ff]
+[    1.591990] c0 pci 0000:00:00.0: PCI bridge to [bus 01-ff]
+[    1.597436] c0 pci 0000:00:00.0:   bridge window [io  0x1000-0x1fff]
+[    1.603790] c0 pci 0000:00:00.0:   bridge window [mem 0x200000000-0x2000fffff]
+[    1.611151] c0 pcieport 0000:00:00.0: of_irq_parse_pci: failed with rc=-22
+[    1.617933] c0 pcieport 0000:00:00.0: assign IRQ: got 0
+[    1.623611] c0 pcieport 0000:00:00.0: Signaling PME with IRQ 27
+[    1.661672] c0 sprd-dma 21200000.dma-controller: no optional ashb eb clock
+[    1.677605] c0 ##### Power debug log init start #####
+[    1.682685] c0 power-dbg-parameter:6 9 15 1 5 10 0
+[    1.687394] c0 sprd_pm_parse_regmap, Warned to get aon-sec regmap
+[    1.694881] c0 ##### Power debug log init successfully #####
+[    1.700798] c0 sprd_time_sync time_sync: start parse sprd_time_sync
+[    1.706886] c0 device is not exist 
+[    1.710834] c0 sprd_time_sync time_sync: success parse sprd_time_sync
+[    1.718502] c0 slog_bridge sbridge@0: tx is usb = 1.
+[    1.723408] c0 slog_bridge sbridge@0: probed, tx_is_usb=1, rx_cnt=5
+[    1.730194] c0 sblock_register_notifier_ex:sblock-1-5 not create!
+[    1.736109] c0 sblock_register_notifier_ex:sblock-2-5 not create!
+[    1.742765] c0 spipe_probe!
+[    1.745389] c0 spipe: after parse device tree, name=slog_pm, dst=6, channel=5, ringnr=1,  rxbuf_size=0x400, txbuf_size=0x0
+[    1.756536] c0 sblock_register_notifier_ex:sblock-5-5 not create!
+[    1.756566] c1 sbuf_host_init: channel 6-5, offset = 0x0!
+[    1.762491] c0 sblock_register_notifier_ex:sblock-7-5 not create!
+[    1.762495] c0 sblock_register_notifier_ex:sblock-8-5 not create!
+[    1.780334] c0 smsg_ch_open: channel 6-5 send open msg!
+[    1.785567] c1 spipe_probe!
+[    1.788190] c1 spipe: after parse device tree, name=sctl_pm, dst=6, channel=6, ringnr=1,  rxbuf_size=0x40, txbuf_size=0x40
+[    1.799314] c1 sbuf_host_init: channel 6-6, offset = 0x0!
+[    1.804720] c0 smsg_ch_open: channel 6-6 send open msg!
+[    1.809930] c1 spipe_probe!
+[    1.812600] c1 spipe: after parse device tree, name=spipe_lte, dst=5, channel=4, ringnr=15,  rxbuf_size=0x1000, txbuf_size=0x1000
+[    1.824209] c1 sbuf_host_init: channel 5-4, offset = 0x0!
+[    1.829756] c0 smsg_ch_open: channel 5-4 send open msg!
+[    1.837061] c1 spipe_probe!
+[    1.839687] c1 spipe: after parse device tree, name=sdiag_lte, dst=5, channel=21, ringnr=1,  rxbuf_size=0x40000, txbuf_size=0x8000
+[    1.851524] c1 sbuf_host_init: channel 5-21, offset = 0x0!
+[    1.857215] c1 smsg_ch_open: channel 5-21 send open msg!
+[    1.862641] c1 spipe_probe!
+[    1.865263] c1 spipe: after parse device tree, name=stty_lte, dst=5, channel=6, ringnr=32,  rxbuf_size=0x800, txbuf_size=0x800
+[    1.876740] c1 sbuf_host_init: channel 5-6, offset = 0x0!
+[    1.882296] c0 smsg_ch_open: channel 5-6 send open msg!
+[    1.885044] c1 spipe_probe!
+[    1.890126] c1 spipe: after parse device tree, name=spipe_nr, dst=0, channel=4, ringnr=15,  rxbuf_size=0x1000, txbuf_size=0x1000
+[    1.901786] c1 sbuf_create: dst = 0 is invalid
+[    1.906171] c1 Failed to create sbuf: -22
+[    1.910089] c1 spipe: probe of spipe@5 failed with error -22
+[    1.915847] c1 spipe_probe!
+[    1.918500] c1 spipe: after parse device tree, name=snv_lte, dst=5, channel=40, ringnr=1,  rxbuf_size=0x40400, txbuf_size=0x1000
+[    1.930147] c1 sbuf_host_init: channel 5-40, offset = 0x0!
+[    1.935889] c0 smsg_ch_open: channel 5-40 send open msg!
+[    1.936055] c1 spipe_probe!
+[    1.943808] c1 spipe: after parse device tree, name=snv_nr, dst=0, channel=40, ringnr=1,  rxbuf_size=0x40400, txbuf_size=0x1000
+[    1.955267] c1 sbuf_create: dst = 0 is invalid
+[    1.959766] c1 Failed to create sbuf: -22
+[    1.963708] c1 spipe: probe of spipe@9 failed with error -22
+[    1.969858] c1 spool: name=slog_lte, dst=5, channel=5, pre_cfg=1
+[    1.975791] c1 spool: tx_num=0, tx_size=0, rx_num=800, rx_size=2048
+[    1.980198] c0 sblock_register_notifier_ex:sblock-1-5 not create!
+[    1.982770] c1 smsg_ch_open: channel 5-5 send open msg!
+[    1.988022] c0 sblock_register_notifier_ex:sblock-2-5 not create!
+[    1.993459] c1 spool: name=slog_nr_phy, dst=7, channel=5, pre_cfg=1
+[    1.999385] c0 slog_bridge sbridge@0: sblock_rx[2] rxblksz=2048
+[    2.005628] c1 spool: tx_num=0, tx_size=0, rx_num=1000, rx_size=2048
+[    2.011520] c0 sblock_register_notifier_ex:sblock-7-5 not create!
+[    2.018700] c1 smsg_ch_open: channel 7-5 send open msg!
+[    2.023877] c0 sblock_register_notifier_ex:sblock-8-5 not create!
+[    2.029261] c1 spool: name=slog_v3_phy, dst=8, channel=5, pre_cfg=1
+[    2.041412] c1 spool: tx_num=0, tx_size=0, rx_num=1000, rx_size=2048
+[    2.048722] c1 smsg_ch_open: channel 8-5 send open msg!
+[    2.049014] c0 spool: name=slog_xc4500_0, dst=1, channel=5, pre_cfg=0
+[    2.060227] c0 spool: tx_num=0, tx_size=0, rx_num=250, rx_size=2048
+[    2.066789] c1 smsg_ch_open: channel 1-5 send open msg!
+[    2.067111] c0 spool: name=slog_xc4500_1, dst=2, channel=5, pre_cfg=0
+[    2.078256] c0 spool: tx_num=0, tx_size=0, rx_num=250, rx_size=2048
+[    2.084856] c1 smsg_ch_open: channel 2-5 send open msg!
+[    2.085736] c0 sprd_cproc_parse_dt:can't find dspreset
+[    2.095147] c0 sprd_cproc_parse_dt: use default iram data!
+[    2.100998] c0 sprd_cproc_parse_dt:can't find dspreset
+[    2.106135] c0 cproc: sec_table[0] base=0x9338fe00, size=0x200000, name=nrdsp2
+[    2.113313] c0 cproc: sec_table[1] base=0x9330fe00, size=0x100000, name=nrdsp1
+[    2.120488] c0 cproc: sec_table[2] base=0x96fffe00, size=0xc00000, name=v3phy
+[    2.127502] c0 cproc: sec_table[3] base=0x92fffe00, size=0x800000, name=nrphy
+[    2.134672] c0 cproc: sec_table[8] base=0x8f81fe00, size=0x1fc0000, name=modem
+[    2.142418] c0 cproc: sec_table[0] base=0x96fffe00, size=0xc00000, name=v3phy
+[    2.149649] c0 sprd_cproc_parse_dt:can't find dspreset
+[    2.154832] c0 cproc: sec_table[0] base=0x9338fe00, size=0x200000, name=nrdsp2
+[    2.161987] c0 cproc: sec_table[1] base=0x9330fe00, size=0x100000, name=nrdsp1
+[    2.169170] c0 cproc: sec_table[2] base=0x92fffe00, size=0x800000, name=nrphy
+[    2.250259] c0 slog_bridge sbridge@0: sblock_rx[0] rxblksz=2048
+[    2.256005] c0 slog_bridge sbridge@0: sblock_rx[1] rxblksz=2048
+[    2.269099] c0 24100000.serial: ttyS0 at MMIO 0x24100000 (irq = 10, base_baud = 1625000) is a SPX
+[    2.277863] c0 slog_bridge sbridge@0: sblock_rx[3] rxblksz=2048
+[    2.283857] c0 slog_bridge sbridge@0: sblock_rx[4] rxblksz=2048
+[    2.289598] c0 slog_bridge sbridge@0: all sblock register ok
+[    2.295392] c0 console [ttyS0] enabled
+[    2.302875] c0 bootconsole [sprd_serial0] disabled
+[    2.313133] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer cts
+[    2.319989] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.327489] c0 of_get_named_gpiod_flags: parsed 'cts-gpios' property of node '/soc/aon/serial@620e0000[0]' - status (0)
+[    2.338206] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer dsr
+[    2.345092] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.352456] c0 of_get_named_gpiod_flags: can't parse 'dsr-gpios' property of node '/soc/aon/serial@620e0000[0]'
+[    2.362489] c0 of_get_named_gpiod_flags: can't parse 'dsr-gpio' property of node '/soc/aon/serial@620e0000[0]'
+[    2.372441] c0 sprd-serial-ex 620e0000.serial: using lookup tables for GPIO lookup
+[    2.379950] c0 sprd-serial-ex 620e0000.serial: lookup for GPIO dsr failed
+[    2.386717] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer dcd
+[    2.393636] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.400996] c0 of_get_named_gpiod_flags: can't parse 'dcd-gpios' property of node '/soc/aon/serial@620e0000[0]'
+[    2.411029] c0 of_get_named_gpiod_flags: can't parse 'dcd-gpio' property of node '/soc/aon/serial@620e0000[0]'
+[    2.420978] c0 sprd-serial-ex 620e0000.serial: using lookup tables for GPIO lookup
+[    2.428495] c0 sprd-serial-ex 620e0000.serial: lookup for GPIO dcd failed
+[    2.435256] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer rng
+[    2.442178] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.449526] c0 of_get_named_gpiod_flags: can't parse 'rng-gpios' property of node '/soc/aon/serial@620e0000[0]'
+[    2.459575] c0 of_get_named_gpiod_flags: can't parse 'rng-gpio' property of node '/soc/aon/serial@620e0000[0]'
+[    2.469525] c0 sprd-serial-ex 620e0000.serial: using lookup tables for GPIO lookup
+[    2.477053] c0 sprd-serial-ex 620e0000.serial: lookup for GPIO rng failed
+[    2.483805] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer rts
+[    2.490725] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.498083] c0 of_get_named_gpiod_flags: parsed 'rts-gpios' property of node '/soc/aon/serial@620e0000[0]' - status (0)
+[    2.508833] c0 sprd-serial-ex 620e0000.serial: GPIO lookup for consumer dtr
+[    2.515737] c0 sprd-serial-ex 620e0000.serial: using device tree for GPIO lookup
+[    2.523095] c0 of_get_named_gpiod_flags: can't parse 'dtr-gpios' property of node '/soc/aon/serial@620e0000[0]'
+[    2.533133] c0 of_get_named_gpiod_flags: can't parse 'dtr-gpio' property of node '/soc/aon/serial@620e0000[0]'
+[    2.543083] c0 sprd-serial-ex 620e0000.serial: using lookup tables for GPIO lookup
+[    2.550611] c0 sprd-serial-ex 620e0000.serial: lookup for GPIO dtr failed
+[    2.557634] c0 sbuf_host_init: channel 6-1, offset = 0x0!
+[    2.563078] c0 620e0000.serial: ttySE1 at MMIO 0x620e0000 (irq = 0, base_baud = 1625000) is a SPX
+[    2.563090] c1 smsg_ch_open: channel 6-1 send open msg!
+[    2.572411] c0 cacheinfo: Unable to detect cache hierarchy for CPU 0
+[    2.590200] c0 brd: module loaded
+[    2.599316] c0 loop: module loaded
+[    2.603289] c0 zram: Added device: zram0
+[    2.607507] c0 arixo_wdt_probe: enter.
+[    2.611221] c0 of_get_named_gpiod_flags: parsed 'ping_gpio' property of node '/arixo-wdt[0]' - status (0)
+[    2.620735] c0 arixo_wdt_parse_dt: ping gpio:155 is low
+[    2.625876] c0 of_get_named_gpiod_flags: parsed 'irq_gpio' property of node '/arixo-wdt[0]' - status (0)
+[    2.635378] c0 arixo_wdt_probe: ping_gpio: 155, wdt_irq_gpio: 143, irq: 92
+[    2.635509] c0 arixo_wdt_probe: ok!!
+[    2.640351] c1 feed_wdt_thread: yyshen enter feed wdt thread ...
+[    2.645433] c0 nand device id[0] is c8
+[    2.655528] c0 nand device id[1] is 5a
+[    2.656844] c1 feed_watchdog: yyshen do feed watchdog, set ping gpio 155 done! 0
+[    2.659238] c0 nand device id[2] is 90
+[    2.666651] c1 feed_wdt_thread: yyshen wait wdt before ...
+[    2.670345] c0 nand device id[3] is 4
+[    2.679397] c0 nand device id[4] is 34
+[    2.683146] c0 nand device is ESMT:F59D2G81KASN1
+[    2.687705] c0 nand device block size is 131072
+[    2.692216] c0 nand device page size is 2048
+[    2.696445] c0 nand device spare size is 128
+[    2.700702] c0 nand device eccbits is 8
+[    2.836696] c0 10 cmdlinepart partitions found on MTD device sprd-nand
+[    2.843124] c0 Creating 10 MTD partitions on "sprd-nand":
+[    2.848484] c0 0x000000000000-0x000000040000 : "splloader"
+[    2.855141] c0 0x000000040000-0x000000180000 : "uboot"
+[    2.861114] c0 0x000000180000-0x000000240000 : "sml"
+[    2.866888] c0 0x000000240000-0x000000340000 : "trustos"
+[    2.873043] c0 0x000000340000-0x000000480000 : "ubootbak"
+[    2.879228] c0 0x000000480000-0x000000540000 : "smlbak"
+[    2.885252] c0 0x000000540000-0x000000640000 : "trustosbak"
+[    2.891637] c0 0x000000640000-0x000000780000 : "rawdata"
+[    2.897758] c0 0x000000780000-0x0000008c0000 : "custinfo"
+[    2.903964] c0 0x0000008c0000-0x000010000000 : "ubipac"
+[    2.911571] c0 sprd-adi 63a00000.spi: no hardware spinlock supplied
+[    2.920939] c0 gpiochip_find_base: found new base at 112
+[    2.926436] c0 gpio gpiochip5: (sc27xx-eic): added GPIO chardev (254:5)
+[    2.933104] c0 gpiochip_setup_dev: registered GPIOs 112 to 127 on device: gpiochip5 (sc27xx-eic)
+[    2.956060] c0 wk2xxx_init,register spi return v = :0
+[    2.961560] c0 pcieport 0000:00:00.0: of_irq_parse_pci: failed with rc=-22
+[    2.968330] c0 r8168 0000:01:00.0: assign IRQ: got 0
+[    2.973320] c0 r8168 Gigabit Ethernet driver 8.049.02-NAPI loaded
+[    2.979360] c0 r8168 0000:01:00.0: enabling device (0000 -> 0003)
+[    2.985430] c0 r8168 0000:01:00.0: enabling Mem-Wr-Inval
+[    3.007199] c0 r8168 0000:01:00.0 (unnamed net_device) (uninitialized): Invalid ether addr 00:00:00:00:00:00
+[    3.016925] c0 r8168 0000:01:00.0 (unnamed net_device) (uninitialized): Random ether addr 66:9b:dd:6a:52:97
+[    3.027551] c0 r8168: This product is covered by one or more of the following patents: US6,570,884, US6,115,776, and US6,327,625.
+[    3.041142] c0 r8168  Copyright (C) 2021 Realtek NIC software team <nicfae@realtek.com> 
+[    3.041142] c0  This program comes with ABSOLUTELY NO WARRANTY; for details, please see <http://www.gnu.org/licenses/>. 
+[    3.041142] c0  This is free software, and you are welcome to redistribute it under certain conditions; see <http://www.gnu.org/licenses/>. 
+[    3.072822] c0 PPP generic driver version 2.4.2
+[    3.077547] c0 PPP BSD Compression module registered
+[    3.082438] c0 PPP Deflate Compression module registered
+[    3.087711] c0 PPP MPPE Compression module registered
+[    3.092843] c0 usbcore: registered new interface driver r8152
+[    3.099862] c0 dwc3-sprd 29100000.usb3: unable to get usb2.0 phy device
+[    3.109655] c0 sc27xx-typec sc27xx-typec: no vddldo regulator supply
+[    3.116139] c0 sc27xx-typec sc27xx-typec: failed to set typec rtrim -517
+[    3.124053] c0 sprd-rtc sc27xx-rtc: RTC values are invalid
+[    3.129680] c0 sprd-rtc sc27xx-rtc: registered as rtc0
+[    3.134974] c0 i2c /dev entries driver
+[    3.142470] c0 generic-adc-thermal pa-sensor: IIO channel not found: -517
+[    3.149208] c0 generic-adc-thermal pa5g-sensor: IIO channel not found: -517
+[    3.159369] c0 sprd_cpufreq: can not get dvfs_bin ret -22
+[    3.164786] c0 cpu cpu0: dev_pm_opp_remove: Couldn't find OPP with freq: 1014000000
+[    3.172398] c0 cpu cpu0: dev_pm_opp_remove: Couldn't find OPP with freq: 768000000
+[    3.179891] c0 cpu cpu0: dev_pm_opp_remove: Couldn't find OPP with freq: 624000000
+[    3.187454] c0 cpu cpu0: dev_pm_opp_remove: Couldn't find OPP with freq: 512000000
+[    3.195000] c0 cpu cpu0: dev_pm_opp_remove: Couldn't find OPP with freq: 256000000
+[    3.202561] c0 sprd_cpufreqhw: Slave cluster0 is found: /cpufreq-scu
+[    3.208810] c0 sprd_cpufreq: can not get dvfs_bin ret -22
+[    3.214190] c0 sprd_hwdvfs_normal: Cluster1's hardware dvfs is enable
+[    3.220645] c0 sprd_cpufreqhw: Slave cluster1 is found: /cpufreq-periph
+[    3.227154] c0 sprd_cpufreq: can not get dvfs_bin ret -22
+[    3.232533] c0 sprd_hwdvfs_normal: Cluster2's hardware dvfs is enable
+[    3.238972] c0 sprd_cpufreqhw: Slave cluster2 is found: /cpufreq-gic
+[    3.245263] c0 sprd_cpufreq: can not get dvfs_bin ret -22
+[    3.250620] c0 sprd_hwdvfs_normal: Cluster3's hardware dvfs is enable
+[    3.257057] c0 sprd_cpufreqhw: Cluster0 does not have sub-clusters
+[    3.263169] c0 sprd_hwdvfs_normal: Get cpu frequency-index2
+[    3.268690] c0 sprd_hwdvfs_normal: Cluster0's hardware dvfs is enable
+[    3.275141] c0 sprd_hwdvfs_normal: Get cpu frequency-index2
+[    3.280763] c0 sprd_hwdvfs_normal: Get cpu frequency-index2
+[    3.286265] c0 sprd-hardware-cpufreq sprd-hardware-cpufreq.0: Succeeded to register cpufreq driver
+[    3.295488] c0 sprd_hotplug_init: Hotplug and qos init!!!
+[    3.300824] c0 hotplug: cluster[0] cpus: 2
+[    3.305147] c0 DT: not find sprd-hotplug
+[    3.309203] c0 update cluster0 cpu num: 1 - 2
+[    3.313509] c0 update cluster0 cpu num: 2 - 2
+[    3.319197] c0 sprd_sdhcr11 26000000.sdio: sdio can't get clock info: sdio_hp_det_clk
+[    3.326968] c0 sprd_sdhcr11 26000000.sdio: sdio can't get the clock dts config: sdio_2x_eb
+[    3.335201] c0 sprd_sdhcr11 26000000.sdio: sdio can't get sdio_1x eb in dts maybe default on
+[    3.343573] c0 sprd_sdhcr11 26000000.sdio: find sdio-adma
+[    3.348916] c0 of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/soc/ap-ahb/sdio@26000000[0]'
+[    3.359353] c0 sprd_sdhcr11 26000000.sdio: GPIO lookup for consumer wp
+[    3.365817] c0 sprd_sdhcr11 26000000.sdio: using device tree for GPIO lookup
+[    3.372826] c0 of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/soc/ap-ahb/sdio@26000000[0]'
+[    3.382849] c0 of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/soc/ap-ahb/sdio@26000000[0]'
+[    3.392831] c0 sprd_sdhcr11 26000000.sdio: using lookup tables for GPIO lookup
+[    3.399965] c0 sprd_sdhcr11 26000000.sdio: lookup for GPIO wp failed
+[    3.406396] c0 sdio_emmc using ADMA2
+[    3.409883] c0 sprd_set_mmc_struct(sdio_emmc): ocr avail = 0x40000, base clock = 390000000
+[    3.409883] c0 pm_caps = 0x0, caps: 0xc0001507, caps2: 0x280000,
+[    3.409883] c0 host->flags:0x62, host_caps:0x1e6d
+[    3.429433] c0 sprd_sdhc_set_vqmmc(sdio_emmc) There is no signalling voltage
+[    3.436426] c0 mmc0: clock 0Hz busmode 2 powermode 1 cs 0 Vdd 18 width 1 timing 0
+[    3.444230] c0 sprd_signal_voltage_on_off(sdio_emmc) there is no signal voltage!
+[    3.480207] c0 mmc0: clock 400000Hz busmode 2 powermode 2 cs 0 Vdd 18 width 1 timing 0
+[    3.489219] c0 sprd_signal_voltage_on_off(sdio_emmc) there is no signal voltage!
+[    3.520656] c0 sprd_sdhcr11 26000000.sdio: sdio_emmc[mmc0] host controller, irq 9
+[    3.528379] c0 mmc0: clock 400000Hz busmode 2 powermode 2 cs 1 Vdd 18 width 1 timing 0
+[    3.537536] c0 of_get_named_gpiod_flags: can't parse 'gpios' property of node '/gpio-leds/led0[0]'
+[    3.547532] c0 of_get_named_gpiod_flags: parsed 'gpio' property of node '/gpio-leds/led0[0]' - status (0)
+[    3.558039] c0 mmc0: clock 400000Hz busmode 2 powermode 2 cs 0 Vdd 18 width 1 timing 0
+[    3.560223] c1 no flags found for gpio
+[    3.566921] c0 mmc0: clock 400000Hz busmode 1 powermode 2 cs 0 Vdd 18 width 1 timing 0
+[    3.569751] c1 of_get_named_gpiod_flags: can't parse 'gpios' property of node '/gpio-leds/led1[0]'
+[    3.577950] c0 sprd_sdhc sdio_emmc CMD1 int 0x48001
+[    3.586447] c1 of_get_named_gpiod_flags: parsed 'gpio' property of node '/gpio-leds/led1[0]' - status (0)
+[    3.591308] c0 mmc0: clock 0Hz busmode 2 powermode 0 cs 0 Vdd 0 width 1 timing 0
+[    3.600771] c1 no flags found for gpio
+[    3.608084] c0 sprd_signal_voltage_on_off(sdio_emmc) there is no signal voltage!
+[    3.611963] c1 of_get_named_gpiod_flags: can't parse 'gpios' property of node '/gpio-leds/led2[0]'
+[    3.628137] c1 of_get_named_gpiod_flags: parsed 'gpio' property of node '/gpio-leds/led2[0]' - status (0)
+[    3.637659] c1 no flags found for gpio
+[    3.643885] c1 sfp_iprelay: genl_register_family err 0
+[    3.649471] c1 sipa 2e000000.sprd,sipa: ipa intr num = 23
+[    3.654846] c1 sipa 2e000000.sprd,sipa: using bypass mode =0
+[    3.662399] c1 sipa 2e000000.sprd,sipa: create sipa eps start
+[    3.668058] c1 sipa 2e000000.sprd,sipa: idx = 0 ep = 0 ep_id = 0 is_to_ipa = 1
+[    3.675318] c1 sipa 2e000000.sprd,sipa: idx = 2 ep = 1 ep_id = 1 is_to_ipa = 1
+[    3.682484] c1 sipa 2e000000.sprd,sipa: idx = 8 ep = 2 ep_id = 2 is_to_ipa = 1
+[    3.689621] c1 sipa 2e000000.sprd,sipa: idx = 15 ep = 0 ep_id = 0 is_to_ipa = 0
+[    3.696936] c1 sipa 2e000000.sprd,sipa: idx = 17 ep = 1 ep_id = 1 is_to_ipa = 0
+[    3.704176] c1 sipa 2e000000.sprd,sipa: idx = 23 ep = 2 ep_id = 2 is_to_ipa = 0
+[    3.711932] c1 sipa_rm: sipa_rm_resource_add_dependency SIPA_RM_RES_CONS_WWAN_UL state: 0
+[    3.720004] c1 sipa_rm: sipa_rm_resource_add_dependency SIPA_RM_RES_CONS_WWAN_DL state: 0
+[    3.728178] c1 sipa_rm: sipa_rm_resource_add_dependency SIPA_RM_RES_CONS_USB state: 0
+[    3.735982] c1 sipa 2e000000.sprd,sipa: create_sipa_skb_sender ep->id = 2 start
+[    3.743350] c1 sipa 2e000000.sprd,sipa: fifo_id = 8 is_pam = 0 is_recv = 0
+[    3.750581] c1 sipa 2e000000.sprd,sipa: create_sipa_skb_sender ep->id = 1 start
+[    3.757928] c1 sipa 2e000000.sprd,sipa: fifo_id = 2 is_pam = 0 is_recv = 0
+[    3.764995] c1 sipa 2e000000.sprd,sipa: ep->id = 2 start
+[    3.770300] c1 sipa 2e000000.sprd,sipa: ep_id = 2 fifo_id = 23 rx_fifo depth = 0x1000
+[    3.778023] c1 sipa 2e000000.sprd,sipa: recv status is 1
+[    3.783323] c1 sipa 2e000000.sprd,sipa: fifo_id = 23 is_pam = 0 is_recv = 1
+[    3.800536] c1 sipa 2e000000.sprd,sipa: ep->id = 1 start
+[    3.805768] c1 sipa 2e000000.sprd,sipa: ep_id = 1 fifo_id = 17 rx_fifo depth = 0x40
+[    3.813449] c1 sipa 2e000000.sprd,sipa: recv status is 1
+[    3.818666] c1 sipa 2e000000.sprd,sipa: fifo_id = 17 is_pam = 0 is_recv = 1
+[    3.841179] c1 sipa_usb: after dt parse, name sipa_usb0 netid -1 term-type 1
+[    3.850797] c1 sipa_mbim: add to dev_list[0] sipa_mbim0 ffffffc01a968000, flag 80
+[    3.859227] c1 sipa_mbim: add to dev_list[1] sipa_mbim1 ffffffc01a96a000, flag 80
+[    3.867671] c1 sipa_mbim: add to dev_list[2] sipa_mbim2 ffffffc01a969000, flag 80
+[    3.876153] c1 sipa_mbim: add to dev_list[3] sipa_mbim3 ffffffc01a98d000, flag 80
+[    3.884644] c1 sipa_mbim: add to dev_list[4] sipa_mbim4 ffffffc01a98a000, flag 80
+[    3.893156] c1 sipa_mbim: add to dev_list[5] sipa_mbim5 ffffffc01a98f000, flag 80
+[    3.901609] c1 sipa_mbim: add to dev_list[6] sipa_mbim6 ffffffc01a988000, flag 80
+[    3.910050] c1 sipa_mbim: add to dev_list[7] sipa_mbim7 ffffffc01a9ad000, flag 80
+[    3.918407] c1 sipa_delegate 89600000.sipa-dele: using dl_fifo_depth = 4096
+[    3.925632] c0 sipa_dele: conn_thread sipa_delegator failed to open dst 0 channel 120
+[    3.925640] c1 sipa_rm: sipa_rm_resource_add_dependency SIPA_RM_RES_CONS_WWAN_DL state: 0
+[    3.935946] c1 sipa_rm: sipa_rm_resource_add_dependency SIPA_RM_RES_CONS_WWAN_UL state: 0
+[    3.941782] c0 smsg_ch_open: channel 5-120 send open msg!
+[    3.951623] c1 [modem-dbg-log][       dbg_log_probe] dbg_log_probe
+[    3.961775] c1 [modem-dbg-log][       dbg_log_probe] serdes_id = 0
+[    3.967854] c1 [modem-dbg-log][dbg_log_device_register] entry
+[    3.974179] c1 [modem-dbg-log][dbg_log_device_register] start dbg_log_sysfs_init
+[    3.981521] c1 [modem-dbg-log][dbg_log_device_register] end dbg_log_sysfs_init
+[    3.988656] c1 [modem-dbg-log][       dbg_log_probe] dcfix enable
+[    3.994793] c1 [modem-dbg-log][       dbg_log_probe] ch_num 5
+[    4.000474] c1 [modem-dbg-log][       dbg_log_probe] ch-index count 5, rc 0
+[    4.007359] c1 [modem-dbg-log][       dbg_log_probe] sel 0 = 0xf
+[    4.013376] c1 [modem-dbg-log][       dbg_log_probe] sel 1 = 0x1
+[    4.019301] c1 [modem-dbg-log][       dbg_log_probe] sel 2 = 0x0
+[    4.025308] c1 [modem-dbg-log][       dbg_log_probe] sel 3 = 0x2
+[    4.031271] c1 [modem-dbg-log][       dbg_log_probe] sel 4 = 0x3
+[    4.037217] c1 [modem-dbg-log][       dbg_log_probe] ch-name count 5, rc 5
+[    4.044080] c1 [modem-dbg-log][       dbg_log_probe] str 0 = TRAINING
+[    4.050549] c1 [modem-dbg-log][       dbg_log_probe] str 1 = TPIU
+[    4.056538] c1 [modem-dbg-log][       dbg_log_probe] str 2 = DBUS
+[    4.062616] c1 [modem-dbg-log][       dbg_log_probe] str 3 = V3
+[    4.068480] c1 [modem-dbg-log][       dbg_log_probe] str 4 = NR
+[    4.074797] c1 [modem-dbg-log][inter_dbg_log_is_freq_valid] input freq 500000
+[    4.082079] c1 [modem-dbg-log][       dbg_log_probe] dbg_log_probe
+[    4.088504] c1 [modem-dbg-log][       dbg_log_probe] serdes_id = 1
+[    4.094653] c1 [modem-dbg-log][dbg_log_device_register] entry
+[    4.100564] c1 [modem-dbg-log][dbg_log_device_register] start dbg_log_sysfs_init
+[    4.107866] c1 [modem-dbg-log][dbg_log_device_register] end dbg_log_sysfs_init
+[    4.115083] c1 [modem-dbg-log][       dbg_log_probe] dcfix enable
+[    4.121147] c1 [modem-dbg-log][       dbg_log_probe] ch_num 3
+[    4.126807] c1 [modem-dbg-log][       dbg_log_probe] ch-index count 3, rc 0
+[    4.133762] c1 [modem-dbg-log][       dbg_log_probe] sel 0 = 0xf
+[    4.139700] c1 [modem-dbg-log][       dbg_log_probe] sel 1 = 0x1
+[    4.145737] c1 [modem-dbg-log][       dbg_log_probe] sel 2 = 0x0
+[    4.151702] c1 [modem-dbg-log][       dbg_log_probe] ch-name count 3, rc 3
+[    4.158479] c1 [modem-dbg-log][       dbg_log_probe] str 0 = TRAINING
+[    4.164912] c1 [modem-dbg-log][       dbg_log_probe] str 1 = TPIU
+[    4.170977] c1 [modem-dbg-log][       dbg_log_probe] str 2 = NR
+[    4.177175] c1 [modem-dbg-log][inter_dbg_log_is_freq_valid] input freq 500000
+[    4.184461] c1 [modem-dbg-log][       dbg_log_probe] dbg_log_probe
+[    4.190932] c1 [modem-dbg-log][       dbg_log_probe] serdes_id = 2
+[    4.197012] c1 [modem-dbg-log][dbg_log_device_register] entry
+[    4.202997] c1 [modem-dbg-log][dbg_log_device_register] start dbg_log_sysfs_init
+[    4.210355] c1 [modem-dbg-log][dbg_log_device_register] end dbg_log_sysfs_init
+[    4.217472] c1 [modem-dbg-log][       dbg_log_probe] dcfix enable
+[    4.223562] c1 [modem-dbg-log][       dbg_log_probe] ch_num 2
+[    4.229241] c1 [modem-dbg-log][       dbg_log_probe] ch-index count 2, rc 0
+[    4.236193] c1 [modem-dbg-log][       dbg_log_probe] sel 0 = 0xf
+[    4.242180] c1 [modem-dbg-log][       dbg_log_probe] sel 1 = 0x0
+[    4.248106] c1 [modem-dbg-log][       dbg_log_probe] ch-name count 2, rc 2
+[    4.254960] c1 [modem-dbg-log][       dbg_log_probe] str 0 = TRAINING
+[    4.261417] c1 [modem-dbg-log][       dbg_log_probe] str 1 = NR
+[    4.267575] c1 [modem-dbg-log][inter_dbg_log_is_freq_valid] input freq 500000
+[    4.275736] c1 failed read freqnum
+[    4.279558] c0 smsg_ch_open: channel 6-22 send open msg!
+[    4.280400] c1 extcon-usb-gpio extcon_usb0: GPIO lookup for consumer id
+[    4.291433] c1 extcon-usb-gpio extcon_usb0: using device tree for GPIO lookup
+[    4.298473] c1 of_get_named_gpiod_flags: can't parse 'id-gpios' property of node '/extcon_usb0[0]'
+[    4.307442] c1 of_get_named_gpiod_flags: parsed 'id-gpio' property of node '/extcon_usb0[0]' - status (0)
+[    4.316951] c1 extcon-usb-gpio extcon_usb0: GPIO lookup for consumer vbus
+[    4.323678] c1 extcon-usb-gpio extcon_usb0: using device tree for GPIO lookup
+[    4.330784] c1 of_get_named_gpiod_flags: can't parse 'vbus-gpios' property of node '/extcon_usb0[0]'
+[    4.339877] c1 of_get_named_gpiod_flags: parsed 'vbus-gpio' property of node '/extcon_usb0[0]' - status (0)
+[    4.352152] c1 sc27xx-adc sc27xx-adc: failed to get hwspinlock id
+[    4.358757] c1 sprd-efuse 63400000.efuse: failed to get hwlock id
+[    4.366592] c1 sc27xx-efuse sc27xx-efuse: failed to get hwspinlock id
+[    4.373247] c1 francis rawdata create
+[    4.373272] c1 francis rawdata create
+[    4.377243] c1 quectel-power quec-power: GPIO lookup for consumer dtr
+[    4.387219] c1 quectel-power quec-power: using device tree for GPIO lookup
+[    4.394127] c1 of_get_named_gpiod_flags: parsed 'dtr-gpios' property of node '/quec-power[0]' - status (0)
+[    4.403730] c1 no flags found for dtr
+[    4.407305] c1 quectel-power quec-power: GPIO lookup for consumer sleep_led
+[    4.414271] c1 quectel-power quec-power: using device tree for GPIO lookup
+[    4.421134] c1 of_get_named_gpiod_flags: parsed 'sleep_led-gpios' property of node '/quec-power[0]' - status (0)
+[    4.433463] c1 input: quec_w_disable as /devices/platform/quec_w_disable/input/input0
+[    4.441841] c1 quectel_w_disable quec_w_disable: GPIO lookup for consumer w_disable
+[    4.449395] c1 quectel_w_disable quec_w_disable: using device tree for GPIO lookup
+[    4.457012] c1 of_get_named_gpiod_flags: parsed 'w_disable-gpios' property of node '/quec_w_disable[0]' - status (0)
+[    4.467587] c1 w_disable irq :102  
+[    4.473557] c1 Netfilter messages via NETLINK v0.30.
+[    4.478439] c1 nfnl_acct: registering with nfnetlink.
+[    4.483830] c1 nf_conntrack version 0.5.0 (1536 buckets, 6144 max)
+[    4.490330] c1 ctnetlink v0.93: registering with nfnetlink.
+[    4.496703] c1 xt_time: kernel timezone is -0000
+[    4.501443] c1 IPv4 over IPsec tunneling driver
+[    4.506919] c1 ip_tables: (C) 2000-2006 Netfilter Core Team
+[    4.513105] c1 arp_tables: arp_tables: (C) 2002 David S. Miller
+[    4.519970] c1 NET: Registered protocol family 10
+[    4.529093] c1 Segment Routing with IPv6
+[    4.533145] c1 ip6_tables: (C) 2000-2006 Netfilter Core Team
+[    4.540528] c1 sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    4.548686] c1 NET: Registered protocol family 17
+[    4.553400] c1 NET: Registered protocol family 15
+[    4.559041] c1 DCCP: Activated CCID 2 (TCP-like)
+[    4.563642] c1 DCCP: Activated CCID 3 (TCP-Friendly Rate Control)
+[    4.571039] c1 sctp: Hash tables configured (bind 256/256)
+[    4.577378] c1 sprd cluster0 sensor id 15
+[    4.581669] c1 get thermal zone failed
+[    4.585334] c1 thermal thermal_zone6: failed to read out thermal zone (-19)
+[    4.592293] c1 get thermal zone failed
+[    4.595972] c1 thermal thermal_zone6: failed to read out thermal zone (-19)
+[    4.603915] c1 sprd soc sensor id 17
+[    4.607627] c1 get thermal zone failed
+[    4.611329] c1 get thermal cluster0-thmzone temp failed
+[    4.616481] c1 thermal thermal_zone0: failed to read out thermal zone (-19)
+[    4.623469] c1 get thermal zone failed
+[    4.627121] c1 get thermal cluster0-thmzone temp failed
+[    4.632337] c1 thermal thermal_zone0: failed to read out thermal zone (-19)
+[    4.644390] c1 registered taskstats version 1
+[    4.668602] c1 dwc3-sprd 29100000.usb3: unable to get usb2.0 phy device
+[    4.675831] c1 sc27xx-typec sc27xx-typec: no vddldo regulator supply
+[    4.682341] c1 sc27xx-typec sc27xx-typec: failed to set typec rtrim -517
+[    4.689599] c1 generic-adc-thermal pa-sensor: IIO channel not found: -517
+[    4.696636] c1 generic-adc-thermal pa5g-sensor: IIO channel not found: -517
+[    4.705171] c1 sc27xx-adc sc27xx-adc: failed to enable ADC module
+[    4.713058] c1 dwc3-sprd 29100000.usb3: unable to get usb2.0 phy device
+[    4.720122] c1 sc27xx-typec sc27xx-typec: no vddldo regulator supply
+[    4.740857] c1 generic-adc-thermal pa-sensor: IIO channel not found: -517
+[    4.747815] c1 generic-adc-thermal pa5g-sensor: IIO channel not found: -517
+[    4.761222] c1 sprd-thermal 63410000.thermal: sen id = 0, cal =262,offset =69900
+[    4.775224] c1 sprd-thermal 63420000.thermal: sen id = 0, cal =258,offset =60900
+[    4.789230] c1 sprd-thermal 63430000.thermal: sen id = 0, cal =255,offset =55400
+[    4.798785] c1 sprd-thermal 63430000.thermal: sen id = 1, cal =255,offset =55400
+[    4.808313] c1 sprd-thermal 63430000.thermal: sen id = 2, cal =255,offset =55400
+[    4.851782] c1 dwc3-sprd 29100000.usb3: unable to get usb2.0 phy device
+[    4.861446] c1 dwc3-sprd 29100000.usb3: unable to get usb2.0 phy device
+[    4.868473] c1 ubi0: attaching mtd9
+[    6.448041] c1 ubi0: scanning is finished
+[    6.466080] c1 ubi0: attached mtd9 (name "ubipac", size 247 MiB)
+[    6.472060] c1 ubi0: PEB size: 131072 bytes (128 KiB), LEB size: 126976 bytes
+[    6.479091] c1 ubi0: min./max. I/O unit sizes: 2048/4096, sub-page size 2048
+[    6.486160] c1 ubi0: VID header offset: 2048 (aligned 2048), data offset: 4096
+[    6.493311] c1 ubi0: good PEBs: 1978, bad PEBs: 0, corrupted PEBs: 0
+[    6.499600] c1 ubi0: user volume: 22, internal volumes: 1, max. volumes count: 128
+[    6.507185] c1 ubi0: max/mean erase counter: 10/5, WL threshold: 4096, image sequence number: 0
+[    6.515811] c1 ubi0: available PEBs: 0, total reserved PEBs: 1978, PEBs reserved for bad PEB handling: 40
+[    6.525356] c0 ubi0: background thread "ubi_bgt0d" started, PID 1946
+[    6.525372] c1 ubi: mtd9 is already attached to ubi0
+[    6.536580] c1 UBI error: cannot attach mtd9
+[    6.540835] c1 otg_wakelock_init: No USB transceiver found
+[    6.570468] c1 sprd-ssphy 634e0000.ssphy: No separate ID extcon device
+[    6.578127] c1 dwc3-sprd 29100000.usb3: 29100000.usb3 supply vbus not found, using dummy regulator
+[    6.588774] c1 dwc3-sprd 29100000.usb3: usb3 can't get the ipa usb ref clock
+[    6.595788] c1 dwc3-sprd 29100000.usb3: usb can't get the ipa usb ref source
+[    6.602818] c1 dwc3-sprd 29100000.usb3: usb can't get the ipa usb ref default
+[    6.611223] c1 of_get_named_gpiod_flags: parsed 'gpios' property of node '/gpio-keys/key-power[0]' - status (0)
+[    6.622513] c0 of_get_named_gpiod_flags: parsed 'gpios' property of node '/gpio-keys/key-equal[0]' - status (0)
+[    6.633243] c0 input: gpio-keys as /devices/platform/gpio-keys/input/input1
+[    6.640958] c0 sprd-rtc sc27xx-rtc: RTC values are invalid
+[    6.646351] c0 sprd-rtc sc27xx-rtc: hctosys: unable to read the hardware clock
+[    6.650282] c1 sprd-ssphy 634e0000.ssphy: sprd_ssphy_init is already inited!
+[    6.653799] c0 sprd_cpu_device: fail to get cooling devices resistance-ja
+[    6.661585] c1 sprd-ssphy 634e0000.ssphy: sprd_ssphy_init is already inited!
+[    6.667648] c0 sprd_hwdvfs_normal: Get cpu frequency-index2
+[    6.674503] c1 xhci-hcd xhci-hcd.0.auto: xHCI Host Controller
+[    6.680016] c0 sprd_cpu_cooling: cpu0 update max_freq to 1352000
+[    6.685640] c1 xhci-hcd xhci-hcd.0.auto: new USB bus registered, assigned bus number 1
+[    6.691553] c0 sprd_cpu_cooling: hotplug: test cpu:0, cpu num in cluster: 2
+[    6.706736] c1 xhci-hcd xhci-hcd.0.auto: hcc params 0x0220fe65 hci version 0x110 quirks 0x0000000000030010
+[    6.716446] c1 xhci-hcd xhci-hcd.0.auto: irq 103, io mem 0x29100000
+[    6.722884] c1 usb usb1: New USB device found, idVendor=1d6b, idProduct=0002
+[    6.729845] c1 usb usb1: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    6.737347] c1 usb usb1: Product: xHCI Host Controller
+[    6.742457] c1 usb usb1: Manufacturer: Linux 4.14.98 xhci-hcd
+[    6.742621] c0 vaddr is ffffffc005500000,paddr is 0000000085500000
+[    6.748110] c1 usb usb1: SerialNumber: xhci-hcd.0.auto
+[    6.754608] c0  detect pmic is sc2730 ,offset = 0x1bac !!!
+[    6.760205] c1 hub 1-0:1.0: USB hub found
+[    6.765715] c0 sprd_sysdump_enable_prepare ok
+[    6.768854] c1 hub 1-0:1.0: 1 port detected
+[    6.773566] c0 lookat_debug_init init ok
+[    6.777842] c1 xhci-hcd xhci-hcd.0.auto: xHCI Host Controller
+[    6.786923] c1 xhci-hcd xhci-hcd.0.auto: new USB bus registered, assigned bus number 2
+[    6.794801] c1 xhci-hcd xhci-hcd.0.auto: Host supports USB 3.0  SuperSpeed
+[    6.794828] c0 sprd_serial 24100000.serial: request TX DMA channel failed, ret = -19
+[    6.801690] c1 usb usb2: We don't know the algorithms for LPM for this host, disabling LPM.
+[    6.809291] c0 sprd_serial 24100000.serial: request RX DMA channel failed, ret = -19
+[    6.817771] c1 usb usb2: New USB device found, idVendor=1d6b, idProduct=0003
+[    6.832345] c1 usb usb2: New USB device strings: Mfr=3, Product=2, SerialNumber=1
+[    6.839748] c1 usb usb2: Product: xHCI Host Controller
+[    6.844912] c1 usb usb2: Manufacturer: Linux 4.14.98 xhci-hcd
+[    6.850584] c1 usb usb2: SerialNumber: xhci-hcd.0.auto
+[    6.856463] c1 hub 2-0:1.0: USB hub found
+[    6.860488] c1 hub 2-0:1.0: 1 port detected
+[    6.869152] c1 dwc3-sprd 29100000.usb3: No separate ID extcon device.
+[    6.875761] c1 dwc3-sprd 29100000.usb3: device connection detected from VBUS GPIO.
+[    6.929665] c0 UBIFS (ubi0:19): UBIFS: mounted UBI device 0, volume 19, name "system", R/O mode
+[    6.938330] c0 UBIFS (ubi0:19): LEB size: 126976 bytes (124 KiB), min./max. I/O unit sizes: 2048 bytes/4096 bytes
+[    6.948511] c0 UBIFS (ubi0:19): FS size: 51044352 bytes (48 MiB, 402 LEBs), journal size 8634368 bytes (8 MiB, 68 LEBs)
+[    6.959264] c0 UBIFS (ubi0:19): reserved for root: 0 bytes (0 KiB)
+[    6.965372] c0 UBIFS (ubi0:19): media format: w4/r0 (latest is w5/r0), UUID 7E35F521-981D-4661-816F-FFCDA74816EC, small LPT model
+[    6.979653] c0 VFS: Mounted root (ubifs filesystem) readonly on device 0:17.
+[    6.988763] c0 devtmpfs: mounted
+[    6.992999] c0 Freeing unused kernel memory: 1600K
+[    6.997856] c0 run init
+[    7.390514] c1 dwc3-sprd 29100000.usb3: enter into idle mode
+[    7.396699] c1 dwc3-sprd 29100000.usb3: enter into suspend mode
+[    8.709355] c0 UBIFS (ubi0:21): background thread "ubifs_bgt0_21" started, PID 2086
+[    8.728810] c1 UBIFS (ubi0:21): recovery needed
+[    8.834246] c1 UBIFS (ubi0:21): recovery completed
+[    8.839067] c1 UBIFS (ubi0:21): UBIFS: mounted UBI device 0, volume 21, name "userdata"
+[    8.847006] c1 UBIFS (ubi0:21): LEB size: 126976 bytes (124 KiB), min./max. I/O unit sizes: 2048 bytes/4096 bytes
+[    8.857199] c1 UBIFS (ubi0:21): FS size: 36061184 bytes (34 MiB, 284 LEBs), journal size 9023488 bytes (8 MiB, 72 LEBs)
+[    8.867966] c1 UBIFS (ubi0:21): reserved for root: 523804 bytes (511 KiB)
+[    8.874682] c1 UBIFS (ubi0:21): media format: w4/r0 (latest is w5/r0), UUID 792F4A48-A792-48E8-82C9-61D9B0B658CF, small LPT model
+[    8.910139] c0 UBIFS (ubi0:4): background thread "ubifs_bgt0_4" started, PID 2088
+[    8.918068] c1 UBIFS (ubi0:4): recovery needed
+[    8.973914] c1 UBIFS (ubi0:4): recovery completed
+[    8.978651] c1 UBIFS (ubi0:4): UBIFS: mounted UBI device 0, volume 4, name "prodnv"
+[    8.986247] c1 UBIFS (ubi0:4): LEB size: 126976 bytes (124 KiB), min./max. I/O unit sizes: 2048 bytes/4096 bytes
+[    8.996388] c1 UBIFS (ubi0:4): FS size: 3047424 bytes (2 MiB, 24 LEBs), journal size 1015809 bytes (0 MiB, 6 LEBs)
+[    9.006655] c1 UBIFS (ubi0:4): reserved for root: 143937 bytes (140 KiB)
+[    9.013352] c1 UBIFS (ubi0:4): media format: w5/r0 (latest is w5/r0), UUID 0C22FC02-ECF0-4855-9D96-769123F2E81C, small LPT model
+[    9.040263] c1 UBIFS (ubi0:20): background thread "ubifs_bgt0_20" started, PID 2090
+[    9.056096] c1 UBIFS (ubi0:20): recovery needed
+[    9.259435] c1 UBIFS (ubi0:20): recovery completed
+[    9.264293] c1 UBIFS (ubi0:20): UBIFS: mounted UBI device 0, volume 20, name "data"
+[    9.271893] c1 UBIFS (ubi0:20): LEB size: 126976 bytes (124 KiB), min./max. I/O unit sizes: 2048 bytes/4096 bytes
+[    9.282076] c1 UBIFS (ubi0:20): FS size: 13459456 bytes (12 MiB, 106 LEBs), journal size 1015809 bytes (0 MiB, 6 LEBs)
+[    9.292726] c1 UBIFS (ubi0:20): reserved for root: 635722 bytes (620 KiB)
+[    9.299454] c1 UBIFS (ubi0:20): media format: w5/r0 (latest is w5/r0), UUID 88B1A1AE-3BB0-470D-92DE-C53A241E5965, small LPT model
+[   10.617942] c1 sprd_sysdump_write: start!!!
+[   10.622205] c1 sprd_sysdump_write: enable user version sysdump!!!
+[   10.628246] c1 set_sysdump_enable: get rst mode  value is = f0
+[   10.634222] c1 set_sysdump_enable: enable sysdump!
+[   10.638945] c1 sprd_sysdump_write: end!!!
+[   12.020331] c1 sprd-rtc sc27xx-rtc: RTC values are invalid
+[   12.457738] c1 sprd-pamu3 2b300000.pamu3: pamu3_protocol_store :RNDIS
+[   12.457738] c1  protocol 0 signature: 0x484d434e 0x535049
+[   12.469865] c1 max_dl_pkts_store call sipa_update_usb_dl_params max_dl_pkts:7
+[   12.515803] c1 sprd_time_sync sprd_time_sync: send monotime_ns=12445365067 boottime_ns=12445365683 realtime_s=1665560716 ts_cnt=532187578 sysfrt_cnt=0 minuteswest=0 dsttime=0 to userspace
+[   12.609408] c1 using random self ethernet address
+[   12.614433] c1 using random host ethernet address
+[   12.628706] c1 file system registered
+[   13.013966] c0 read descriptors
+[   13.017042] c0 read strings
+[   13.041126] c0 usb0: HOST MAC 02:32:0c:5d:d1:ad
+[   13.052829] c0 usb0: MAC a6:a9:c8:b7:aa:59
+[   13.300309] c0 sprd-ssphy 634e0000.ssphy: sprd_ssphy_init is already inited!
+[   13.307271] c0 dwc3-sprd 29100000.usb3: enter into resume mode
+[   13.316313] c0 sprd-ssphy 634e0000.ssphy: sprd_ssphy_init is already inited!
+[   13.323352] c0 sprd-ssphy 634e0000.ssphy: sprd_ssphy_init is already inited!
+[   13.333796] c0 dwc3_gadget_set_speed_lite: speed=5
+[   13.338602] c0 dwc3-sprd 29100000.usb3: is running as DEVICE
+[   13.368038] c0 android_work: sent uevent USB_STATE=CONNECTED
+[   14.392339] c1 smsg_ch_open: channel 6-1 receive open msg!
+[   14.392605] c0 smsg_ch_open: channel 6-6 receive open msg!
+[   14.397743] c1 smsg_ch_open: channel 6-1 success
+[   14.403218] c0 smsg_ch_open: channel 6-6 success
+[   14.403228] c0 sbuf_thread: channel 6-6 state = 0, recv cmd msg, flag = 1!
+[   14.403261] c0 smsg_ch_open: channel 6-5 receive open msg!
+[   14.407779] c1 sbuf_thread: channel 6-1 state = 0, recv cmd msg, flag = 1!
+[   14.412398] c0 smsg_ch_open: channel 6-5 success
+[   14.436171] c0 sbuf_thread: channel 6-5 state = 0, recv cmd msg, flag = 1!
+[   14.443084] c0 smsg_ch_open: channel 6-22 receive open msg!
+[   14.448556] c0 smsg_ch_open: channel 6-22 success

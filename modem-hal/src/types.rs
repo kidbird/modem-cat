@@ -218,8 +218,11 @@ impl ChipsetVendor {
         }
 
         // UniSoc series
-        if upper.contains("RG200U") || upper.contains("RM500U") || upper.contains("RG500U")
-            || upper.contains("RG501U") || upper.contains("RM501U")
+        if upper.contains("RG200U")
+            || upper.contains("RM500U")
+            || upper.contains("RG500U")
+            || upper.contains("RG501U")
+            || upper.contains("RM501U")
         {
             return (vid, 0x0800);
         }

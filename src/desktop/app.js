@@ -233,10 +233,14 @@
     document.querySelector('.nav').addEventListener('click', (e) => {
       const item = e.target.closest('.nav-item:not(.disabled)');
       if (!item) return;
+      const prevPage = document.querySelector('.page.active')?.id?.replace('page-', '') || '';
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       item.classList.add('active');
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.getElementById('page-' + item.dataset.page).classList.add('active');
+      if (window.handleDebugTerminalPageChange) {
+        window.handleDebugTerminalPageChange(prevPage, item.dataset.page);
+      }
       if (item.dataset.page === 'status' && state.connected) {
         const activeTabBtn = document.querySelector('#page-status .tab-btn.active');
         if (activeTabBtn) activeTabBtn.click();
@@ -259,6 +263,12 @@
       }
       if (item.dataset.page === 'atmanual') {
         initAtdbPage();
+      }
+      if (item.dataset.page === 'adbdebug' && window.initDebugTerminal) {
+        window.initDebugTerminal().catch(() => {});
+      }
+      if (item.dataset.page === 'sshdebug' && window.initDebugTerminal) {
+        window.initDebugTerminal().catch(() => {});
       }
     });
 
@@ -2298,16 +2308,25 @@
     async function applyToggle(feature, enabled) {
       const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP', napt: 'NAPT 端口转换', netmask: '动态子网掩码', armLog: 'ARM LOG', cpLog: 'CP LOG' };
       const keyMap = { adb: 'Adb', ethAt: 'EthAt', uartAt: 'UartAt', pcieMode: 'Pcie', ethernet: 'Ethernet', proxyArp: 'ProxyArp', napt: 'Napt', netmask: 'Netmask', armLog: 'ArmLog', cpLog: 'CpLog' };
-      if (!state.connected) return;
+      if (!state.connected) {
+        showToast('请先连接模组', 'err');
+        return;
+      }
+      const key = keyMap[feature];
+      const onBtn = document.getElementById('toggle' + key + '_on');
+      const offBtn = document.getElementById('toggle' + key + '_off');
+      // Optimistic UI: update active state immediately so user sees feedback
+      if (onBtn) onBtn.classList.toggle('active', enabled);
+      if (offBtn) offBtn.classList.toggle('active', !enabled);
       try {
         await invoke('set_feature_toggle', { feature, enabled });
         await flushAtLog();
         addTerminalLine(`[功能] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
+        showToast(`${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
       } catch (e) {
         addTerminalLine(`[功能] ${labels[feature]} 设置失败: ${e}`, 'err');
-        const key = keyMap[feature];
-        const onBtn = document.getElementById('toggle' + key + '_on');
-        const offBtn = document.getElementById('toggle' + key + '_off');
+        showToast(`${labels[feature]} 设置失败`, 'err');
+        // Revert optimistic UI on failure
         if (onBtn) onBtn.classList.toggle('active', !enabled);
         if (offBtn) offBtn.classList.toggle('active', enabled);
       }
@@ -2533,14 +2552,6 @@
         if ($.appVersion) $.appVersion.textContent = 'v' + ver;
         if ($.aboutVersion) $.aboutVersion.textContent = 'v' + ver;
       } catch (_) {}
-      // Check license status for factory/firmware features
-      try {
-        const status = await invoke('get_license_status');
-        state.licenseStatus = status;
-        updateLicenseNavVisibility();
-      } catch (e) {
-        console.warn('[初始化] License 状态获取失败:', e);
-      }
       try {
         await refreshConnectionParams();
       } catch (e) {
@@ -2555,6 +2566,9 @@
       }
       // 启动 USB 监控
       setupUsbMonitor();
+      if (window.initDebugTerminal) {
+        await window.initDebugTerminal();
+      }
 
       // 定时轮询端口列表（兜底：即使 port-changed 事件丢失，也能在 5s 内
       // 检测到端口变化）。仅在未连接时轮询，避免干扰 AT 操作。
@@ -2758,300 +2772,6 @@
     renderBandGrid([], [], 'bandGridLte');
     renderBandGrid([], [], 'bandGridNr');
 
-    // ── 工厂模式 ──
-    const factoryState = {
-      initialized: false,
-      connected: false,
-      deviceIp: '192.168.42.1',
-      baseData: null,
-      currentProduct: null,
-      currentSn: '',
-      deviceInfo: null,
-    };
-
-    async function factoryInit() {
-      if (factoryState.initialized) return;
-      const notice = document.getElementById('factoryInitNotice');
-      if (notice) notice.style.display = 'block';
-      try {
-        await invoke('init_factory');
-        const baseData = await invoke('factory_get_base_data');
-        factoryState.baseData = baseData;
-        const product = await invoke('factory_get_current_product');
-        factoryState.currentProduct = product;
-        const sn = await invoke('factory_get_current_sn');
-        factoryState.currentSn = sn;
-        factoryRenderDropdowns();
-        factoryUpdateSnDisplay();
-        factoryState.initialized = true;
-      } catch (e) {
-        console.error('工厂模式初始化失败:', e);
-        showToast('工厂模式初始化失败: ' + e, 'err');
-      }
-      if (notice) notice.style.display = 'none';
-    }
-
-    function factoryRenderDropdowns() {
-      const bd = factoryState.baseData;
-      if (!bd) return;
-      const brandSel = document.getElementById('factoryBrandSelect');
-      const typeSel = document.getElementById('factoryTypeSelect');
-      const facSel = document.getElementById('factoryFactorySelect');
-      if (brandSel) {
-        brandSel.innerHTML = bd.brands.map(b => `<option value="${escAttr(b.name)}" ${b.name === factoryState.currentProduct?.brand ? 'selected' : ''}>${escHtml(b.name)} (${escHtml(b.code)})</option>`).join('');
-      }
-      if (typeSel) {
-        // 后端 BaseData 用 #[serde(rename = "types")]，IPC 响应字段为 types 而非 product_types
-        typeSel.innerHTML = bd.types.map(t => `<option value="${escAttr(t.name)}" ${t.name === factoryState.currentProduct?.product_type ? 'selected' : ''}>${escHtml(t.name)} (${escHtml(t.code)})</option>`).join('');
-      }
-      if (facSel) {
-        facSel.innerHTML = bd.factories.map(f => `<option value="${escAttr(f.name)}" ${f.name === factoryState.currentProduct?.fac ? 'selected' : ''}>${escHtml(f.name)} (${escHtml(f.code)})</option>`).join('');
-      }
-    }
-
-    async function onFactoryProductChange() {
-      const brand = document.getElementById('factoryBrandSelect')?.value;
-      const productType = document.getElementById('factoryTypeSelect')?.value;
-      const fac = document.getElementById('factoryFactorySelect')?.value;
-      if (!brand || !productType || !fac) return;
-      try {
-        const sn = await invoke('factory_set_product', { brand, productType, fac });
-        factoryState.currentSn = sn;
-        factoryState.currentProduct = { brand, product_type: productType, fac };
-        factoryUpdateSnDisplay();
-      } catch (e) {
-        showToast('设置产品失败: ' + e, 'err');
-      }
-    }
-
-    async function factoryUpdateSnDisplay() {
-      try {
-        const sn = await invoke('factory_get_current_sn');
-        factoryState.currentSn = sn;
-        const display = document.getElementById('factorySnDisplay');
-        if (display) display.textContent = sn || '--------------';
-        const codeSet = await invoke('factory_get_code_set');
-        const detail = document.getElementById('factoryCodeDetail');
-        if (detail) {
-          detail.textContent = `品牌:${codeSet.brand_code || '-'} 型号:${codeSet.type_code || '-'} 工厂:${codeSet.fac_code || '-'} 年:${codeSet.year_code || '-'} 月:${codeSet.mon_code || '-'} 序号:${codeSet.seq_code || '-'}`;
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    async function factoryConnectDevice() {
-      const ipInput = document.getElementById('factoryDeviceIp');
-      // AGENTS.md: "敏感信息禁止公开默认值" — 设备 IP 未提供时提示用户，
-      // 不再 fallback 到硬编码的 192.168.42.1。
-      const ip = ipInput?.value?.trim();
-      if (!ip) { showToast('请先输入设备 IP', 'err'); return; }
-      const statusEl = document.getElementById('factoryConnectStatus');
-      try {
-        if (statusEl) { statusEl.textContent = '连接中...'; statusEl.style.color = 'var(--warning)'; }
-        await invoke('factory_set_device_ip', { ip });
-        await invoke('factory_get_device_info');
-        factoryState.connected = true;
-        factoryState.deviceIp = ip;
-        if (statusEl) { statusEl.textContent = '已连接'; statusEl.style.color = 'var(--success)'; }
-        factoryUpdateDeviceInfo();
-        showToast('设备连接成功', 'ok');
-      } catch (e) {
-        factoryState.connected = false;
-        if (statusEl) { statusEl.textContent = '连接失败'; statusEl.style.color = 'var(--danger)'; }
-        showToast('连接失败: ' + e, 'err');
-      }
-    }
-
-    async function factoryGetDeviceInfo() {
-      try {
-        const info = await invoke('factory_get_device_info');
-        factoryState.deviceInfo = info;
-        factoryUpdateDeviceInfo();
-        showToast('设备信息已更新', 'ok');
-      } catch (e) {
-        showToast('获取设备信息失败: ' + e, 'err');
-      }
-    }
-
-    function factoryUpdateDeviceInfo() {
-      const info = factoryState.deviceInfo;
-      const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val || '-'; };
-      if (!info) return;
-      setVal('factoryImei', info.imei);
-      setVal('factoryIccid', info.iccid);
-      setVal('factoryDeviceSn', info.sn);
-      setVal('factorySwVersion', info.sw_version);
-      setVal('factoryDeviceName', info.device_name);
-      setVal('factoryActivated', info.activated ? '已激活' : '未激活');
-    }
-
-    async function factoryWriteSn() {
-      const writeBtn = document.getElementById('factoryWriteSnBtn');
-      const statusEl = document.getElementById('factoryWriteStatus');
-      if (!factoryState.connected) { showToast('请先连接设备', 'err'); return; }
-      try {
-        if (writeBtn) writeBtn.disabled = true;
-        if (statusEl) { statusEl.textContent = '正在写入...'; statusEl.style.color = 'var(--warning)'; }
-        const ok = await invoke('factory_write_sn_to_device', { sn: factoryState.currentSn });
-        if (ok) {
-          if (statusEl) { statusEl.textContent = 'SN 写入成功'; statusEl.style.color = 'var(--success)'; }
-          showToast('SN 写入成功', 'ok');
-        } else {
-          if (statusEl) { statusEl.textContent = 'SN 验证失败（写入值与回读不一致）'; statusEl.style.color = 'var(--danger)'; }
-          showToast('SN 写入验证失败', 'err');
-          return;
-        }
-        // Get device info, save record, save execute data, increment sequence
-        await invoke('factory_save_execute_data');
-        const info = await invoke('factory_get_device_info');
-        factoryState.deviceInfo = info;
-        await invoke('factory_save_device_record', { deviceInfo: info });
-        factoryUpdateDeviceInfo();
-        factoryUpdateRecordsTab();
-        const newSn = await invoke('factory_increment_sequence');
-        factoryState.currentSn = newSn;
-        factoryUpdateSnDisplay();
-      } catch (e) {
-        if (statusEl) { statusEl.textContent = '写入失败: ' + e; statusEl.style.color = 'var(--danger)'; }
-        showToast('SN 写入失败: ' + e, 'err');
-      } finally {
-        if (writeBtn) writeBtn.disabled = false;
-      }
-    }
-
-    function switchFactoryTab(tab, btn) {
-      document.querySelectorAll('.factory-tab').forEach(t => t.style.display = 'none');
-      const panel = document.getElementById('factoryTab-' + tab);
-      if (panel) panel.style.display = '';
-      document.querySelectorAll('#page-factory > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-      if (tab === 'config') factoryRenderConfigTables();
-      if (tab === 'records') factoryUpdateRecordsTab();
-    }
-
-    function switchFactoryConfigSub(sub, btn) {
-      document.querySelectorAll('#factoryTab-config .config-sub-panel').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
-      const panel = document.getElementById('configSub-' + sub);
-      if (panel) { panel.style.display = ''; panel.classList.add('active'); }
-      document.querySelectorAll('#factoryTab-config > .sub-tabs .sub-tab-btn').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-    }
-
-    function factoryRenderConfigTables() {
-      const bd = factoryState.baseData;
-      if (!bd) return;
-      const renderTable = (tbodyId, items, removeFn) => {
-        const tbody = document.getElementById(tbodyId);
-        if (!tbody) return;
-        if (!items || items.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:20px;">暂无数据</td></tr>';
-          return;
-        }
-        tbody.innerHTML = items.map(i =>
-          `<tr><td>${escHtml(i.name)}</td><td>${escHtml(i.code)}</td><td><button class="btn btn-danger btn-sm" onclick="${removeFn}('${escAttr(i.name)}')" style="font-size:11px;padding:2px 8px;">删除</button></td></tr>`
-        ).join('');
-      };
-      renderTable('factoryBrandsTable', bd.brands, 'factoryRemoveBrand');
-      renderTable('factoryTypesTable', bd.types, 'factoryRemoveType');
-      renderTable('factoryFactoriesTable', bd.factories, 'factoryRemoveFactory');
-    }
-
-    async function factoryAddBrand() {
-      const name = document.getElementById('newBrandName')?.value?.trim();
-      const code = document.getElementById('newBrandCode')?.value?.trim();
-      if (!name || !code) { showToast('名称和编码不能为空', 'err'); return; }
-      try {
-        const bd = await invoke('factory_add_brand', { name, code });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        if (document.getElementById('newBrandName')) document.getElementById('newBrandName').value = '';
-        if (document.getElementById('newBrandCode')) document.getElementById('newBrandCode').value = '';
-        showToast('品牌已添加', 'ok');
-      } catch (e) { showToast('添加失败: ' + e, 'err'); }
-    }
-    async function factoryRemoveBrand(name) {
-      try {
-        const bd = await invoke('factory_remove_brand', { name });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        showToast('品牌已删除', 'ok');
-      } catch (e) { showToast('删除失败: ' + e, 'err'); }
-    }
-    async function factoryAddType() {
-      const name = document.getElementById('newTypeName')?.value?.trim();
-      const code = document.getElementById('newTypeCode')?.value?.trim();
-      if (!name || !code) { showToast('名称和编码不能为空', 'err'); return; }
-      try {
-        const bd = await invoke('factory_add_product_type', { name, code });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        if (document.getElementById('newTypeName')) document.getElementById('newTypeName').value = '';
-        if (document.getElementById('newTypeCode')) document.getElementById('newTypeCode').value = '';
-        showToast('产品类型已添加', 'ok');
-      } catch (e) { showToast('添加失败: ' + e, 'err'); }
-    }
-    async function factoryRemoveType(name) {
-      try {
-        const bd = await invoke('factory_remove_product_type', { name });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        showToast('产品类型已删除', 'ok');
-      } catch (e) { showToast('删除失败: ' + e, 'err'); }
-    }
-    async function factoryAddFactory() {
-      const name = document.getElementById('newFactoryName')?.value?.trim();
-      const code = document.getElementById('newFactoryCode')?.value?.trim();
-      if (!name || !code) { showToast('名称和编码不能为空', 'err'); return; }
-      try {
-        const bd = await invoke('factory_add_factory', { name, code });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        if (document.getElementById('newFactoryName')) document.getElementById('newFactoryName').value = '';
-        if (document.getElementById('newFactoryCode')) document.getElementById('newFactoryCode').value = '';
-        showToast('工厂已添加', 'ok');
-      } catch (e) { showToast('添加失败: ' + e, 'err'); }
-    }
-    async function factoryRemoveFactory(name) {
-      try {
-        const bd = await invoke('factory_remove_factory', { name });
-        factoryState.baseData = bd;
-        factoryRenderDropdowns();
-        factoryRenderConfigTables();
-        showToast('工厂已删除', 'ok');
-      } catch (e) { showToast('删除失败: ' + e, 'err'); }
-    }
-
-    function factoryUpdateRecordsTab() {
-      const tbody = document.getElementById('factoryRecordsTable');
-      if (!tbody || !factoryState.deviceInfo) return;
-      const info = factoryState.deviceInfo;
-      const status = info.activated ? '已激活' : '未激活';
-      const newRow = `<tr><td>${escHtml(info.timestamp)}</td><td>${escHtml(info.imei)}</td><td>${escHtml(info.sn)}</td><td>${escHtml(info.sw_version)}</td><td>${escHtml(info.device_name)}</td><td>${status}</td></tr>`;
-      if (tbody.querySelector('td[colspan]')) {
-        tbody.innerHTML = newRow;
-      } else {
-        tbody.insertAdjacentHTML('afterbegin', newRow);
-        // Keep max 50 rows
-        while (tbody.children.length > 50) tbody.lastElementChild.remove();
-      }
-    }
-
-    function escAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
-
-    // Lazy init: when user clicks the factory nav item for the first time
-    {
-      const factoryNav = document.querySelector('.nav-item[data-page="factory"]');
-      if (factoryNav) {
-        factoryNav.addEventListener('click', () => {
-          if (!factoryState.initialized) factoryInit();
-        });
-      }
-    }
-
     // ── 关于对话框 ──
     function showAbout() {
       document.getElementById('aboutOverlay').style.display = 'flex';
@@ -3063,86 +2783,6 @@
       const listen = window.__TAURI__?.event?.listen;
       if (listen) {
         listen('show-about', showAbout);
-      }
-    }
-
-    // ── License 对话框 ──
-    function showLicenseStatus() {
-      refreshLicenseStatus().then(() => {
-        document.getElementById('licenseOverlay').style.display = 'flex';
-      });
-    }
-    function hideLicenseStatus() {
-      document.getElementById('licenseOverlay').style.display = 'none';
-    }
-    async function refreshLicenseStatus() {
-      const content = document.getElementById('licenseStatusContent');
-      try {
-        const status = await invoke('get_license_status');
-        state.licenseStatus = status;
-        updateLicenseNavVisibility();
-        const formatExpiry = (ts) => {
-          if (ts === 0) return t('license_expires_never');
-          return new Date(ts * 1000).toLocaleDateString('zh-CN');
-        };
-        const expiresText = status.valid
-          ? formatExpiry(status.expires_at)
-          : '';
-        const expired = status.valid && status.expires_at > 0 && status.expires_at < Date.now() / 1000;
-        const validIcon = status.valid && !expired
-          ? '<span style="color:var(--success);">&#x2714; ' + t('license_activated') + '</span>'
-          : '<span style="color:var(--danger);">&#x2718; ' + (expired ? t('license_expired') : t('license_not_activated')) + '</span>';
-        content.innerHTML = `
-          <div style="margin-bottom:16px;font-size:15px;font-weight:600;">${validIcon}</div>
-          ${status.licensee ? `<div style="font-size:13px;margin-bottom:8px;"><span style="color:var(--text-muted);">${t('license_licensee')}:</span> ${escHtml(status.licensee)}</div>` : ''}
-          ${status.mac ? `<div style="font-size:13px;margin-bottom:8px;"><span style="color:var(--text-muted);">${t('license_mac')}:</span> ${escHtml(status.mac)}</div>` : ''}
-          ${status.valid ? `<div style="font-size:13px;margin-bottom:8px;"><span style="color:var(--text-muted);">${t('license_expires')}:</span> ${expiresText}${expired ? ' (' + t('license_expired') + ')' : ''}</div>` : ''}
-          <div style="font-size:13px;margin-bottom:4px;color:var(--text-muted);">${t('nav_factory')}: ${status.factory_mode ? '<span style="color:var(--success);">&#x2714;</span>' : '<span style="color:var(--text-muted);">&#x2718;</span>'}</div>
-          <div style="font-size:13px;margin-bottom:4px;color:var(--text-muted);">${t('nav_firmware')}: ${status.firmware_download ? '<span style="color:var(--success);">&#x2714;</span>' : '<span style="color:var(--text-muted);">&#x2718;</span>'}</div>
-          ${status.error ? `<div style="font-size:12px;color:var(--danger);margin-top:12px;">${escHtml(status.error)}</div>` : ''}
-        `;
-      } catch (e) {
-        content.innerHTML = `<div style="font-size:13px;color:var(--danger);">${t('license_load_failed')}: ${escHtml(String(e))}</div>`;
-      }
-    }
-    async function loadLicenseFile() {
-      try {
-        const { open } = window.__TAURI__?.dialog || {};
-        if (!open) {
-          console.warn('dialog plugin not available');
-          return;
-        }
-        const selected = await open({
-          multiple: false,
-          filters: [{ name: 'License', extensions: ['dat'] }]
-        });
-        if (!selected) return;
-        const path = typeof selected === 'string' ? selected : selected.path || selected[0];
-        if (!path) return;
-        const status = await invoke('load_license_file', { path });
-        state.licenseStatus = status;
-        updateLicenseNavVisibility();
-        showToast(t('license_load_success'), 'success');
-      } catch (e) {
-        showToast(t('license_load_failed') + ': ' + e, 'error');
-      }
-    }
-    function updateLicenseNavVisibility() {
-      const s = state.licenseStatus;
-      const factoryItem = document.querySelector('.nav-item[data-page="factory"]');
-      const firmwareItem = document.querySelector('.nav-item[data-page="firmware"]');
-      if (factoryItem) factoryItem.style.display = (s && s.valid && s.factory_mode) ? '' : 'none';
-      if (firmwareItem) firmwareItem.style.display = (s && s.valid && s.firmware_download) ? '' : 'none';
-    }
-    {
-      const listen = window.__TAURI__?.event?.listen;
-      if (listen) {
-        listen('show-license-status', showLicenseStatus);
-        listen('show-load-license', loadLicenseFile);
-        listen('license-changed', (event) => {
-          state.licenseStatus = event.payload;
-          updateLicenseNavVisibility();
-        });
       }
     }
 
@@ -3687,6 +3327,35 @@
       if (rsrpChart && sinrChart && document.getElementById('page-monitor').classList.contains('active')) {
         rsrpChart.resize();
         sinrChart.resize();
+      }
+    });
+
+    // ── Expose all onclick-referenced functions to window ──
+    // Tauri v2 WebView2 may not resolve inline onclick handlers to scoped
+    // function declarations in all configurations. Explicitly binding them
+    // to window ensures every onclick="fn()" in index.html works reliably.
+    const _onclickFns = {
+      applyBandLock, applyDmz, applyLanConfig, applyMtu,
+      applyOperatorLock, applyPreferredNetwork, applyToggle, applyVlan,
+      clearCellLock, clearOperatorLock, closeApnModal,
+      configureQualcomm5Glan, confirmAction,
+      connectQualcomm5Glan, dismissSceneReboot, enableEthPdu,
+      hideAbout, openApnModal, quickAt,
+      refresh5GlanQualcommStatus, refreshHardwareInfo, refreshIpInfo,
+      refreshModemStatus, refreshNeighbors,
+      resetBandLock, saveApn, saveCellLock, saveQcEthDriver, saveUnisoc5Glan,
+      sendAtCommand, setIms, setLang, setMqttEnabled,
+      setQcDataInterfaceToggle, setQcIpptMode, setQcPcieModeToggle,
+      setQcUsbnetToggle, setQcUsbspeedToggle,
+      setTheme, setUiScale, setUiScaleMode,
+      switch5GlanTab, switchCellularTab, switchHardwareTab,
+      switchNeighborTab, switchStatusTab,
+      toggleConnection, toggleDataConnection, toggleRf,
+      toggleSimSlotDropdown,
+    };
+    Object.keys(_onclickFns).forEach(fn => {
+      if (typeof _onclickFns[fn] === 'function') {
+        window[fn] = _onclickFns[fn];
       }
     });
 

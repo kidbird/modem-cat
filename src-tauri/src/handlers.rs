@@ -1,10 +1,12 @@
-use std::sync::atomic::Ordering;
 use modem_hal::types::*;
 use modem_hal::{validate_at_string, validate_cid, validate_raw_at_command};
+use std::sync::atomic::Ordering;
 
 use crate::{mqtt, AppState};
 
-fn current_data_cid(data_cid: &std::sync::Arc<std::sync::atomic::AtomicI32>) -> Result<i32, String> {
+fn current_data_cid(
+    data_cid: &std::sync::Arc<std::sync::atomic::AtomicI32>,
+) -> Result<i32, String> {
     let cid = data_cid.load(Ordering::Relaxed);
     validate_cid(cid)?;
     Ok(cid)
@@ -27,9 +29,7 @@ pub(crate) async fn get_hardware_info(
 }
 
 #[tauri::command]
-pub(crate) async fn get_ip_info(
-    state: tauri::State<'_, AppState>,
-) -> Result<IpInfo, String> {
+pub(crate) async fn get_ip_info(state: tauri::State<'_, AppState>) -> Result<IpInfo, String> {
     with_vendor_cid!(state, |t, v, cid| {
         validate_cid(cid)?;
         v.query_ip_info(t, cid)
@@ -51,9 +51,7 @@ pub(crate) async fn get_neighbor_cells(
 }
 
 #[tauri::command]
-pub(crate) async fn get_qos_info(
-    state: tauri::State<'_, AppState>,
-) -> Result<QosInfo, String> {
+pub(crate) async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<QosInfo, String> {
     with_vendor_cid!(state, |t, v, cid| {
         validate_cid(cid)?;
         v.query_qos(t, cid)
@@ -61,9 +59,7 @@ pub(crate) async fn get_qos_info(
 }
 
 #[tauri::command]
-pub(crate) async fn get_network_mode(
-    state: tauri::State<'_, AppState>,
-) -> Result<String, String> {
+pub(crate) async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, String> {
     with_vendor!(state, |t, v| v.query_network_mode(t))
 }
 
@@ -84,7 +80,13 @@ pub(crate) async fn set_apn_config(
     validate_at_string(&username)?;
     validate_at_string(&password)?;
     with_vendor!(state, |t, v| v.set_apn(
-        t, cid, context_type, &apn, &username, &password, auth_type
+        t,
+        cid,
+        context_type,
+        &apn,
+        &username,
+        &password,
+        auth_type
     ))
 }
 
@@ -108,9 +110,7 @@ pub(crate) async fn set_apn_active(
 }
 
 #[tauri::command]
-pub(crate) async fn connect_data(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn connect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     let data_cid = state.data_cid.clone();
@@ -118,9 +118,7 @@ pub(crate) async fn connect_data(
         let mut tguard = transport
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))?;
-        let mut vguard = vendor
-            .lock()
-            .map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
         let t = tguard.as_deref_mut().ok_or("Not connected")?;
         let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
         let cid = current_data_cid(&data_cid)?;
@@ -174,9 +172,7 @@ pub(crate) async fn configure_qualcomm_5glan(
 }
 
 #[tauri::command]
-pub(crate) async fn enable_eth_pdu(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn enable_eth_pdu(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.enable_eth_pdu(t))
 }
 
@@ -197,9 +193,7 @@ pub(crate) async fn query_qualcomm_5glan_status(
 }
 
 #[tauri::command]
-pub(crate) async fn get_vlan(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<i32>, String> {
+pub(crate) async fn get_vlan(state: tauri::State<'_, AppState>) -> Result<Vec<i32>, String> {
     with_vendor!(state, |t, v| v.query_vlan(t))
 }
 
@@ -213,9 +207,7 @@ pub(crate) async fn set_vlan(
 }
 
 #[tauri::command]
-pub(crate) async fn disconnect_data(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn disconnect_data(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor_cid!(state, |t, v, cid| {
         validate_cid(cid)?;
         v.disconnect_data(t, cid)
@@ -241,31 +233,22 @@ pub(crate) async fn set_nr5g_band_cmd(
 }
 
 #[tauri::command]
-pub(crate) async fn reboot_modem(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn reboot_modem(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.reboot(t))
 }
 
 #[tauri::command]
-pub(crate) async fn set_cfun(
-    mode: i32,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn set_cfun(mode: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.set_cfun(t, mode))
 }
 
 #[tauri::command]
-pub(crate) async fn factory_reset(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn factory_reset(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.factory_reset(t))
 }
 
 #[tauri::command]
-pub(crate) async fn get_sim_slot(
-    state: tauri::State<'_, AppState>,
-) -> Result<i32, String> {
+pub(crate) async fn get_sim_slot(state: tauri::State<'_, AppState>) -> Result<i32, String> {
     with_vendor!(state, |t, v| v.query_sim_slot(t))
 }
 
@@ -318,9 +301,7 @@ pub(crate) async fn set_cell_lock(
 }
 
 #[tauri::command]
-pub(crate) async fn clear_cell_lock(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn clear_cell_lock(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.clear_cell_lock(t))
 }
 
@@ -344,16 +325,13 @@ pub(crate) async fn clear_plmn_lock(
     password: Option<String>,
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
-    let pw =
-        password.ok_or_else(|| "PLMN unlock requires a password".to_string())?;
+    let pw = password.ok_or_else(|| "PLMN unlock requires a password".to_string())?;
     validate_at_string(&pw)?;
     with_vendor!(state, |t, v| v.clear_plmn_lock(t, &pw))
 }
 
 #[tauri::command]
-pub(crate) fn pop_at_commands(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<String>, String> {
+pub(crate) fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<String>, String> {
     let mut log = state
         .at_command_log
         .lock()
@@ -362,9 +340,7 @@ pub(crate) fn pop_at_commands(
 }
 
 #[tauri::command]
-pub(crate) async fn get_bands(
-    state: tauri::State<'_, AppState>,
-) -> Result<BandConfig, String> {
+pub(crate) async fn get_bands(state: tauri::State<'_, AppState>) -> Result<BandConfig, String> {
     with_vendor!(state, |t, v| v.query_bands_with_spec(t))
 }
 
@@ -380,9 +356,7 @@ pub(crate) async fn set_bands(
 }
 
 #[tauri::command]
-pub(crate) async fn reset_all_bands(
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
+pub(crate) async fn reset_all_bands(state: tauri::State<'_, AppState>) -> Result<(), String> {
     with_vendor!(state, |t, v| v.reset_all_bands(t))
 }
 
@@ -422,16 +396,12 @@ pub(crate) async fn set_qualcomm_config(
 }
 
 #[tauri::command]
-pub(crate) async fn get_traffic(
-    state: tauri::State<'_, AppState>,
-) -> Result<TrafficInfo, String> {
+pub(crate) async fn get_traffic(state: tauri::State<'_, AppState>) -> Result<TrafficInfo, String> {
     with_vendor!(state, |t, v| v.query_traffic(t))
 }
 
 #[tauri::command]
-pub(crate) async fn get_usbnet_mode(
-    state: tauri::State<'_, AppState>,
-) -> Result<i32, String> {
+pub(crate) async fn get_usbnet_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
     with_vendor!(state, |t, v| v.query_usbnet_mode(t))
 }
 
@@ -444,9 +414,7 @@ pub(crate) async fn set_usbnet_mode(
 }
 
 #[tauri::command]
-pub(crate) async fn get_nat_mode(
-    state: tauri::State<'_, AppState>,
-) -> Result<i32, String> {
+pub(crate) async fn get_nat_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
     with_vendor!(state, |t, v| v.query_nat_mode(t))
 }
 
@@ -488,9 +456,7 @@ pub(crate) async fn set_mqtt_enabled(
 }
 
 #[tauri::command]
-pub(crate) async fn get_mqtt_enabled(
-    state: tauri::State<'_, AppState>,
-) -> Result<bool, String> {
+pub(crate) async fn get_mqtt_enabled(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     let task_guard = state
         .mqtt_task
         .lock()

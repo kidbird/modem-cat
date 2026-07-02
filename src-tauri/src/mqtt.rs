@@ -64,12 +64,10 @@ impl MqttConfig {
                 username: user.to_string(),
                 password: pass.to_string(),
             }),
-            _ => {
-                return Err(
-                    "MQTT username/password must be provided together; public defaults are forbidden"
-                        .to_string(),
-                )
-            }
+            _ => return Err(
+                "MQTT username/password must be provided together; public defaults are forbidden"
+                    .to_string(),
+            ),
         };
 
         Ok(Self {
@@ -263,30 +261,24 @@ mod tests {
     fn mqtt_config_requires_explicit_host_and_port() {
         let err = MqttConfig::from_settings(None, None, None, None)
             .expect_err("missing broker config must be rejected");
-        assert!(err.contains("MODEM_CAT_MQTT_HOST"), "unexpected error: {err}");
+        assert!(
+            err.contains("MODEM_CAT_MQTT_HOST"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
     fn mqtt_config_rejects_partial_credentials() {
-        let err = MqttConfig::from_settings(
-            Some("broker.example"),
-            Some("1883"),
-            Some("user"),
-            None,
-        )
-        .expect_err("partial credentials must be rejected");
+        let err =
+            MqttConfig::from_settings(Some("broker.example"), Some("1883"), Some("user"), None)
+                .expect_err("partial credentials must be rejected");
         assert!(err.contains("username/password"), "unexpected error: {err}");
     }
 
     #[test]
     fn mqtt_config_accepts_anonymous_and_explicit_modes() {
-        let anonymous = MqttConfig::from_settings(
-            Some("broker.example"),
-            Some("1883"),
-            None,
-            None,
-        )
-        .expect("anonymous broker should be allowed");
+        let anonymous = MqttConfig::from_settings(Some("broker.example"), Some("1883"), None, None)
+            .expect("anonymous broker should be allowed");
         assert!(anonymous.credentials.is_none());
 
         let explicit = MqttConfig::from_settings(

@@ -244,8 +244,25 @@
     .page { display: none; flex-direction: column; gap: 16px; min-height: 0; }
     .page.active { display: flex; flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
     #page-at { flex: 1; }
+    #page-adbdebug, #page-sshdebug {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
     #page-hardware { flex: 1; overflow: hidden; }
     #page-hardware .tab-panel.active { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    #page-adbdebug .panel, #page-sshdebug .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #page-at .panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
 
     /* ── Panels ── */
     .panel {
@@ -635,6 +652,7 @@
     .terminal-wrap {
       display: flex;
       flex-direction: column;
+      flex: 1;
       min-height: 0;
     }
     .terminal {
@@ -681,7 +699,8 @@
       overflow: auto;
       font-size: 13px;
       font-family: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'SF Mono', monospace;
-      height: clamp(420px, 58vh, 760px);
+      flex: 1;
+      height: auto;
       min-height: 320px;
       resize: vertical;
       white-space: pre-wrap;
@@ -701,7 +720,7 @@
 
     @media (max-width: 900px) {
       .debug-terminal-stream {
-        height: clamp(320px, 48vh, 560px);
+        min-height: 240px;
       }
     }
 

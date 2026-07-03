@@ -8,6 +8,12 @@ use modem_hal::ModemFactory;
 
 use crate::{wrap_transport, AppState};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 // ── Port listing helpers ──
 
 #[cfg(target_os = "windows")]
@@ -508,30 +514,57 @@ pub struct NetworkAdapter {
     pub gateway: Option<String>,
 }
 
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcessLaunchPlan {
+    program: String,
+    args: Vec<String>,
+    hide_window: bool,
+}
+
+#[cfg(target_os = "windows")]
+fn windows_network_adapter_query_plan() -> ProcessLaunchPlan {
+    ProcessLaunchPlan {
+        program: "powershell".to_string(),
+        args: vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            r#"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
+Get-NetAdapter | Where-Object {
+    $_.Status -eq 'Up' -and
+    $_.Virtual -eq $false -and
+    $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|WLAN|802\.11|Bluetooth|Loopback|TAP|VPN|Virtual|VMware|VirtualBox|Hyper-V|Wintun|Tunnel'
+} | ForEach-Object {
+    $config = Get-NetIPConfiguration -InterfaceIndex $_.InterfaceIndex;
+    [PSCustomObject]@{
+        Name = $_.Name;
+        InterfaceDescription = $_.InterfaceDescription;
+        IPv4Address = $config.IPv4Address.IPAddress;
+        IPv4DefaultGateway = $config.IPv4DefaultGateway.NextHop
+    }
+} | Where-Object { $_.IPv4Address -and $_.IPv4DefaultGateway } | ConvertTo-Json"#
+                .to_string(),
+        ],
+        hide_window: true,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn build_process_command(plan: &ProcessLaunchPlan) -> std::process::Command {
+    let mut command = std::process::Command::new(&plan.program);
+    command.args(&plan.args);
+    if plan.hide_window {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 #[tauri::command]
 pub(crate) async fn list_network_adapters() -> Result<Vec<NetworkAdapter>, String> {
     tokio::task::spawn_blocking(move || {
         #[cfg(target_os = "windows")]
         {
-            let output = std::process::Command::new("powershell")
-                .args(&[
-                    "-NoProfile",
-                    "-Command",
-                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
-                     Get-NetAdapter | Where-Object { \
-                         $_.Status -eq 'Up' -and \
-                         $_.Virtual -eq $false -and \
-                         $_.InterfaceDescription -notmatch 'Wi-Fi|Wireless|WLAN|802\\.11|Bluetooth|Loopback|TAP|VPN|Virtual|VMware|VirtualBox|Hyper-V|Wintun|Tunnel' \
-                     } | ForEach-Object { \
-                         $config = Get-NetIPConfiguration -InterfaceIndex $_.InterfaceIndex; \
-                         [PSCustomObject]@{ \
-                             Name = $_.Name; \
-                             InterfaceDescription = $_.InterfaceDescription; \
-                             IPv4Address = $config.IPv4Address.IPAddress; \
-                             IPv4DefaultGateway = $config.IPv4DefaultGateway.NextHop \
-                         } \
-                     } | Where-Object { $_.IPv4Address -and $_.IPv4DefaultGateway } | ConvertTo-Json",
-                ])
+            let output = build_process_command(&windows_network_adapter_query_plan())
                 .output()
                 .map_err(|e| format!("Failed to execute PowerShell: {}", e))?;
 
@@ -663,4 +696,21 @@ pub(crate) async fn connect_websocket(
     })
     .await
     .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "windows")]
+    use super::windows_network_adapter_query_plan;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn network_adapter_query_plan_hides_console_window() {
+        let plan = windows_network_adapter_query_plan();
+        assert_eq!(plan.program, "powershell");
+        assert!(plan.hide_window);
+        assert!(plan.args.iter().any(|arg| arg == "-NoProfile"));
+        assert!(plan.args.iter().any(|arg| arg == "-Command"));
+        assert!(plan.args.iter().any(|arg| arg.contains("Get-NetAdapter")));
+    }
 }

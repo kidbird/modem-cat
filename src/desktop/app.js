@@ -261,6 +261,9 @@
       if (item.dataset.page === 'scene') {
         loadScenePage();
       }
+      if (item.dataset.page === 'firmware') {
+        initFirmwarePage();
+      }
       if (item.dataset.page === 'atmanual') {
         initAtdbPage();
       }
@@ -809,7 +812,7 @@
       const sel = document.getElementById('apnCid');
       const usedCids = new Set(apnData.map(a => a.cid));
       sel.innerHTML = '';
-      for (let c = 1; c <= 16; c++) {
+      for (let c = 1; c <= 8; c++) {
         if (c === selectedCid || !usedCids.has(c)) {
           const opt = document.createElement('option');
           opt.value = c;
@@ -2421,7 +2424,9 @@
       try {
         const list = await invoke('get_apn_list');
         console.log('[APN] raw list:', list);
-        apnData = (list || []).map(a => ({
+        apnData = (list || [])
+          .filter(a => (a.cid || 0) >= 1 && (a.cid || 0) <= 8)
+          .map(a => ({
           name: a.apnName || '',
           user: a.username || '',
           pass: '',
@@ -2799,12 +2804,11 @@
     }
 
     // ─── Firmware Download Page ────────────────────────────────────────────
-    const { listen: fwListen } = window.__TAURI__.event;
-
     const fw = {
       pacPath: null,
       report: null,
       downloading: false,
+      initialized: false,
     };
 
     const RISK_LABEL = {
@@ -2875,8 +2879,7 @@
       document.getElementById('fwProgressFill').style.width = `${Math.round(pct)}%`;
     }
 
-    // Select + analyze a PAC.
-    document.getElementById('fwSelectPacBtn').addEventListener('click', async () => {
+    async function handleFirmwareSelectPac() {
       const selBtn = document.getElementById('fwSelectPacBtn');
       let path;
       try {
@@ -2902,10 +2905,9 @@
       } finally {
         selBtn.disabled = fw.downloading;
       }
-    });
+    }
 
-    // Start download.
-    document.getElementById('fwStartBtn').addEventListener('click', async () => {
+    async function handleFirmwareStart() {
       if (!fw.pacPath) { showToast('请先选择 PAC 文件', 'error'); return; }
       try {
         document.getElementById('fwLog').textContent = '';
@@ -2919,10 +2921,9 @@
         fwSetProgress(null);
         fwSetResult(`<div class="alert alert-error">${escHtml(e)}</div>`);
       }
-    });
+    }
 
-    // Stop download.
-    document.getElementById('fwStopBtn').addEventListener('click', async () => {
+    async function handleFirmwareStop() {
       try {
         await invoke('stop_firmware_download');
         fwSetDownloading(false);
@@ -2931,10 +2932,9 @@
       } catch (e) {
         showToast(`停止失败: ${e}`, 'error');
       }
-    });
+    }
 
-    // Listen to forwarded sidecar events.
-    fwListen('firmware-event', (ev) => {
+    function handleFirmwareEvent(ev) {
       const p = ev.payload || {};
       if (p.Log) {
         fwLog(`[${p.Log.level}] ${p.Log.message}`);
@@ -2967,7 +2967,35 @@
           }
         }
       }
-    });
+    }
+
+    async function initFirmwarePage() {
+      if (fw.initialized) return;
+
+      const fwSelectBtn = document.getElementById('fwSelectPacBtn');
+      const fwStartBtn = document.getElementById('fwStartBtn');
+      const fwStopBtn = document.getElementById('fwStopBtn');
+      if (!fwSelectBtn || !fwStartBtn || !fwStopBtn) {
+        console.warn('[Firmware] 固件下载页面节点未准备好');
+        return;
+      }
+
+      fw.initialized = true;
+      fwSelectBtn.addEventListener('click', handleFirmwareSelectPac);
+      fwStartBtn.addEventListener('click', handleFirmwareStart);
+      fwStopBtn.addEventListener('click', handleFirmwareStop);
+
+      const listen = window.__TAURI__?.event?.listen;
+      if (listen) {
+        try {
+          await listen('firmware-event', handleFirmwareEvent);
+        } catch (e) {
+          console.warn('[Firmware] 监听 firmware-event 失败:', e);
+        }
+      } else {
+        console.warn('[Firmware] Tauri event system not available');
+      }
+    }
 
     // ─── Online Signal Monitoring ───
 

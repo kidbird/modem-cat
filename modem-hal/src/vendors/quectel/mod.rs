@@ -1448,4 +1448,40 @@ mod tests {
 
         assert!(err.contains("nat"), "unexpected error: {err}");
     }
+
+    #[test]
+    fn query_apn_list_prefers_qicsgp_and_hides_cids_above_8() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+CGACT: 1,1\r\n+CGACT: 8,1\r\n+CGACT: 11,1\r\nOK",
+            "+QICSGP: 1,1,\"cmnet\",\"\",\"\",0\r\n+QICSGP: 8,3,\"custom8\",\"\",\"\",0\r\n+QICSGP: 11,3,\"ims\",\"\",\"\",0\r\nOK",
+        ]);
+
+        let list = modem.query_apn_list(&mut transport).expect("apn list");
+
+        assert_eq!(transport.sent, vec!["AT+CGACT?", "AT+QICSGP?"]);
+        assert_eq!(list.iter().map(|e| e.cid).collect::<Vec<_>>(), vec![1, 8]);
+        assert_eq!(list[0].apn_name, "cmnet");
+        assert_eq!(list[1].apn_name, "custom8");
+        assert!(list.iter().all(|e| e.cid >= 1 && e.cid <= 8));
+    }
+
+    #[test]
+    fn query_apn_list_fallback_cgdcont_still_hides_cids_above_8() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+CGACT: 1,1\r\n+CGACT: 11,1\r\nOK",
+            "OK",
+            "+CGDCONT: 1,\"IP\",\"cmnet\",\"0.0.0.0\"\r\n+CGDCONT: 11,\"IPV4V6\",\"ims\",\"0.0.0.0\"\r\nOK",
+        ]);
+
+        let list = modem.query_apn_list(&mut transport).expect("apn list fallback");
+
+        assert_eq!(
+            transport.sent,
+            vec!["AT+CGACT?", "AT+QICSGP?", "AT+CGDCONT?"]
+        );
+        assert_eq!(list.iter().map(|e| e.cid).collect::<Vec<_>>(), vec![1]);
+        assert_eq!(list[0].apn_name, "cmnet");
+    }
 }

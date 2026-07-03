@@ -61,6 +61,14 @@ struct SessionHandle {
     tx: Sender<SessionCommand>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProcessLaunchPlan {
+    program: PathBuf,
+    args: Vec<String>,
+    working_dir: PathBuf,
+    hide_window: bool,
+}
+
 #[derive(Default)]
 pub struct DebugTerminalState {
     next_session_id: AtomicU64,
@@ -195,6 +203,34 @@ fn resolve_bundled_adb_path(app: &AppHandle) -> Result<PathBuf, String> {
         })
 }
 
+fn adb_start_server_plan(adb_path: &std::path::Path, adb_dir: &std::path::Path) -> ProcessLaunchPlan {
+    ProcessLaunchPlan {
+        program: adb_path.to_path_buf(),
+        args: vec!["start-server".to_string()],
+        working_dir: adb_dir.to_path_buf(),
+        hide_window: true,
+    }
+}
+
+fn adb_shell_plan(adb_path: &std::path::Path, adb_dir: &std::path::Path) -> ProcessLaunchPlan {
+    ProcessLaunchPlan {
+        program: adb_path.to_path_buf(),
+        args: vec!["shell".to_string()],
+        working_dir: adb_dir.to_path_buf(),
+        hide_window: true,
+    }
+}
+
+fn build_process_command(plan: &ProcessLaunchPlan) -> Command {
+    let mut command = Command::new(&plan.program);
+    command.current_dir(&plan.working_dir).args(&plan.args);
+    #[cfg(windows)]
+    if plan.hide_window {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 fn spawn_reader_thread<R: Read + Send + 'static>(
     app: AppHandle,
     kind: &'static str,
@@ -238,30 +274,19 @@ fn spawn_adb_thread(
                 .ok_or("ADB 路径无效，缺少父目录")?
                 .to_path_buf();
 
-            // Pre-start ADB server with CREATE_NO_WINDOW so the daemon process
-            // inherits the no-window flag. Without this, `adb shell` would
-            // internally fork `adb server` which pops up a console window.
-            #[cfg(windows)]
-            {
-                let _ = Command::new(&adb_path)
-                    .arg("start-server")
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .current_dir(&adb_dir)
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .output();
-            }
+            // Pre-start ADB server with the same hidden-window launch plan as
+            // the interactive shell so `adb.exe` never flashes a console.
+            let _ = build_process_command(&adb_start_server_plan(&adb_path, &adb_dir))
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .output();
 
-            let mut command = Command::new(&adb_path);
+            let mut command = build_process_command(&adb_shell_plan(&adb_path, &adb_dir));
             command
-                .arg("shell")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .current_dir(adb_dir);
-            #[cfg(windows)]
-            command.creation_flags(CREATE_NO_WINDOW);
+                .stderr(Stdio::piped());
 
             let mut child = command
                 .spawn()
@@ -625,5 +650,29 @@ mod tests {
             gateway: Some("192.168.1.1".into()),
         };
         assert_eq!(adapter.gateway.as_deref(), Some("192.168.1.1"));
+    }
+
+    #[test]
+    fn adb_start_server_plan_hides_console_window() {
+        let adb_path = PathBuf::from("C:/adb/adb.exe");
+        let adb_dir = PathBuf::from("C:/adb");
+        let plan = adb_start_server_plan(&adb_path, &adb_dir);
+
+        assert_eq!(plan.program, adb_path);
+        assert_eq!(plan.working_dir, adb_dir);
+        assert_eq!(plan.args, vec!["start-server"]);
+        assert!(plan.hide_window);
+    }
+
+    #[test]
+    fn adb_shell_plan_hides_console_window() {
+        let adb_path = PathBuf::from("C:/adb/adb.exe");
+        let adb_dir = PathBuf::from("C:/adb");
+        let plan = adb_shell_plan(&adb_path, &adb_dir);
+
+        assert_eq!(plan.program, adb_path);
+        assert_eq!(plan.working_dir, adb_dir);
+        assert_eq!(plan.args, vec!["shell"]);
+        assert!(plan.hide_window);
     }
 }

@@ -111,7 +111,25 @@ Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不创�
 - MSI / NSIS 安装包
 - `ModemCat_vX.Y.Z_portable.zip`
 
-`build-release.ps1` 本身不会联网下载 WebView2；它只检查本地 `webview2-runtime/` 是否已准备好。首次环境准备若缺少该目录，再单独执行 `scripts/setup-webview2.ps1`。
+`build-release.ps1` 本身不会联网下载 WebView2；它只检查本地 `webview2-runtime/` 是否已准备好。首次环境准备若缺少该目录，再单独执行 `scripts/setup-webview2.ps1`。WebView2 约束统一维护在本文件，不再单独维护重复的 `WEBVIEW2_BUILD.md`。
+
+为保证远端 CI/CD 也能完整执行 Windows 打包，以下构建输入必须保留在 Git：
+
+- `.cargo/config.toml`（Windows static CRT 配置）
+- `src-tauri/binaries/r26-cli*`
+- `src-tauri/resources/adb/`
+
+`webview2-runtime/` 不进入 Git。若要做 fixed WebView2 离线打包，必须在执行构建的机器上预先准备该目录；它属于应用私有运行时，不覆盖目标机器系统 WebView2。
+
+如果 CI 使用 Ubuntu runner，则不要指望它替代 Windows 机器去产出完整 Windows 安装包。当前工程的 MSI / 常规 Tauri Windows 打包应放在 Windows runner 上执行；Ubuntu runner 更适合跑测试、文档校验和非安装包任务。
+
+以下目录属于机器本地代理 / 索引 / 记忆缓存，必须继续留在 `.gitignore`，不要提交到远端：
+
+- `.codegraph/`
+- `.gitnexus/`
+- `.specify/`
+- `.understand-anything/`
+- `.workbuddy/`
 
 构建完成后脚本打印产物路径，例如：
 

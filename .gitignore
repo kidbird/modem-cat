@@ -1,6 +1,13 @@
 # Claude
 .claude/
 
+# Legacy GitHub Actions config (project no longer maintained on GitHub)
+.github/workflows/
+
+# Local AI / agent config (not project source)
+opencode.json
+.agents/
+
 # Dependencies
 node_modules/
 .pnp/
@@ -11,7 +18,7 @@ dist/
 build/
 out/
 
-# WebView2 fixed runtime (downloaded on demand)
+# WebView2 fixed runtime (kept outside Git; provision on builder/runner)
 webview2-runtime/
 
 # Tauri
@@ -94,6 +101,9 @@ check-out.txt
 # Worktree patches
 worktree-patch/
 
+# Requirement/spec docs now live under docs/
+/specs/
+
 # Orphaned lockfile (workspace root Cargo.lock is authoritative)
 src-tauri/Cargo.lock
 .worktrees/
@@ -104,7 +114,6 @@ src-tauri/Cargo.lock
 .qoderignore
 .qoder/
 .codegraph/
-.agents/skills/graphify/
 
 # Temporary plan/spec files (historical tracked ones preserved)
 docs/superpowers/plans/

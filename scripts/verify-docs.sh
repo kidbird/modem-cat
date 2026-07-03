@@ -37,6 +37,11 @@ echo "[2] 死路径与过时引用"
 check "owner 文档不再引用已删除的 commands.rs" "! grep -n 'commands.rs' AGENTS.md CLAUDE.md docs/CONTEXT_PACK.md docs/ARCHITECTURE.md docs/AT_COMMANDS.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/REVIEW.md docs/BUILD.md docs/TECH_STACK.md docs/CODING.md docs/README.md 2>/dev/null"
 check "owner 文档不再写死旧行数 1142/1556/6479" "! grep -nE '1142|1556|6479' AGENTS.md CLAUDE.md docs/CONTEXT_PACK.md docs/ARCHITECTURE.md docs/AT_COMMANDS.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/REVIEW.md docs/BUILD.md docs/TECH_STACK.md docs/CODING.md docs/README.md 2>/dev/null"
 check "owner 文档不再描述最终用户 License / Factory 菜单入口" "! grep -nE 'show-load-license|show-license-status|#page-factory|factory_write_sn_to_device|get_license_status|load_license_file' docs/ARCHITECTURE.md docs/CODE_MAP.md docs/CALL_FLOW.md docs/BUILD.md docs/TECH_STACK.md 2>/dev/null"
+check "本地 agent/tool 目录不再被 Git 跟踪" "[ -z \"$(git ls-files .agents .codegraph .gitnexus .specify .understand-anything .workbuddy opencode.json 2>/dev/null)\" ]"
+check ".gitignore 继续忽略本地 agent/tool 目录" "grep -q '^.agents/$' .gitignore && grep -q 'opencode.json' .gitignore && grep -q '\\.codegraph/' .gitignore && grep -q '\\.gitnexus/' .gitignore && grep -q '\\.specify/' .gitignore && grep -q '\\.understand-anything/' .gitignore && grep -q '\\.workbuddy/' .gitignore"
+check ".gitignore 继续忽略 fixed WebView2 runtime" "grep -q '^webview2-runtime/$' .gitignore"
+check "fixed WebView2 runtime 不进入 Git" "[ -z \"$(git ls-files webview2-runtime 2>/dev/null)\" ]"
+check "仓库根 specs/ 不再作为正式需求目录" "grep -q '^/specs/$' .gitignore && [ ! -e specs ]"
 
 echo "[3] 凭据与真相源"
 check "WebSocket 不再补 admin 默认凭据" "! grep -R -n 'unwrap_or(\"admin\")' src-tauri/src modem-hal/src 2>/dev/null"
@@ -55,6 +60,10 @@ check "CODING 文档包含 verify-docs" "grep -q 'verify-docs.sh' docs/CODING.md
 check "AGENTS 验证基线包含 cargo test / cargo build / verify-docs" "grep -q 'cargo test --workspace' AGENTS.md && grep -q 'cargo build -p modem-hal' AGENTS.md && grep -q 'verify-docs.sh' AGENTS.md"
 check "CODE_MAP 记录 ADB / SSH 调试 IPC" "grep -q 'start_adb_session' docs/CODE_MAP.md && grep -q 'start_ssh_session' docs/CODE_MAP.md"
 check "BUILD 记录 ADB 资源目录" "grep -q 'src-tauri/resources/adb/' docs/BUILD.md && grep -q 'Sdk/' docs/BUILD.md"
+check "BUILD 记录 fixed WebView2 非跟仓约束" "grep -q 'webview2-runtime/' docs/BUILD.md && grep -q '不进入 Git' docs/BUILD.md"
+check "TECH_STACK 记录 Windows 打包资产边界" "grep -q '.cargo/config.toml' docs/TECH_STACK.md && grep -q 'src-tauri/resources/adb/' docs/TECH_STACK.md"
+check "README 记录 docs/specs 需求文档位置" "grep -q 'docs/specs/' docs/README.md || grep -q 'specs/001-modem-debug-tool' docs/README.md"
+check "不再维护重复的 WEBVIEW2_BUILD 文档" "[ ! -e docs/WEBVIEW2_BUILD.md ]"
 
 echo
 echo "=== 结果: $pass 通过 / $fail 失败 ==="

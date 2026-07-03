@@ -113,3 +113,11 @@ src-tauri/src/dloader.rs
 - `cargo test --workspace`
 - `cargo build -p modem-hal`
 - 完整桌面构建与平台说明见 `docs/BUILD.md`
+
+### 5.1 Windows 打包资产边界
+
+- Windows 发布使用 `.cargo/config.toml` 提供 static CRT 配置，避免目标机器额外依赖 `VCRUNTIME140.dll` / `MSVCP140.dll`
+- `src-tauri/tauri.conf.json` 当前启用 `fixedRuntime`；若使用该模式，仓库根目录的 `webview2-runtime/` 需要在构建机本地预置，但不进入 Git。它属于应用私有 WebView2 运行时，不覆盖系统已安装版本
+- `src-tauri/resources/adb/`、`src-tauri/binaries/r26-cli*` 都属于可复现打包链路的一部分，需保留跟仓
+- Ubuntu runner 可以承接校验和部分构建任务，但不能把“需要 Windows 打包器/运行时的完整 Windows 发版”变成纯 Linux 主机任务
+- `.codegraph/`、`.gitnexus/`、`.specify/`、`.understand-anything/`、`.workbuddy/` 属于本地工具痕迹，不属于源码或发布资产

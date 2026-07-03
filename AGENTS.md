@@ -35,7 +35,7 @@
 - **文档和护栏同改**：凡是改动 live 架构、IPC、AT 合同、连接方式、认证方式、构建验证方式，必须同一次更新对应 owner 文档和 `scripts/verify-docs.sh`。
 - **review 纪律**：review / cleanup 任务必须给出可定位的文件证据；已修复的技术债从 `docs/REVIEW.md` 直接移除，不保留“已修历史年表”。
 - **验证基线**：改动完成后至少运行 `cargo test --workspace`、`cargo build -p modem-hal`、`bash scripts/verify-docs.sh`。
-- **构建产物统一输出**：所有构建打包的产物（MSI/NSIS 安装包、便携版可执行文件、sidecar、license-gen 等）必须统一放到 `dist/` 根目录下，禁止创建子目录（如 `dist/installer/`、`dist/portable/`）。打包脚本见 `scripts/build-release.ps1`，skill 指引见 `.agents/skills/release-package/SKILL.md`。
+- **构建产物统一输出**：所有构建打包的产物（MSI/NSIS 安装包、便携版可执行文件、sidecar、license-gen 等）必须统一放到 `dist/` 根目录下，禁止创建子目录（如 `dist/installer/`、`dist/portable/`）。打包脚本见 `scripts/build-release.ps1`，构建约束见 `docs/BUILD.md`。
 
 ## Ownership Rules
 

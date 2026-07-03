@@ -19,12 +19,22 @@
 | [CODING.md](CODING.md) | AT 输入校验、敏感信息、前端入口、文档同步规范 | 改代码前查 |
 | [REVIEW.md](REVIEW.md) | 当前已知技术债、风险点、与正式设计合同的偏差 | 排期修 bug 时查 |
 
+## 需求与方案文档
+
+| 路径 | 用途 |
+|---|---|
+| [specs/001-modem-debug-tool](specs/001-modem-debug-tool/) | 桌面工具初始需求包：`spec` / `plan` / `tasks` / `contracts` / `research` |
+| [superpowers/specs](superpowers/specs/) | 历史设计草案与专项设计说明 |
+| [superpowers/plans](superpowers/plans/) | 历史实施计划与拆解记录 |
+
 ## 文档维护原则
 
 1. **先看根入口，再按需加载**。从 [AGENTS.md](../AGENTS.md) 开始，经由 [CONTEXT_PACK.md](CONTEXT_PACK.md) 路由到对应 owner 文档，不要把所有细节塞回根文件。
 2. **代码与文档不一致时，以代码为准**。修文档时先确认 live path，再决定是更新 owner 文档还是把偏差登记到 [REVIEW.md](REVIEW.md)。
 3. **正式合同与技术债分开写**。主流程、主合同写进 `ARCHITECTURE.md` / `AT_COMMANDS.md` / `CODE_MAP.md`；fallback、兼容分支、历史残留写进 `REVIEW.md`，不要混写。
 4. **改代码必同步改 owner 文档**。新增/删除 IPC、调整 AT 合同、改变调用路径时，同一次改动内完成文档更新。
+5. **需求文档统一留在 `docs/` 下**。仓库级需求 / 计划 / 任务文档放在 `docs/specs/` 或 `docs/superpowers/`，不要再在仓库根平铺新的 `specs/` 目录。
+6. **本地参考导出物不放正式索引**。HTML 导出、TXT 转写、临时手册整理稿、PDF 本地副本都不算 owner 文档；若只用于个人检索，保持 gitignored，不写进本目录索引。
 
 ## 历史归档
 

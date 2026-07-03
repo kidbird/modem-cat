@@ -1051,19 +1051,15 @@
         <div class="panel-header">
           <div class="panel-title" data-i18n="nav_adb_debug">ADB 调试</div>
           <div style="display:flex;gap:8px;">
-            <button class="btn btn-primary btn-sm" onclick="connectAdbDebug()" data-i18n="btn_connect">连接</button>
-            <button class="btn btn-secondary btn-sm" onclick="disconnectDebugTerminal()" data-i18n="btn_disconnect_debug">断开</button>
+            <button class="btn btn-primary btn-sm" id="adbDebugConnectBtn" onclick="connectAdbDebug()" data-i18n="btn_connect">连接</button>
+            <button class="btn btn-secondary btn-sm" id="adbDebugDisconnectBtn" onclick="disconnectDebugTerminal('adb')" data-i18n="btn_disconnect_debug">断开</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearDebugTerminal('adb')" data-i18n="btn_clear_at">清除</button>
           </div>
         </div>
         <div id="adbDebugStatus" class="debug-status" data-i18n="adb_debug_waiting">请先连接模组，然后进入 ADB shell。</div>
+        <div class="debug-terminal-hint" data-i18n="debug_terminal_direct_input">点击终端后可直接输入命令，Enter 发送。</div>
         <div class="terminal-wrap">
-          <pre class="debug-terminal-stream" id="adbDebugTerminal"></pre>
-          <div class="terminal-input">
-            <span class="terminal-prompt">›</span>
-            <input type="text" id="adbDebugInput" data-i18n-ph="ph_debug_cmd" placeholder="输入调试命令..." onkeydown="handleAdbDebugKey(event)">
-            <button class="btn btn-primary" onclick="sendAdbDebugInput()" data-i18n="btn_send">发送</button>
-            <button class="btn btn-secondary" onclick="clearDebugTerminal('adb')" data-i18n="btn_clear_at">清除</button>
-          </div>
+          <pre class="debug-terminal-stream" id="adbDebugTerminal" tabindex="0" onclick="focusDebugTerminal('adb')" onkeydown="handleDebugTerminalKey(event, 'adb')" onpaste="handleDebugTerminalPaste(event, 'adb')"></pre>
         </div>
       </div>
     </div><!-- /page-adbdebug -->
@@ -1075,8 +1071,9 @@
           <div class="panel-title" data-i18n="nav_ssh_debug">SSH 调试</div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-primary btn-sm" onclick="refreshSshDebugAdapters()" data-i18n="btn_refresh">刷新</button>
-            <button class="btn btn-primary btn-sm" onclick="connectSshDebug()" data-i18n="btn_connect">连接</button>
-            <button class="btn btn-secondary btn-sm" onclick="disconnectDebugTerminal()" data-i18n="btn_disconnect_debug">断开</button>
+            <button class="btn btn-primary btn-sm" id="sshDebugConnectBtn" onclick="connectSshDebug()" data-i18n="btn_connect">连接</button>
+            <button class="btn btn-secondary btn-sm" id="sshDebugDisconnectBtn" onclick="disconnectDebugTerminal('ssh')" data-i18n="btn_disconnect_debug">断开</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearDebugTerminal('ssh')" data-i18n="btn_clear_at">清除</button>
           </div>
         </div>
         <div class="form-row">
@@ -1100,14 +1097,9 @@
           </div>
         </div>
         <div id="sshDebugStatus" class="debug-status" data-i18n="ssh_debug_waiting">选择有线网卡后，设备 IP 会自动带出网关地址。</div>
+        <div class="debug-terminal-hint" data-i18n="debug_terminal_direct_input">点击终端后可直接输入命令，Enter 发送。</div>
         <div class="terminal-wrap">
-          <pre class="debug-terminal-stream" id="sshDebugTerminal"></pre>
-          <div class="terminal-input">
-            <span class="terminal-prompt">›</span>
-            <input type="text" id="sshDebugInput" data-i18n-ph="ph_debug_cmd" placeholder="输入调试命令..." onkeydown="handleSshDebugKey(event)">
-            <button class="btn btn-primary" onclick="sendSshDebugInput()" data-i18n="btn_send">发送</button>
-            <button class="btn btn-secondary" onclick="clearDebugTerminal('ssh')" data-i18n="btn_clear_at">清除</button>
-          </div>
+          <pre class="debug-terminal-stream" id="sshDebugTerminal" tabindex="0" onclick="focusDebugTerminal('ssh')" onkeydown="handleDebugTerminalKey(event, 'ssh')" onpaste="handleDebugTerminalPaste(event, 'ssh')"></pre>
         </div>
       </div>
     </div><!-- /page-sshdebug -->

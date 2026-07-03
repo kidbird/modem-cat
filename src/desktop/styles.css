@@ -635,6 +635,7 @@
     .terminal-wrap {
       display: flex;
       flex-direction: column;
+      min-height: 0;
     }
     .terminal {
       background: #05070f;
@@ -665,6 +666,12 @@
       font-size: 12.5px;
       line-height: 1.5;
     }
+    .debug-terminal-hint {
+      margin: -2px 0 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
     .debug-terminal-stream {
       margin: 0;
       background: #05070f;
@@ -674,13 +681,28 @@
       overflow: auto;
       font-size: 13px;
       font-family: 'JetBrains Mono', 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'SF Mono', monospace;
-      height: 520px;
-      min-height: 120px;
+      height: clamp(420px, 58vh, 760px);
+      min-height: 320px;
       resize: vertical;
       white-space: pre-wrap;
       word-break: break-word;
       color: #e2e8f0;
       box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+      cursor: text;
+    }
+    .debug-terminal-stream:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent), inset 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .debug-terminal-stream.is-active {
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+
+    @media (max-width: 900px) {
+      .debug-terminal-stream {
+        height: clamp(320px, 48vh, 560px);
+      }
     }
 
     .shortcut-bar {

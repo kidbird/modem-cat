@@ -2680,14 +2680,15 @@
               new Promise((_, rj) => setTimeout(() => rj(new Error('断开超时')), 3000)),
             ]).catch(() => {});
             state.connected = false;
-          state.dataConnected = false;
-          state.dataApn = '';
-          state.connectedPort = '';
-          state.idle = true;
-          state.transport = undefined;
-          updateConnectionUI(false);
-          updateDataConnectionUI();
-          clearData();
+            state.dataConnected = false;
+            state.dataApn = '';
+            state.connectedPort = '';
+            state.idle = true;
+            state.transport = undefined;
+            updateConnectionUI(false);
+            updateDataConnectionUI();
+            clearData();
+          }
         } else if (state.connected && state.connectedPort && portNames.includes(state.connectedPort)) {
           // Port still present — reset miss counter.
           state._portMissCount = 0;

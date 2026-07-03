@@ -8,16 +8,22 @@
     license-gen, and WebView2 runtime. Outputs everything flat in dist/ root.
 
 .PARAMETERS
-    None. Version is read from tauri.conf.json.
+    -Quick
+        Skip the portable ZIP stage. Useful for iteration when only exe / MSI / NSIS
+        are needed.
 
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1
 #>
 
-param()
+param(
+    [switch]$Quick
+)
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
@@ -40,7 +46,14 @@ function Stop-RunningDistApp {
 
     $normalized = [System.IO.Path]::GetFullPath($DistExePath)
     $running = Get-Process -ErrorAction SilentlyContinue | Where-Object {
-        $_.Path -and ([System.IO.Path]::GetFullPath($_.Path) -eq $normalized)
+        if (-not $_.Path) {
+            return $false
+        }
+        try {
+            return [System.IO.Path]::GetFullPath($_.Path) -eq $normalized
+        } catch {
+            return $false
+        }
     }
 
     foreach ($proc in $running) {
@@ -67,6 +80,34 @@ function Copy-FileWithRetry {
             }
             Start-Sleep -Milliseconds (500 * $attempt)
         }
+    }
+}
+
+function Add-DirectoryToZip {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.IO.Compression.ZipArchive]$Archive,
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+        [Parameter(Mandatory = $true)]
+        [string]$EntryPrefix
+    )
+
+    $baseDir = [System.IO.Path]::GetFullPath($SourceDir)
+    Get-ChildItem $baseDir -Recurse -File | ForEach-Object {
+        $full = [System.IO.Path]::GetFullPath($_.FullName)
+        $relative = $full.Substring($baseDir.Length).TrimStart('\', '/')
+        $entryName = if ([string]::IsNullOrWhiteSpace($EntryPrefix)) {
+            $relative
+        } else {
+            "$EntryPrefix/$relative".Replace('\', '/')
+        }
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $Archive,
+            $full,
+            $entryName,
+            [System.IO.Compression.CompressionLevel]::Optimal
+        ) | Out-Null
     }
 }
 
@@ -202,6 +243,7 @@ if (Test-Path $exeSrc) {
 foreach ($file in $adbFiles) {
     $src = Join-Path $adbResourceDir $file
     if (Test-Path $src) {
+        Stop-RunningDistApp -DistExePath (Join-Path $dist $file)
         Copy-FileWithRetry -Source $src -Destination (Join-Path $dist $file)
         Write-Host "  [OK] $file"
     }
@@ -210,8 +252,10 @@ foreach ($file in $adbFiles) {
 # MSI installer
 $msiDir = "$root\target\release\bundle\msi"
 if (Test-Path $msiDir) {
-    Get-ChildItem $msiDir -Filter "*.msi" -Recurse | ForEach-Object {
-        Copy-Item $_.FullName (Join-Path $dist $_.Name) -Force
+    Get-ChildItem $msiDir -Filter "*.msi" -Recurse | Where-Object {
+        $_.Name -like "*_${ver}_*"
+    } | ForEach-Object {
+        Copy-FileWithRetry -Source $_.FullName -Destination (Join-Path $dist $_.Name)
         Write-Host "  [OK] $($_.Name)"
     }
 }
@@ -219,8 +263,10 @@ if (Test-Path $msiDir) {
 # NSIS installer
 $nsisDir = "$root\target\release\bundle\nsis"
 if (Test-Path $nsisDir) {
-    Get-ChildItem $nsisDir -Filter "*.exe" -Recurse | ForEach-Object {
-        Copy-Item $_.FullName (Join-Path $dist $_.Name) -Force
+    Get-ChildItem $nsisDir -Filter "*.exe" -Recurse | Where-Object {
+        $_.Name -like "*_${ver}_*"
+    } | ForEach-Object {
+        Copy-FileWithRetry -Source $_.FullName -Destination (Join-Path $dist $_.Name)
         Write-Host "  [OK] $($_.Name)"
     }
 }
@@ -248,33 +294,46 @@ foreach ($lg in $licGenPaths) {
     }
 }
 
-# WebView2 runtime (entire directory — fixedRuntime, no download)
-Write-Host "  [INFO] Copying webview2-runtime/ ($wvCount files) ..."
-Copy-Item $webview2 (Join-Path $dist "webview2-runtime") -Recurse -Force
-Write-Host "  [OK] webview2-runtime/"
-
 # Create portable ZIP
 Write-Host ""
-Write-Host "[8/8] Creating portable ZIP ..."
 $zipName = "ModemCat_v${ver}_portable.zip"
 $zipPath = Join-Path $dist $zipName
-$tempZip = Join-Path $env:TEMP "modem-cat-zip-temp"
-if (Test-Path $tempZip) { Remove-Item $tempZip -Recurse -Force }
-New-Item -ItemType Directory -Path $tempZip -Force | Out-Null
+if ($Quick) {
+    Write-Host "[8/8] Skipping portable ZIP (-Quick)"
+} else {
+    Write-Host "[8/8] Creating portable ZIP ..."
+    if (Test-Path $zipPath) {
+        Remove-Item $zipPath -Force
+    }
 
-Get-ChildItem $dist -Force | ForEach-Object {
-    if ($_.Name -ne $zipName) {
-        if ($_.PSIsContainer) {
-            Copy-Item $_.FullName (Join-Path $tempZip $_.Name) -Recurse -Force
-        } else {
-            Copy-Item $_.FullName (Join-Path $tempZip $_.Name) -Force
+    $archive = $null
+    try {
+        $archive = [System.IO.Compression.ZipFile]::Open(
+            $zipPath,
+            [System.IO.Compression.ZipArchiveMode]::Create
+        )
+
+        Get-ChildItem $dist -File | ForEach-Object {
+            if ($_.Name -ne $zipName) {
+                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                    $archive,
+                    $_.FullName,
+                    $_.Name,
+                    [System.IO.Compression.CompressionLevel]::Optimal
+                ) | Out-Null
+            }
+        }
+
+        Write-Host "  [INFO] Adding webview2-runtime/ to portable ZIP payload ..."
+        Add-DirectoryToZip -Archive $archive -SourceDir $webview2 -EntryPrefix "webview2-runtime"
+    } finally {
+        if ($archive) {
+            $archive.Dispose()
         }
     }
-}
 
-Compress-Archive -Path "$tempZip\*" -DestinationPath $zipPath -Force
-Remove-Item $tempZip -Recurse -Force
-Write-Host "  [OK] $zipName"
+    Write-Host "  [OK] $zipName"
+}
 
 # == Final summary ==
 Write-Host ""
@@ -282,7 +341,7 @@ Write-Host "  ==========================================="
 Write-Host "  All artifacts (dist/ root — flat, no subdirs)"
 Write-Host "  ==========================================="
 Write-Host ""
-Get-ChildItem $dist -Recurse -Force | Where-Object { -not $_.PSIsContainer } | ForEach-Object {
+Get-ChildItem $dist -Force | Where-Object { -not $_.PSIsContainer } | ForEach-Object {
     $rel = $_.FullName.Substring($dist.Length).TrimStart('\')
     if ($_.Length -ge 1MB) { $s = "{0:N1} MB" -f ($_.Length/1MB) }
     elseif ($_.Length -ge 1KB) { $s = "{0:N0} KB" -f ($_.Length/1KB) }

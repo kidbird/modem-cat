@@ -366,13 +366,25 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
                     └─ emit('debug-terminal-output', { kind: 'adb', stream, text })
 ```
 
-### 13.3 ADB 命令输入 / 离开页面
+### 13.3 ADB 终端输入 / 断开 / 离开页面
 
 ```
-[前端]  sendAdbDebugInput()
-  └─ invoke('write_debug_terminal_input', { input })
-        └─→ debug_terminal.rs::write_debug_terminal_input
-              └─ 写入 adb child stdin
+[前端]  用户点击终端后直接按键输入
+  └─→ handleDebugTerminalKey(event, "adb")
+        └─ invoke('write_debug_terminal_input', { input })
+              └─→ debug_terminal.rs::write_debug_terminal_input
+                    └─ 写入 adb child stdin
+
+[前端]  点击“断开”
+  └─→ disconnectDebugTerminal("adb")
+        └─ invoke('close_debug_terminal_session')
+              └─→ 关闭 adb shell 子进程
+
+[后端]  adb shell 退出
+  └─ emit('debug-terminal-output', { kind: 'adb', stream: 'system', text: 'ADB shell 已退出 ...' })
+
+[前端]  handleDebugOutputEvent()
+  └─→ 按 system 文本把按钮状态恢复成“连接 / 断开禁用”
 
 [前端]  离开 ADB/SSH 页
   └─→ handleDebugTerminalPageChange(prev, next)
@@ -417,13 +429,19 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
                     └─ emit('debug-terminal-output', { kind: 'ssh', stream, text })
 ```
 
-### 14.3 SSH 命令输入 / 断开
+### 14.3 SSH 终端输入 / 断开
 
 ```
-[前端]  sendSshDebugInput()
-  └─ invoke('write_debug_terminal_input', { input })
-        └─→ debug_terminal.rs::write_debug_terminal_input
-              └─ 通过 channel stdin 写入远端 shell
+[前端]  用户点击终端后直接按键输入
+  └─→ handleDebugTerminalKey(event, "ssh")
+        └─ invoke('write_debug_terminal_input', { input })
+              └─→ debug_terminal.rs::write_debug_terminal_input
+                    └─ 通过 channel stdin 写入远端 shell
+
+[前端]  点击“断开”
+  └─→ disconnectDebugTerminal("ssh")
+        └─ invoke('close_debug_terminal_session')
+              └─→ 关闭 SSH shell channel
 ```
 
 ## 15. 固件下载流程

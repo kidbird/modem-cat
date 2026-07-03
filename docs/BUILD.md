@@ -92,6 +92,12 @@ git add -A && git commit -m "chore: bump version to v0.2.0"
 build-win.bat
 ```
 
+若只想快速验证 Windows 正式构建，不生成便携 ZIP，可直接执行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Quick
+```
+
 若要把 ADB 调试随 Windows 包交付，先把以下文件放到项目根目录的 `Sdk/`（或 `sdk/`）：
 
 - `adb.exe`
@@ -99,6 +105,13 @@ build-win.bat
 - `AdbWinUsbApi.dll`
 
 `scripts/build-release.ps1` 会在构建开始前自动把它们同步到 `src-tauri/resources/adb/`，再由 `tauri.conf.json > bundle.resources` 打进安装包；同时也会把这 3 个文件复制到 `dist/` 根目录，方便便携版直接运行。
+
+Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不创建子目录。WebView2 fixed runtime 不会展开到 `dist/webview2-runtime/`，而是只打进：
+
+- MSI / NSIS 安装包
+- `ModemCat_vX.Y.Z_portable.zip`
+
+`build-release.ps1` 本身不会联网下载 WebView2；它只检查本地 `webview2-runtime/` 是否已准备好。首次环境准备若缺少该目录，再单独执行 `scripts/setup-webview2.ps1`。
 
 构建完成后脚本打印产物路径，例如：
 

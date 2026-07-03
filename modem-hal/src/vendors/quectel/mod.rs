@@ -532,11 +532,11 @@ impl ModemVendor for QuectelModem {
                         let mut parts: Vec<String> =
                             rest.split(',').map(|s| s.to_string()).collect();
                         if parts.len() >= 2 {
-                            // Ensure correct VID/PID for this model
-                            let (vid, pid) = ChipsetVendor::usb_id_for_model(&self.model);
-                            parts[0] = format!("0x{:04X}", vid);
-                            parts[1] = format!("0x{:04X}", pid);
-                            // ADB flag is the second-to-last parameter
+                            // Preserve the device's current VID/PID and all other USB
+                            // function bits exactly as reported; only flip the live
+                            // ADB flag. Cross-platform PID differs by module family,
+                            // and rewriting it here risks breaking Windows USB driver
+                            // binding and COM enumeration.
                             let adb_idx = parts.len() - 2;
                             parts[adb_idx] = if on { "1".to_string() } else { "0".to_string() };
                             let cmd = format!(r#"AT+QCFG="usbcfg",{}"#, parts.join(","));
@@ -1413,6 +1413,27 @@ mod tests {
         assert!(
             err.contains("pcie/mode") || err.contains("AT command failed"),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn set_adb_toggle_preserves_existing_usbcfg_vid_pid_and_other_fields() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+QCFG: \"usbcfg\",0x2C7C,0x600C,1,1,1,1,1,0,0\r\nOK",
+            "OK",
+        ]);
+
+        modem
+            .set_feature_toggle(&mut transport, "adb", true)
+            .expect("set adb toggle should succeed");
+
+        assert_eq!(
+            transport.sent,
+            vec![
+                "AT+QCFG=\"usbcfg\"",
+                "AT+QCFG=\"usbcfg\",0x2C7C,0x600C,1,1,1,1,1,1,0",
+            ]
         );
     }
 

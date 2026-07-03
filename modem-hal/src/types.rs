@@ -206,30 +206,6 @@ impl ChipsetVendor {
         }
     }
 
-    /// Returns the expected (VID, PID) for a given modem model.
-    /// All Quectel modems use VID=0x2C7C, but PID varies by platform.
-    pub fn usb_id_for_model(model: &str) -> (u16, u16) {
-        let upper = model.to_uppercase();
-        let vid = 0x2C7C; // Quectel VID
-
-        // ASR RG255AA series
-        if upper.contains("RG255") {
-            return (vid, 0x600C);
-        }
-
-        // UniSoc series
-        if upper.contains("RG200U")
-            || upper.contains("RM500U")
-            || upper.contains("RG500U")
-            || upper.contains("RG501U")
-            || upper.contains("RM501U")
-        {
-            return (vid, 0x0800);
-        }
-
-        // Qualcomm series (default for other models)
-        (vid, 0x0801)
-    }
 }
 
 /// Serving cell information (unified format)

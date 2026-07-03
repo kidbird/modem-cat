@@ -92,7 +92,7 @@
 |---|---|---|---|
 | 页面初始化 | `#adbDebugNav` | `initDebugTerminal` | `get_debug_terminal_capabilities` / `get_debug_terminal_prefs` |
 | 连接按钮 | `#adbDebugConnectBtn` | `connectAdbDebug` | `get_feature_toggles` → `start_adb_session` |
-| 输入框发送 | `#adbDebugInput` | `sendAdbDebugInput` | `write_debug_terminal_input` |
+| 终端键盘输入 | `#adbDebugTerminal` | `handleDebugTerminalKey` / `handleDebugTerminalPaste` | `write_debug_terminal_input` |
 | 断开按钮 | `#adbDebugDisconnectBtn` | `disconnectDebugTerminal` | `close_debug_terminal_session` |
 | 终端输出 | `#adbDebugTerminal` | `handleDebugOutputEvent` | `debug-terminal-output` 事件 |
 
@@ -106,7 +106,7 @@
 | 用户名/最近 IP 回填 | `#sshUsername` / `#sshHost` | `loadDebugPrefs` | `get_debug_terminal_prefs` |
 | 保存偏好 | — | `saveDebugPrefs` | `save_debug_terminal_prefs` |
 | 连接按钮 | `#sshDebugConnectBtn` | `connectSshDebug` | `start_ssh_session` |
-| 输入框发送 | `#sshDebugInput` | `sendSshDebugInput` | `write_debug_terminal_input` |
+| 终端键盘输入 | `#sshDebugTerminal` | `handleDebugTerminalKey` / `handleDebugTerminalPaste` | `write_debug_terminal_input` |
 | 断开按钮 | `#sshDebugDisconnectBtn` | `disconnectDebugTerminal` | `close_debug_terminal_session` |
 | 终端输出 | `#sshDebugTerminal` | `handleDebugOutputEvent` | `debug-terminal-output` 事件 |
 

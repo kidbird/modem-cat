@@ -138,7 +138,7 @@
 | Proxy ARP | `AT+QCFG="proxyarp"` | `AT+QCFG="proxyarp",{0/1}` | |
 | UART AT | `AT+QCFG="uartat"` | `AT+QCFG="uartat",{0/1}` | |
 | ETH AT | `AT+QCFG="eth_at"` | `AT+QCFG="eth_at",{0/1}` | 仅 Qualcomm；UniSoc 硬编码 false |
-| ADB | `AT+QCFG="usbcfg"` | `AT+QCFG="usbcfg",{...}` | 修改倒数第二个字段 |
+| ADB | `AT+QCFG="usbcfg"` | `AT+QCFG="usbcfg",{...}` | 先查询当前整行 `usbcfg`，仅修改倒数第二个字段；软件不得自行改写当前设备返回的 `VID/PID` |
 | NAPT | `AT+QCFG="napt"` | `AT+QCFG="napt",{0/1}` | |
 | Netmask | `AT+QCFG="netmask"` | `AT+QCFG="netmask",{0/1}` | |
 | USB 网卡模式 | `AT+QCFG="usbnet"` | `AT+QCFG="usbnet",{mode}` | |

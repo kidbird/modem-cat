@@ -305,7 +305,7 @@ window.AT_DB = {
           params:[
             {name:'adb',desc:'ADB 调试开关',values:'倒数第二个字段：0=关闭 ADB, 1=开启 ADB'},
             {name:'vid/pid',desc:'USB 厂商/产品 ID',values:'通常保持不变'}],
-          example:'AT+QCFG="usbcfg"\n+QCFG: "usbcfg",0x2C7C,0x0801,...\nOK', note:'修改 ADB 开关时：先查询完整值，仅修改倒数第二个字段（0→1），其余字段保持不变。ADB 开启后可通过 adb shell 访问模组 Android 系统。' },
+          example:'AT+QCFG="usbcfg"\n+QCFG: "usbcfg",<vid>,<pid>,...\nOK', note:'修改 ADB 开关时：先查询完整值，仅修改倒数第二个字段（0→1），其余字段保持不变。软件不得自行改写设备当前返回的 VID/PID。ADB 开启后可通过 adb shell 访问模组 Android 系统。' },
         { cmd:'AT+QCFG="lanip_ex"', category:'接口配置', desc:'查询或设置 LAN 网关 IP 及 DHCP 地址池',
           syntax:'AT+QCFG="lanip_ex"\nAT+QCFG="lanip_ex","<gw>","<start>","<end>"',
           response:'+QCFG: "lanip_ex","<gw>","<start>","<end>"\nOK',
@@ -734,7 +734,7 @@ window.AT_DB = {
           response:'+QCFG: "usbcfg",<vid>,<pid>,...\nOK',
           params:[
             {name:'adb',desc:'ADB 调试开关',values:'倒数第二个字段：0=关闭 ADB, 1=开启 ADB'}],
-          example:'AT+QCFG="usbcfg"\n+QCFG: "usbcfg",0x2C7C,0x0801,...\nOK', note:'修改 ADB 时：先查询完整值，仅改倒数第二个字段，其余保持不变。' },
+          example:'AT+QCFG="usbcfg"\n+QCFG: "usbcfg",<vid>,<pid>,...\nOK', note:'修改 ADB 时：先查询完整值，仅改倒数第二个字段，其余保持不变；不要自行改写设备当前返回的 VID/PID。' },
         { cmd:'AT+QCFG="lanip_ex"', category:'接口配置', desc:'查询或设置 LAN 网关 IP 及 DHCP 地址池',
           syntax:'AT+QCFG="lanip_ex"\nAT+QCFG="lanip_ex","<gw>","<start>","<end>"',
           response:'+QCFG: "lanip_ex","<gw>","<start>","<end>"\nOK',

@@ -13,7 +13,7 @@ Complete Windows release build pipeline. Produces portable executable, installer
 ```
 /release              # full release build
 /release --verify     # build + run verify-docs.sh + cargo test
-/release --quick      # skip cargo test (faster, for iteration)
+/release --quick      # skip portable ZIP stage (faster, for iteration)
 ```
 
 ## What It Does
@@ -23,8 +23,8 @@ Complete Windows release build pipeline. Produces portable executable, installer
 3. **Builds Tauri** — `cargo tauri build` → portable exe + MSI + NSIS
 4. **Copies r26-cli sidecar** — firmware download component
 5. **Builds license-gen** — License generation tool
-6. **Copies WebView2 runtime** — bundled fixedRuntime (no download needed)
-7. **Creates portable ZIP** — `ModemCat_vX.Y.Z_portable.zip` with all components
+6. **Stages WebView2 runtime for ZIP payload** — bundled fixedRuntime (no download needed)
+7. **Creates portable ZIP** — `ModemCat_vX.Y.Z_portable.zip` with all components, unless `--quick` skips this stage
 8. **Lists final artifacts** with file sizes
 
 ## Output Layout (dist/ root — flat, no subdirectories)
@@ -37,7 +37,6 @@ dist/
 ├── r26-cli-x86_64-pc-windows-msvc.exe         # Firmware download sidecar
 ├── r26-cli.version.txt                        # Sidecar version
 ├── license-gen.exe                            # License generation tool
-├── webview2-runtime/                          # WebView2 fixed runtime (offline)
 └── ModemCat_vX.Y.Z_portable.zip               # All-in-one portable package
 ```
 
@@ -57,15 +56,16 @@ The implementation lives at: `scripts/build-release.ps1`
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Quick
 ```
 
 ## Key Design Decisions
 
-1. **No WebView2 download** — uses fixedRuntime (`webview2-runtime/`) bundled at build time. The MSI/NSIS installers include it. Users never download WebView2.
+1. **No WebView2 download** — uses fixedRuntime bundled at build time. The MSI/NSIS installers include it, and the portable ZIP embeds it for offline use.
 
 2. **Flat dist/ structure** — AGENTS.md mandates "构建产物统一输出到 dist/ 根目录下，禁止创建子目录". The flat layout makes download links predictable and avoids nested-path issues.
 
-3. **Portable ZIP includes everything** — r26-cli, webview2-runtime (for systems without it), license-gen. User can unzip and run `modem-cat.exe` immediately.
+3. **Portable ZIP includes everything** — r26-cli, webview2-runtime (for systems without it), license-gen. User can unzip and run `modem-cat.exe` immediately. ZIP generation now writes entries directly into the archive instead of copying the whole payload to a temp folder first, which reduces release time and disk churn.
 
 4. **MSVC auto-detection** — uses `vswhere.exe` to find any VS 2019/2022 installation. No hardcoded paths.
 

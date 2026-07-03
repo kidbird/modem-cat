@@ -197,8 +197,6 @@ fn resolve_bundled_adb_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn spawn_reader_thread<R: Read + Send + 'static>(
     app: AppHandle,
-    active_session: std::sync::Arc<Mutex<Option<SessionHandle>>>,
-    session_id: u64,
     kind: &'static str,
     stream: &'static str,
     mut reader: R,
@@ -222,7 +220,6 @@ fn spawn_reader_thread<R: Read + Send + 'static>(
                 }
             }
         }
-        clear_active_session(&active_session, session_id);
     });
 }
 
@@ -276,16 +273,12 @@ fn spawn_adb_thread(
             emit_output(&app, kind, "system", "ADB shell 已启动");
             spawn_reader_thread(
                 app.clone(),
-                active_session.clone(),
-                session_id,
                 kind,
                 "stdout",
                 stdout,
             );
             spawn_reader_thread(
                 app.clone(),
-                active_session.clone(),
-                session_id,
                 kind,
                 "stderr",
                 stderr,

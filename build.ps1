@@ -30,8 +30,9 @@ Write-Host " ==================================================="
 Write-Host "  Modem Cat  -  Multi-Variant Build"
 Write-Host ""
 Write-Host "  所有产物统一输出到 dist/ 根目录:"
-Write-Host "    MSI/NSIS 安装包 -> dist\\Modem Cat_*_[webview|nowebview]_*.msi/.exe"
-Write-Host "    便携版          -> dist\\modem-cat.exe"
+Write-Host "    MSI/NSIS 安装包 -> dist\\Modem Cat_*_[webview|nowebview]_x64_*.msi/.exe"
+Write-Host "    便携版 ZIP      -> dist\\ModemCat_v*_portable_[webview|nowebview].zip"
+Write-Host "    便携版主程序    -> dist\\modem-cat.exe"
 Write-Host "    Sidecar         -> dist\\r26-cli-x86_64-pc-windows-msvc.exe"
 Write-Host " ==================================================="
 Write-Host ""
@@ -78,7 +79,7 @@ if ($vcvars) {
 Write-Host ""
 
 # ── 4. Portable + sidecar ──────────────────────────────
-Write-Host "[4/5] Portable build (static CRT) + sidecar..."
+Write-Host "[4/6] Portable build (static CRT) + sidecar..."
 $env:RUSTFLAGS = "-C target-feature=+crt-static"
 cargo build --release -p modem-cat
 if ($LASTEXITCODE -ne 0) { $env:RUSTFLAGS = "" ; throw "portable build failed (exit $LASTEXITCODE)" }
@@ -101,10 +102,59 @@ if (Test-Path $sidecarSrc) {
 } else {
     Write-Warning "       sidecar not found at $sidecarSrc"
 }
+
+# ADB tools (from Sdk/ or resources/)
+$adbFiles = @("adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll")
+foreach ($adb in $adbFiles) {
+    $adbSrc = Join-Path $root "src-tauri\resources\adb\$adb"
+    if (-not (Test-Path $adbSrc)) { $adbSrc = Join-Path $root "Sdk\$adb" }
+    if (Test-Path $adbSrc) {
+        Copy-Item -LiteralPath $adbSrc -Destination (Join-Path $distDir $adb) -Force
+        Write-Host "       dist\$adb"
+    }
+}
+
+# license-gen
+$lg = Join-Path $root "target\release\license-gen.exe"
+if (-not (Test-Path $lg)) { $lg = Join-Path $root "tools\license-gen\target\release\license-gen.exe" }
+if (Test-Path $lg) {
+    Copy-Item -LiteralPath $lg -Destination (Join-Path $distDir "license-gen.exe") -Force
+    Write-Host "       dist\license-gen.exe"
+}
 Write-Host ""
 
-# ── 5. Summary ─────────────────────────────────────────
-Write-Host "[5/5] Output:"
+# ── 5. Portable ZIPs (webview + nowebview) ────────────
+Write-Host "[5/6] Portable ZIPs..."
+$pWebview = Join-Path $env:TEMP "mc-pwv"
+$pNowebview = Join-Path $env:TEMP "mc-pwnwv"
+foreach ($d in @($pWebview, $pNowebview)) {
+    if (Test-Path $d) { Remove-Item $d -Recurse -Force }
+    New-Item -ItemType Directory -Path $d -Force | Out-Null
+}
+$portableFiles = @("modem-cat.exe", "r26-cli-x86_64-pc-windows-msvc.exe", "r26-cli.version.txt", "license-gen.exe", "adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll")
+foreach ($f in $portableFiles) {
+    $src = Join-Path $distDir $f
+    if (Test-Path $src) { Copy-Item $src $pWebview -Force; Copy-Item $src $pNowebview -Force }
+}
+$wvSrc = Join-Path $root "webview2-runtime"
+if (Test-Path $wvSrc) { Copy-Item $wvSrc (Join-Path $pWebview "webview2-runtime") -Recurse -Force }
+
+$zipW = Join-Path $distDir "ModemCat_v${ver}_portable_webview.zip"
+$zipN = Join-Path $distDir "ModemCat_v${ver}_portable_nowebview.zip"
+Get-ChildItem $distDir -Filter "ModemCat_v${ver}_portable*" | Remove-Item -Force -EA 0
+
+Compress-Archive -Path "$pWebview\*" -DestinationPath $zipW -Force
+$szW = [math]::Round((Get-Item $zipW).Length / 1MB, 1)
+Write-Host "  $(Split-Path $zipW -Leaf) ($szW MB)"
+Compress-Archive -Path "$pNowebview\*" -DestinationPath $zipN -Force
+$szN = [math]::Round((Get-Item $zipN).Length / 1MB, 1)
+Write-Host "  $(Split-Path $zipN -Leaf) ($szN MB)"
+Remove-Item $pWebview -Recurse -Force
+Remove-Item $pNowebview -Recurse -Force
+Write-Host ""
+
+# ── 6. Summary ─────────────────────────────────────────
+Write-Host "[6/6] Output:"
 Write-Host ""
 Get-ChildItem $distDir -Recurse -File -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object {
     $rel = $_.FullName.Substring($distDir.Length).TrimStart('\')

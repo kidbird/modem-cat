@@ -3,6 +3,8 @@
 > 2026-06-18 更新
 > Agent 入口在仓库根：[AGENTS.md](../AGENTS.md) 是根契约，[CLAUDE.md](../CLAUDE.md) 只做委托。
 
+仓库根的 [README.md](../README.md) 面向“第一次打开仓库的人”，提供产品说明、架构概览、环境准备、构建命令和发布产物选择；本文件继续只做 `docs/` 目录索引。
+
 ## 文档列表
 
 | 文档 | 用途 | 受众 |
@@ -26,6 +28,20 @@
 | [specs/001-modem-debug-tool](specs/001-modem-debug-tool/) | 桌面工具初始需求包：`spec` / `plan` / `tasks` / `contracts` / `research` |
 | [superpowers/specs](superpowers/specs/) | 历史设计草案与专项设计说明 |
 | [superpowers/plans](superpowers/plans/) | 历史实施计划与拆解记录 |
+
+## 发版产物速查
+
+| 产物 | 路径模式 | 使用场景 |
+|---|---|---|
+| 轻量免安装包 | `dist/ModemCat_vX.Y.Z_portable-lite.zip` | 目标 Windows 机器已安装系统 WebView2，想优先减小下载体积 |
+| 完整免安装包 | `dist/ModemCat_vX.Y.Z_portable.zip` | 目标机器可能没有 WebView2，需要离线直接运行 |
+| NSIS 安装包 | `dist/Modem Cat_X.Y.Z_x64-setup.exe` | 需要常规安装流程、桌面/开始菜单入口、适合普通终端用户 |
+| MSI 安装包 | `dist/Modem Cat_X.Y.Z_x64_zh-CN.msi` | 需要企业分发、统一部署或更标准的 Windows 安装介质 |
+
+补充说明：
+轻量免安装包和完整免安装包都包含 `modem-cat.exe`、ADB 运行组件、`r26-cli` 固件 sidecar。
+两者唯一差异是完整免安装包额外包含 `webview2-runtime/`。
+详细构建方式和注意事项见 [BUILD.md](BUILD.md)。
 
 ## 文档维护原则
 

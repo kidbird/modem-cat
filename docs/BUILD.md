@@ -109,9 +109,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Q
 Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不创建子目录。WebView2 fixed runtime 不会展开到 `dist/webview2-runtime/`，而是只打进：
 
 - MSI / NSIS 安装包
+- `ModemCat_vX.Y.Z_portable-lite.zip`
 - `ModemCat_vX.Y.Z_portable.zip`
 
-其中 portable ZIP 只包含免安装运行所需内容：
+其中两个 portable ZIP 的根层公共内容都是：
 
 - `modem-cat.exe`
 - `adb.exe`
@@ -119,7 +120,13 @@ Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不创�
 - `AdbWinUsbApi.dll`
 - `r26-cli-x86_64-pc-windows-msvc.exe`
 - `r26-cli.version.txt`
-- `webview2-runtime/`
+
+差异如下：
+
+| 包名 | 是否包含 `webview2-runtime/` | 适用场景 |
+|---|---|---|
+| `ModemCat_vX.Y.Z_portable-lite.zip` | 否 | 目标机器已安装系统 WebView2 Runtime，希望下载体积更小、分发更快 |
+| `ModemCat_vX.Y.Z_portable.zip` | 是 | 目标机器可能没有系统 WebView2，需要离线即开即用 |
 
 任何 license / 设备激活工具都不属于最终用户桌面交付物，也不进入 `dist/` 或 portable ZIP。
 

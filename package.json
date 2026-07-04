@@ -7,6 +7,6 @@
     "build:desktop": "cd src-tauri && cargo build --release"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.1"
+    "@tauri-apps/api": "^2.11.5"
   }
 }

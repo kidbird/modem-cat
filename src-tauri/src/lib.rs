@@ -24,9 +24,6 @@ pub struct AppState {
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,
     /// Handle of the active background MQTT connection loop task.
     pub mqtt_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
-    /// Retained license payload state for non-end-user builds.
-    /// End-user desktop IPC no longer exposes activation or license menus.
-    pub license: Arc<Mutex<Option<modem_license::LicensePayload>>>,
     /// Set while a disconnect is in progress (heartbeat / USB-monitor ↔ IPC).
     /// Prevents the heartbeat from emitting duplicate `port-changed` and from
     /// touching a transport that `disconnect` is tearing down.
@@ -141,7 +138,6 @@ mod debug_terminal;
 pub mod dloader;
 pub mod factory;
 mod handlers;
-pub mod license;
 mod monitor;
 mod mqtt;
 
@@ -255,7 +251,6 @@ pub fn run() {
             connected_port: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
             mqtt_task: Arc::new(Mutex::new(None)),
-            license: Arc::new(Mutex::new(None)),
             disconnecting: Arc::new(AtomicBool::new(false)),
             connecting: Arc::new(AtomicBool::new(false)),
         })
@@ -285,7 +280,6 @@ pub fn run() {
                 connected_port: state.connected_port.clone(),
                 at_command_log: state.at_command_log.clone(),
                 mqtt_task: state.mqtt_task.clone(),
-                license: state.license.clone(),
                 disconnecting: state.disconnecting.clone(),
                 connecting: state.connecting.clone(),
             };

@@ -8,7 +8,7 @@
 
 - **Tauri 2**
   - 前端通过 `window.__TAURI__.core.invoke` / `event.listen` 与后端通信
-  - `src-tauri/src/lib.rs` 负责装配；实际执行面分散在 `handlers.rs`、`connection.rs`、`monitor.rs`、`license.rs`、`factory.rs`、`dloader.rs`
+  - `src-tauri/src/lib.rs` 负责装配；实际执行面分散在 `handlers.rs`、`connection.rs`、`monitor.rs`、`factory.rs`、`dloader.rs`
 
 ### 1.2 前端
 
@@ -54,8 +54,6 @@
 
 ### 1.5 辅助模块
 
-- `modem-license`
-  - License 校验与状态建模（当前最终用户桌面构建不暴露其 IPC）
 - `r26-cli` sidecar
   - PAC 解析与固件下载执行
   - 由 `src-tauri/src/dloader.rs` 管理
@@ -71,7 +69,7 @@
 src/desktop/*
   → invoke / listen
 src-tauri/src/lib.rs
-  → AppState.transport / vendor / license
+  → AppState.transport / vendor
 src-tauri/src/debug_terminal.rs
   → adb.exe sidecar / ssh2 shell
 modem-hal/src/*

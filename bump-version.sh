@@ -10,7 +10,6 @@
 #   src-tauri/Cargo.toml        → version
 #   package.json                → "version"
 #   modem-hal/Cargo.toml        → version
-#   modem-license/Cargo.toml    → version
 #   Cargo.lock 通过 cargo 自动更新
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -69,12 +68,7 @@ sed -i.bak "0,/^version = \"[^\"]*\"/{s/^version = \"[^\"]*\"/version = \"$NEW\"
 rm -f modem-hal/Cargo.toml.bak
 ok "modem-hal/Cargo.toml        →  version = \"$NEW\""
 
-# 5. modem-license/Cargo.toml
-sed -i.bak "0,/^version = \"[^\"]*\"/{s/^version = \"[^\"]*\"/version = \"$NEW\"/}" modem-license/Cargo.toml
-rm -f modem-license/Cargo.toml.bak
-ok "modem-license/Cargo.toml    →  version = \"$NEW\""
-
-# 6. 更新 Cargo.lock（让 lockfile 与 Cargo.toml 保持一致）
+# 5. 更新 Cargo.lock（让 lockfile 与 Cargo.toml 保持一致）
 info "更新 Cargo.lock..."
 cargo update --workspace --precise "$NEW" -p modem-cat 2>/dev/null || \
   cargo generate-lockfile 2>/dev/null || true

@@ -17,7 +17,7 @@
 |---|---|---|
 | Frontend | `src/desktop/` | `docs/CODE_MAP.md`, `docs/CALL_FLOW.md`, `docs/TECH_STACK.md` |
 | Tauri Connection / IPC / Monitor / MQTT | `src-tauri/src/{lib,handlers,connection,monitor,mqtt}.rs` | `docs/ARCHITECTURE.md`, `docs/CODE_MAP.md`, `docs/CALL_FLOW.md`, `docs/REVIEW.md` |
-| License / Factory / Firmware | `src-tauri/src/{license,factory,dloader}.rs` | `docs/ARCHITECTURE.md`, `docs/CODE_MAP.md`, `docs/TECH_STACK.md`, `docs/REVIEW.md` |
+| Factory / Firmware | `src-tauri/src/{factory,dloader}.rs` | `docs/ARCHITECTURE.md`, `docs/CODE_MAP.md`, `docs/TECH_STACK.md`, `docs/REVIEW.md` |
 | HAL / Parser / Vendor / Transport | `modem-hal/src/` | `docs/AT_COMMANDS.md`, `docs/ARCHITECTURE.md`, `docs/REVIEW.md` |
 | Build / Docs / Guardrails | repo root, `docs/`, `scripts/verify-docs.sh` | `docs/BUILD.md`, `docs/TECH_STACK.md`, 对应 owner 文档 |
 
@@ -26,7 +26,7 @@
 - **唯一 AT 队列**：所有 live modem I/O 只能复用 `AppState.transport` 持有的 `AtTransport`，最终统一汇聚到 `AtTransport::send_at`。禁止新增第二条 AT 发送队列、后台直连 transport、或绕过现有串行化路径的 helper。
 - **唯一业务主路径**：同一业务只允许一条 live IPC / transport / parser 主路径。替换旧路径时，旧 handler、旧模块、旧脚本、旧文档必须同一次删除或改写。
 - **实时读取必须严格失败**：状态查询、配置读取、认证配置读取失败时必须直接返回错误。禁止二次改发 AT、`unwrap_or_default()`、`unwrap_or(0)`、伪默认值、静默吞错。
-- **单一真相源**：前端 live 状态以 `state` 为准；后端 modem live 状态以 `AppState` 为准；Factory / Firmware / License 各自以其 owner state 为准。禁止维护第二份 live 镜像。
+- **单一真相源**：前端 live 状态以 `state` 为准；后端 modem live 状态以 `AppState` 为准；Factory / Firmware 各自以其 owner state 为准。禁止维护第二份 live 镜像。
 - **AT 命令来源受限**：只允许来自 `docs/` AT 手册、owner 文档，或用户明确给出的修正；禁止按相似型号、论坛片段、历史分支猜命令。
 - **AT / 认证输入必须显式校验**：用户可控字符串 AT 参数统一走 `validate_at_string` / `validate_raw_at_command` / `validate_cid`；AT 拼接统一用 `format!()`；WebSocket / MQTT / 设备认证信息不得偷补公开默认值。
 - **敏感信息禁止公开默认值**：PLMN / APN / token / password / WebSocket 凭据 / MQTT 凭据等敏感字段，未提供时必须保持空缺或报错，禁止 fallback 到 `"admin"`、空密码、固定 broker 凭据等默认值。
@@ -35,7 +35,7 @@
 - **文档和护栏同改**：凡是改动 live 架构、IPC、AT 合同、连接方式、认证方式、构建验证方式，必须同一次更新对应 owner 文档和 `scripts/verify-docs.sh`。
 - **review 纪律**：review / cleanup 任务必须给出可定位的文件证据；已修复的技术债从 `docs/REVIEW.md` 直接移除，不保留“已修历史年表”。
 - **验证基线**：改动完成后至少运行 `cargo test --workspace`、`cargo build -p modem-hal`、`bash scripts/verify-docs.sh`。
-- **构建产物统一输出**：所有构建打包的产物（MSI/NSIS 安装包、便携版可执行文件、sidecar、license-gen 等）必须统一放到 `dist/` 根目录下，禁止创建子目录（如 `dist/installer/`、`dist/portable/`）。打包脚本见 `scripts/build-release.ps1`，构建约束见 `docs/BUILD.md`。
+- **构建产物统一输出**：所有构建打包的产物（MSI/NSIS 安装包、便携版可执行文件、sidecar、portable ZIP 等）必须统一放到 `dist/` 根目录下，禁止创建子目录（如 `dist/installer/`、`dist/portable/`）。打包脚本见 `scripts/build-release.ps1`，构建约束见 `docs/BUILD.md`。
 
 ## Ownership Rules
 

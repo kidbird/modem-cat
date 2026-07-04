@@ -61,9 +61,12 @@ check "AGENTS 验证基线包含 cargo test / cargo build / verify-docs" "grep -
 check "CODE_MAP 记录 ADB / SSH 调试 IPC" "grep -q 'start_adb_session' docs/CODE_MAP.md && grep -q 'start_ssh_session' docs/CODE_MAP.md"
 check "BUILD 记录 ADB 资源目录" "grep -q 'src-tauri/resources/adb/' docs/BUILD.md && grep -q 'Sdk/' docs/BUILD.md"
 check "BUILD 记录 fixed WebView2 非跟仓约束" "grep -q 'webview2-runtime/' docs/BUILD.md && grep -q '不进入 Git' docs/BUILD.md"
+check "BUILD 记录 portable ZIP 不包含 license / 激活工具" "grep -q 'portable ZIP 只包含免安装运行所需内容' docs/BUILD.md && ! grep -q 'license-gen' docs/BUILD.md"
 check "TECH_STACK 记录 Windows 打包资产边界" "grep -q '.cargo/config.toml' docs/TECH_STACK.md && grep -q 'src-tauri/resources/adb/' docs/TECH_STACK.md"
 check "README 记录 docs/specs 需求文档位置" "grep -q 'docs/specs/' docs/README.md || grep -q 'specs/001-modem-debug-tool' docs/README.md"
 check "不再维护重复的 WEBVIEW2_BUILD 文档" "[ ! -e docs/WEBVIEW2_BUILD.md ]"
+check "主工程不再引用 modem-license" "! grep -q 'modem-license' src-tauri/Cargo.toml && ! grep -q 'modem_license' src-tauri/src/lib.rs && [ ! -e src-tauri/src/license.rs ]"
+check "仓库不再保留 license 工具目录" "[ ! -e modem-license ] && [ ! -e tools/license-gen ]"
 
 echo
 echo "=== 结果: $pass 通过 / $fail 失败 ==="

@@ -21,7 +21,6 @@ src-tauri/src/
   connection.rs← 串口/TCP/WebSocket 连接 IPC
   monitor.rs   ← usb-monitor / heartbeat 后台线程
   mqtt.rs      ← 可选 MQTT 后台状态上报
-  license.rs   ← License 加载 / 校验 / IPC
   factory.rs   ← 工厂模式 HTTP 设备通信 / 本地持久化 / IPC
   dloader.rs   ← 固件下载 sidecar / 事件转发 / IPC
         │
@@ -77,8 +76,6 @@ src-tauri/src/
 - `connected_port`
 - `at_command_log`
 - `mqtt_task`
-- `license`
-
 此外还有两个独立受管状态：
 
 - `DloaderState`
@@ -130,12 +127,7 @@ src-tauri/src/
 - SSH 会话通过 `ssh2` 直连，不复用 `AppState.transport`
 - 输出统一通过 `debug-terminal-output` 事件推送到前端终端页
 
-### 4.7 `src-tauri/src/license.rs`
-
-- 保留给非最终用户构建的 License 校验模块
-- 当前最终用户桌面构建不注册其 IPC，也不暴露激活入口
-
-### 4.8 `src-tauri/src/dloader.rs`
+### 4.7 `src-tauri/src/dloader.rs`
 
 - PAC 选择 / 信息解析
 - `r26-cli` sidecar 管理

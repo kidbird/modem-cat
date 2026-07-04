@@ -6,7 +6,6 @@
 #   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (无 Webview 安装包)
 #   dist\modem-cat.exe                              (便携版主程序)
 #   dist\r26-cli-x86_64-pc-windows-msvc.exe         (固件下载 sidecar)
-#   dist\license-gen.exe                            (许可证生成器)
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -34,7 +33,6 @@ Write-Host "  所有产物统一输出到 dist/ 根目录:"
 Write-Host "    MSI/NSIS 安装包 -> dist\\Modem Cat_*_[webview|nowebview]_*.msi/.exe"
 Write-Host "    便携版          -> dist\\modem-cat.exe"
 Write-Host "    Sidecar         -> dist\\r26-cli-x86_64-pc-windows-msvc.exe"
-Write-Host "    License 工具    -> dist\\license-gen.exe"
 Write-Host " ==================================================="
 Write-Host ""
 
@@ -79,25 +77,8 @@ if ($vcvars) {
 }
 Write-Host ""
 
-# ── 4. license-gen ─────────────────────────────────────
-Write-Host "[4/6] license-gen build..."
-# license-gen is its own workspace; build from inside it
-Push-Location "$root\tools\license-gen"
-try {
-    cargo build --release -p license-gen
-    if ($LASTEXITCODE -ne 0) { throw "license-gen build failed (exit $LASTEXITCODE)" }
-} finally {
-    Pop-Location
-}
-$distDir = Join-Path $root "dist"
-if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
-# license-gen 产物在 tools\license-gen\target\release\
-Copy-Item -LiteralPath "$root\tools\license-gen\target\release\license-gen.exe" -Destination (Join-Path $distDir "license-gen.exe") -Force
-Write-Host "       dist\license-gen.exe"
-Write-Host ""
-
-# ── 5. Portable + sidecar ──────────────────────────────
-Write-Host "[5/6] Portable build (static CRT) + sidecar..."
+# ── 4. Portable + sidecar ──────────────────────────────
+Write-Host "[4/5] Portable build (static CRT) + sidecar..."
 $env:RUSTFLAGS = "-C target-feature=+crt-static"
 cargo build --release -p modem-cat
 if ($LASTEXITCODE -ne 0) { $env:RUSTFLAGS = "" ; throw "portable build failed (exit $LASTEXITCODE)" }
@@ -122,8 +103,8 @@ if (Test-Path $sidecarSrc) {
 }
 Write-Host ""
 
-# ── 6. Summary ─────────────────────────────────────────
-Write-Host "[6/6] Output:"
+# ── 5. Summary ─────────────────────────────────────────
+Write-Host "[5/5] Output:"
 Write-Host ""
 Get-ChildItem $distDir -Recurse -File -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object {
     $rel = $_.FullName.Substring($distDir.Length).TrimStart('\')

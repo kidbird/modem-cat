@@ -4,8 +4,9 @@
     Modem Cat — Complete release build script (Windows).
 
 .DESCRIPTION
-    Builds portable exe + MSI installer + NSIS installer, bundles r26-cli sidecar,
-    license-gen, and WebView2 runtime. Outputs everything flat in dist/ root.
+    Builds portable exe + MSI installer + NSIS installer, bundles the runtime
+    sidecars needed by the end-user app, and creates a portable ZIP payload.
+    Outputs everything flat in dist/ root.
 
 .PARAMETERS
     -Quick
@@ -37,6 +38,14 @@ $adbFiles = @(
     "adb.exe",
     "AdbWinApi.dll",
     "AdbWinUsbApi.dll"
+)
+$portablePayloadFiles = @(
+    "modem-cat.exe",
+    "adb.exe",
+    "AdbWinApi.dll",
+    "AdbWinUsbApi.dll",
+    "r26-cli-x86_64-pc-windows-msvc.exe",
+    "r26-cli.version.txt"
 )
 
 function Stop-RunningDistApp {
@@ -120,7 +129,7 @@ Write-Host "  root: $root"
 Write-Host ""
 
 # == Step 1: Clean dist/ ==
-Write-Host "[1/8] Cleaning dist/ ..."
+Write-Host "[1/7] Cleaning dist/ ..."
 Stop-RunningDistApp -DistExePath (Join-Path $dist "modem-cat.exe")
 if (Test-Path $dist) {
     # Dist files may be locked (e.g. portable exe running). Move-then-delete avoids
@@ -136,7 +145,7 @@ New-Item -ItemType Directory -Path $dist -Force | Out-Null
 Write-Host "  [OK] dist/ cleaned"
 
 # == Step 2: Sync ADB resources from Sdk/ ==
-Write-Host "[2/8] Syncing ADB resources from Sdk/ ..."
+Write-Host "[2/7] Syncing ADB resources from Sdk/ ..."
 if (-not (Test-Path $sdkDir)) {
     throw "Sdk directory not found: $sdkDir"
 }
@@ -152,7 +161,7 @@ foreach ($file in $adbFiles) {
 }
 
 # == Step 3: Toolchain checks ==
-Write-Host "[3/8] Toolchain checks ..."
+Write-Host "[3/7] Toolchain checks ..."
 
 $cargo = Get-Command cargo -ErrorAction SilentlyContinue
 if (-not $cargo) { throw "cargo not found. Install Rust: https://rustup.rs" }
@@ -183,7 +192,7 @@ $wvCount = (Get-ChildItem $webview2 -Recurse -File -ErrorAction SilentlyContinue
 Write-Host "  [OK] webview2-runtime: $wvCount files"
 
 # == Step 4: Build Tauri ==
-Write-Host "[4/8] Building Tauri (portable + installers) ..."
+Write-Host "[4/7] Building Tauri (portable + installers) ..."
 
 $vcvarsallPath = $vcvarsall -replace '"',''
 cmd /c "`"$vcvarsallPath`" x64 && set" | ForEach-Object {
@@ -203,7 +212,7 @@ try {
 Write-Host "  [OK] Tauri build done"
 
 # == Step 5: r26-cli sidecar (pre-built expected) ==
-Write-Host "[5/8] Checking r26-cli sidecar ..."
+Write-Host "[5/7] Checking r26-cli sidecar ..."
 $r26Src = "$root\src-tauri\binaries\r26-cli-x86_64-pc-windows-msvc.exe"
 if (Test-Path $r26Src) {
     Write-Host "  [OK] sidecar found in binaries/"
@@ -211,25 +220,8 @@ if (Test-Path $r26Src) {
     Write-Warning "r26-cli sidecar not found in binaries/ — firmware download will not be available"
 }
 
-# == Step 6: Build license-gen ==
-Write-Host "[6/8] Building license-gen ..."
-$licGenDir = Join-Path $root "tools\license-gen"
-if (Test-Path $licGenDir) {
-    Push-Location $licGenDir
-    try {
-        cargo build --release -p license-gen
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  [OK] license-gen built"
-        } else {
-            Write-Warning "license-gen build failed"
-        }
-    } finally { Pop-Location }
-} else {
-    Write-Warning "tools/license-gen not found"
-}
-
-# == Step 7: Copy artifacts to dist/ root ==
-Write-Host "[7/8] Copying artifacts to dist/ ..."
+# == Step 6: Copy artifacts to dist/ root ==
+Write-Host "[6/7] Copying artifacts to dist/ ..."
 
 # Portable exe
 $exeSrc = "$root\target\release\modem-cat.exe"
@@ -281,27 +273,14 @@ if (Test-Path $r26Src) {
     }
 }
 
-# license-gen
-$licGenPaths = @(
-    "$root\target\release\license-gen.exe",
-    "$root\tools\license-gen\target\release\license-gen.exe"
-)
-foreach ($lg in $licGenPaths) {
-    if (Test-Path $lg) {
-        Copy-FileWithRetry -Source $lg -Destination (Join-Path $dist "license-gen.exe")
-        Write-Host "  [OK] license-gen.exe"
-        break
-    }
-}
-
 # Create portable ZIP
 Write-Host ""
 $zipName = "ModemCat_v${ver}_portable.zip"
 $zipPath = Join-Path $dist $zipName
 if ($Quick) {
-    Write-Host "[8/8] Skipping portable ZIP (-Quick)"
+    Write-Host "[7/7] Skipping portable ZIP (-Quick)"
 } else {
-    Write-Host "[8/8] Creating portable ZIP ..."
+    Write-Host "[7/7] Creating portable ZIP ..."
     if (Test-Path $zipPath) {
         Remove-Item $zipPath -Force
     }
@@ -313,12 +292,13 @@ if ($Quick) {
             [System.IO.Compression.ZipArchiveMode]::Create
         )
 
-        Get-ChildItem $dist -File | ForEach-Object {
-            if ($_.Name -ne $zipName) {
+        foreach ($file in $portablePayloadFiles) {
+            $payloadPath = Join-Path $dist $file
+            if (Test-Path $payloadPath) {
                 [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
                     $archive,
-                    $_.FullName,
-                    $_.Name,
+                    $payloadPath,
+                    $file,
                     [System.IO.Compression.CompressionLevel]::Optimal
                 ) | Out-Null
             }

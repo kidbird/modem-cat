@@ -111,6 +111,18 @@ Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不创�
 - MSI / NSIS 安装包
 - `ModemCat_vX.Y.Z_portable.zip`
 
+其中 portable ZIP 只包含免安装运行所需内容：
+
+- `modem-cat.exe`
+- `adb.exe`
+- `AdbWinApi.dll`
+- `AdbWinUsbApi.dll`
+- `r26-cli-x86_64-pc-windows-msvc.exe`
+- `r26-cli.version.txt`
+- `webview2-runtime/`
+
+任何 license / 设备激活工具都不属于最终用户桌面交付物，也不进入 `dist/` 或 portable ZIP。
+
 `build-release.ps1` 本身不会联网下载 WebView2；它只检查本地 `webview2-runtime/` 是否已准备好。首次环境准备若缺少该目录，再单独执行 `scripts/setup-webview2.ps1`。WebView2 约束统一维护在本文件，不再单独维护重复的 `WEBVIEW2_BUILD.md`。
 
 为保证远端 CI/CD 也能完整执行 Windows 打包，以下构建输入必须保留在 Git：

@@ -20,7 +20,7 @@
               │    │              ├─ set_menu(控制面板/退出)
               │    │              └─ on_menu_event / on_tray_icon_event
               │    │
-              │    ├─ invoke_handler!  ← live IPC 命令注册（分发到 handlers / connection / license / factory / dloader）
+              │    ├─ invoke_handler!  ← live IPC 命令注册（分发到 handlers / connection / debug_terminal / dloader）
               │    │
               │    ├─ on_window_event() → 窗口关闭时 hide() 而非退出
               │    │

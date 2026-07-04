@@ -17,7 +17,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["custom-protocol", "tray-icon"] }
+tauri = { version = "2.11.5", features = ["custom-protocol", "tray-icon"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
@@ -29,7 +29,6 @@ log = "0.4"
 env_logger = "0.11"
 rumqttc = "0.25.1"
 modem-hal = { path = "../modem-hal" }
-modem-license = { path = "../modem-license" }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 chrono = "0.4"
 ssh2 = "0.9"

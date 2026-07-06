@@ -287,6 +287,8 @@ impl ModemVendor for QuectelModem {
             cp_baseline,
             soc_temp,
             pa_temp,
+            usb_vid: None,
+            usb_pid: None,
             serial_number,
         })
     }
@@ -1475,7 +1477,9 @@ mod tests {
             "+CGDCONT: 1,\"IP\",\"cmnet\",\"0.0.0.0\"\r\n+CGDCONT: 11,\"IPV4V6\",\"ims\",\"0.0.0.0\"\r\nOK",
         ]);
 
-        let list = modem.query_apn_list(&mut transport).expect("apn list fallback");
+        let list = modem
+            .query_apn_list(&mut transport)
+            .expect("apn list fallback");
 
         assert_eq!(
             transport.sent,

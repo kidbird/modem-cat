@@ -61,6 +61,8 @@ pub struct HardwareInfo {
     pub cp_baseline: String,
     pub soc_temp: String,
     pub pa_temp: String,
+    pub usb_vid: Option<u16>,
+    pub usb_pid: Option<u16>,
     /// Modem serial number, read via `AT+EGMR=0,5`. Populated by
     /// query_hardware_info; empty string if the command fails (not all
     /// platforms/ firmware variants support it).
@@ -183,6 +185,10 @@ pub struct PortInfo {
     pub port_name: String,
     pub description: Option<String>,
     pub manufacturer: Option<String>,
+    pub usb_vid: Option<u16>,
+    pub usb_pid: Option<u16>,
+    pub detected_model: Option<String>,
+    pub detected_chipset: Option<String>,
     pub is_at_port: bool,
     pub display_name: String,
 }
@@ -205,7 +211,6 @@ impl ChipsetVendor {
             ChipsetVendor::Unknown => "unknown",
         }
     }
-
 }
 
 /// Serving cell information (unified format)

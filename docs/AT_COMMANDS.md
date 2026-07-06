@@ -8,8 +8,20 @@
 - 实时状态查询失败必须直接报错，不要改发第二条 AT 掩盖失败。
 - `Unknown` 型号的正式合同是直接报错，不允许猜测 adapter。
 - 只有主合同命令写在本表；历史兼容命令请回原始手册查询，不视为 live 合同。
+- 若本地串口枚举已拿到已知 USB `VID/PID`，连接链路可先据此确认芯片平台与 AT 分支；`AT+CGMM` 作为未知 USB 或非 USB transport 的兜底识别路径。
 
 ## 平台划分（按检测优先级）
+
+### USB `VID/PID` 优先映射
+
+| VID/PID | 先决平台 | 说明 |
+|---|---|---|
+| `0x2C7C:0x0900` | UniSoc（展锐） | RG200U / RM500U 系列，直接走 UniSoc AT 分支 |
+| `0x2C7C:0x0800` | Qualcomm（高通） | 直接走 Qualcomm AT 分支 |
+| `0x2C7C:0x0801` | Qualcomm（高通） | 直接走 Qualcomm AT 分支 |
+| `0x2C7C:0x0600` | ASR | 5G RedCap，直接走 ASR 分支（当前 AT 仍复用 UniSoc adapter） |
+
+若 USB 未命中已知表，再回退 `AT+CGMM` 关键字识别。
 
 | 优先级 | 厂商 | 关键字（CGMM 大写后子串匹配） | 代表型号 |
 |---|---|---|---|

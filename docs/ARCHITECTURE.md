@@ -17,6 +17,7 @@ src/desktop/
 src-tauri/src/
   main.rs      ← 入口（NO_PROXY）
   lib.rs       ← Tauri 装配 / AppState / handler 注册 / tray / window lifecycle
+  startup_diagnostics.rs ← 启动日志 / panic hook / 文件日志初始化
   handlers.rs  ← live 业务 IPC（状态/配置/数据/AT/MQTT）
   connection.rs← 串口/TCP/WebSocket 连接 IPC
   monitor.rs   ← usb-monitor / heartbeat 后台线程
@@ -74,6 +75,7 @@ src-tauri/src/
 - `vendor`
 - `data_cid`
 - `connected_port`
+- `connected_usb_ids`
 - `at_command_log`
 - `mqtt_task`
 此外还有两个独立受管状态：
@@ -94,6 +96,7 @@ src-tauri/src/
 - `AppState`
 - `LoggingTransport`
 - 菜单 / 窗口行为
+- 启动日志初始化与启动失败回传
 
 ### 4.2 `src-tauri/src/handlers.rs`
 
@@ -105,12 +108,16 @@ src-tauri/src/
 
 - 串口 / TCP / WebSocket 连接
 - 自动连接、端口筛选、网卡枚举
+- 串口枚举时优先读取 USB `VID/PID`，命中已知映射后先确认芯片平台与 AT 分支：`0x2C7C:0x0900` → UniSoc（RG200U/RM500U 系），`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR RedCap；未命中时再回退到 `AT+CGMM`
+- `get_hardware_info` 通过 `AppState.connected_usb_ids` 回填当前连接口的 `usbVid` / `usbPid`
 - WebSocket 认证只接受显式提供的凭据；禁止公开默认值
 
 ### 4.4 `src-tauri/src/monitor.rs`
 
 - `usb-monitor`
 - `connection-heartbeat`
+- `port-changed`
+  payload 为结构化条目：`{ portName, timestamp, usbVid, usbPid, detectedModel, detectedChipset }`
 - 后台检测只发事件，不得旁路 live AT 队列
 
 ### 4.5 `src-tauri/src/mqtt.rs`
@@ -131,9 +138,18 @@ src-tauri/src/
 
 - PAC 选择 / 信息解析
 - `r26-cli` sidecar 管理
+- Windows 打包时额外携带 `resources/r26-runtime/vcruntime140.dll`，启动 sidecar 前由 `dloader.rs` 将该目录前置到子进程 `PATH`
 - `firmware-event` 事件转发
 - 不直接参与 AT 队列
 - sidecar 句柄清理失败只能记录日志 / 返回错误，不能因锁 `unwrap()` 直接 panic
+
+### 4.8 `src-tauri/src/startup_diagnostics.rs`
+
+- 启动阶段文件日志路径统一为 `%LOCALAPPDATA%\Modem Cat\logs\startup.log`
+- 若 `LOCALAPPDATA` 不可用，则依次回退到 `%TEMP%`、当前工作目录
+- `main.rs` 启动前安装 panic hook；`lib.rs::run()` 在进入 Tauri runtime 前初始化文件 logger
+- 启动最前面会额外记录 `modem-cat.exe` 路径、当前工作目录、`webview2-runtime/` 目录和 `msedgewebview2.exe` 是否存在
+- 目标是把“窗口子系统下双击无反应”的启动失败收敛成可回收的本地日志，而不是只写 stdout/stderr
 
 ## 5. HAL 结构
 
@@ -156,7 +172,7 @@ pub trait AtTransport: Send {
 ### 5.2 厂商层
 
 - `modem_factory.rs`
-  `AT+CGMM` → 型号字符串 → 芯片平台识别
+  `USB VID/PID` 已知映射 → 先选芯片平台/AT 分支并保留型号提示；未知或非 USB transport 时回退 `AT+CGMM` → 型号字符串 → 芯片平台识别
 - `modem_vendor.rs`
   统一业务 trait
 - `vendors/quectel/mod.rs`

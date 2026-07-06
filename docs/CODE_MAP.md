@@ -6,6 +6,7 @@
 ## 1. 后端 live IPC 命令清单
 
 > 当前 live IPC 统一注册在 `src-tauri/src/lib.rs::generate_handler!`，但实际执行面分散在 `handlers.rs`、`connection.rs`、`debug_terminal.rs`、`dloader.rs`。
+> `list_ports` 对 USB 串口会附带 `usbVid` / `usbPid` / `detectedModel` / `detectedChipset`，供前端和自动连接链路复用同一份识别结果。
 
 - 连接类：`list_ports` / `auto_connect_at` / `connect_serial` / `connect_tcp` / `list_network_adapters` / `connect_websocket` / `disconnect`
 - 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
@@ -13,7 +14,7 @@
 - 数据 / 射频 / 系统：`connect_data` / `disconnect_data` / `set_cfun` / `reboot_modem` / `factory_reset`
 - 锁网 / 小区锁：`query_cell_lock` / `set_cell_lock` / `clear_cell_lock` / `set_plmn_lock` / `clear_plmn_lock`
 - Qualcomm 5GLAN：`query_qualcomm_5glan_status` / `configure_qualcomm_5glan` / `enable_eth_pdu` / `connect_qualcomm_5glan`
-- AT / MQTT：`send_raw_at` / `pop_at_commands` / `set_mqtt_enabled` / `get_mqtt_enabled`
+- AT / MQTT：`send_raw_at` / `pop_at_commands` / `export_at_log` / `set_mqtt_enabled` / `get_mqtt_enabled`
 - Debug Terminal：`get_debug_terminal_capabilities` / `list_debug_network_adapters` / `get_debug_terminal_prefs` / `save_debug_terminal_prefs` / `start_adb_session` / `start_ssh_session` / `write_debug_terminal_input` / `close_debug_terminal_session`
 - Firmware：`pick_pac_file` / `pac_info` / `start_firmware_download` / `stop_firmware_download`
 
@@ -85,6 +86,7 @@
 | 终端输出 | addTerminalLine / flushAtLog | `pop_at_commands`（轮询） |
 | 命令输入 | sendAtCommand | `send_raw_at` |
 | 快捷 AT 按钮 | quickAt | `send_raw_at` |
+| 导出按钮 | exportAtLog | `export_at_log` |
 
 ### 2.4 ADB 调试页（`#page-adbdebug`）
 
@@ -127,7 +129,7 @@
 
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
-| 模组型号/固件/温度/SN | refreshHardwareInfo | `get_hardware_info` |
+| 模组型号/USB VID-PID/固件/温度/SN | refreshHardwareInfo | `get_hardware_info` |
 | Qualcomm 配置 | refreshQualcommConfig | `get_qualcomm_config` |
 | USB net / Data interface / PCIe / USB speed / IPPT | setQcXxxToggle | `set_qualcomm_config` |
 | ETH driver | saveQcEthDriver | `set_qualcomm_config` |
@@ -173,7 +175,7 @@
 
 | 事件名 | 触发源 | 前端回调位置 | 作用 |
 |---|---|---|---|
-| `port-changed` | usb-monitor 线程 + heartbeat 线程 | app.js `setupUsbMonitor` 函数 | `{ added, removed: string[] }`，触发自动重连 / 强制断开 |
+| `port-changed` | usb-monitor 线程 + heartbeat 线程 | app.js `setupUsbMonitor` 函数 | `{ added, removed: PortChangeEntry[] }`；每项含 `portName` / `timestamp` / `usbVid` / `usbPid` / `detectedModel` / `detectedChipset`，用于日志上报、自动重连和强制断开 |
 | `show-about` | Tauri 菜单 / 快捷键 | app.js `setupAboutListener` 函数 | `showAbout()` 显示关于对话框 |
 | `debug-terminal-output` | debug_terminal.rs | debug-terminal.js `handleDebugOutputEvent` | ADB / SSH 终端输出与系统状态回显 |
 | `firmware-event` | dloader.rs sidecar 事件转发 | app.js `fwListen` 回调 | Log/Progress/StateChange/Completed/Error/Terminated 等固件下载事件 |

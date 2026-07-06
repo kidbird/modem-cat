@@ -8,11 +8,22 @@
 应用启动
   │
   └─→ main.rs
+        ├─→ install_startup_diagnostics()
+        │     └─→ startup_diagnostics.rs::install_panic_hook()
         └─→ NO_PROXY=tauri.localhost,localhost,127.0.0.1
         └─→ modem_cat_lib::run()
               │
               ▼
         [lib.rs:run()]
+              │
+              ├─ startup_diagnostics.rs::init_env_logger()
+              │    └─→ `%LOCALAPPDATA%\Modem Cat\logs\startup.log`
+              │        （失败时依次回退到 `%TEMP%`、当前工作目录）
+              │
+              ├─ startup_diagnostics.rs::append_runtime_layout_snapshot()
+              │    └─→ 记录 exe 路径 / cwd / webview2-runtime 目录 / msedgewebview2.exe 是否存在
+              │
+              ├─ startup_diagnostics.rs::append_startup_log("startup begin")
               │
               ├─ tauri::Builder::default()
               │    ├─ setup() → 初始化系统托盘菜单
@@ -27,6 +38,7 @@
               │    └─ .setup()  → 启动后台线程
               │         ├─ start_port_monitor(app.handle().clone())  ← 2s 轮询
               │         └─ start_connection_heartbeat(...)           ← 4s 轮询
+              │         └─ startup_diagnostics.rs::append_startup_log("tauri setup completed")
               │
               ▼
         前端 index.html 加载
@@ -46,12 +58,15 @@
                                       │
                                       ├─ serialport::available_ports()
                                       ├─ get_windows_all_port_info() [winreg, cfg(windows)]
+                                      ├─ resolve_port_info() → 读取 FriendlyName / Manufacturer / USB VID/PID
                                       ├─ is_at_port() → 判断 AT 候选端口
                                       │
                                       ├─ spawn_blocking + `AT` probe
                                       │
-                                      └─ ModemFactory::create()  ← AT+CGMM 型号检测
-                                              └─→ 成功：建 LoggingTransport → AppState.transport
+                                      └─ ModemFactory::create_with_usb_ids()
+                                              ├─ 已知 USB VID/PID → 直接选 AT 分支（`0x2C7C:0x0900` → UniSoc，`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR）
+                                              └─ 未命中 / 非 USB → `AT+CGMM` 型号检测 fallback
+                                              └─→ 成功：建 LoggingTransport → AppState.transport，并把 USB `VID/PID` 写入 `AppState.connected_usb_ids`
                                               └─→ 失败：尝试下一个端口
 
                           // 连接成功后
@@ -59,11 +74,20 @@
                                   ├─ sequential try/catch（非并行）
                                   │   ├─ refreshModemStatus()    → get_modem_status
                                   │   ├─ refreshIpInfo()         → get_ip_info
-                                  │   ├─ refreshHardwareInfo()   → get_hardware_info
+                                  │   ├─ refreshHardwareInfo()   → get_hardware_info（AT 硬件信息 + `AppState.connected_usb_ids`）
                                   │   ├─ refreshApnList()        → get_apn_list
                                   │   ├─ refreshQos()            → get_qos_info
                                   │   └─ refreshTraffic()        → get_traffic
                                   └─ 各调用独立 catch，失败不阻断后续
+
+如果 Tauri runtime 在前端可交互前就失败：
+
+```
+main.rs
+  └─→ run() 返回 Err(String)
+        ├─ lib.rs 先把错误写入 startup.log
+        └─ main.rs 再追加 "startup failed before UI became interactive" 并以 exit code 1 退出
+```
 ```
 
 ## 2. 前端页面导航
@@ -268,6 +292,32 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
        └─ 其它      → class="resp"
 ```
 
+### 10.1 AT 终端导出（`export_at_log`）
+
+> 文本来源是前端 DOM（用户屏幕所见），**不复用后端 AT ring buffer**（后者只存 redact 命令回显、不含完整响应）。
+
+```
+[app.js]  exportAtLog()
+  │
+  ├─ 收集 #terminal 下所有 .terminal-line 的文本 → '\n' 拼接
+  ├─ 空内容直接在终端提示，不发 IPC
+  │
+  └─ invoke('export_at_log', { content })
+        │
+        └─→ handlers.rs::export_at_log
+              │
+              ├─ current_exe().parent()  ← 默认目录=程序所在目录；取不到则交给系统默认
+              ├─ app.dialog().file()
+              │     .set_file_name("at_log.txt")
+              │     .add_filter("文本文件", ["txt"])
+              │     .set_directory(exe_dir)
+              │     .save_file(|f| ...)        ← 原生"另存为"对话框
+              │
+              ├─ 用户取消        → Ok(None)
+              └─ 用户确认 path   → std::fs::write(path, content)
+                                  → Ok(Some(path_string)) / Err
+```
+
 ## 11. 后台监控线程
 
 ### 11.1 `usb-monitor`（2s 间隔）
@@ -277,11 +327,14 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
   │
   └─→ std::thread::Builder::new().name("usb-monitor").spawn(|| {
         loop {
-          let ports = serialport::available_ports()?;
-          let added   = ports_new - last_set;
-          let removed = last_set - ports_new;
+          let ports = connection::snapshot_ports()?;
+          let added   = current_ports - last_ports;
+          let removed = last_ports - current_ports;
           if !added.is_empty() || !removed.is_empty() {
-            app_handle.emit("port-changed", { added, removed })?;
+            app_handle.emit("port-changed", {
+              added:   [{ portName, timestamp, usbVid, usbPid, detectedModel, detectedChipset }],
+              removed: [{ portName, timestamp, usbVid, usbPid, detectedModel, detectedChipset }]
+            })?;
           }
           std::thread::sleep(Duration::from_secs(2));
         }
@@ -302,7 +355,11 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
             let alive = transport.try_lock().ok()?.as_deref().is_alive();
             if !alive {
               connected_port.try_lock().ok()?.take();
-              app_handle.emit("port-changed", { added: [], removed: [name] })?;
+              connected_usb_ids.try_lock().ok()?.take();
+              app_handle.emit("port-changed", {
+                added: [],
+                removed: [{ portName: name, timestamp, usbVid, usbPid, detectedModel, detectedChipset }]
+              })?;
             }
           }
           std::thread::sleep(Duration::from_secs(4));
@@ -316,15 +373,16 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
 [USB 拔]
   │
   ├─ usb-monitor 2s 内检测到 port 消失
-  │     → emit "port-changed" { removed: [port] }
+  │     → emit "port-changed" { removed: [{ portName, timestamp, usbVid, usbPid, detectedChipset, ... }] }
   │
   └─ heartbeat 4s 内 is_alive()=false
-        → emit "port-changed" { removed: [port] }  （兜底）
+        → emit "port-changed" { removed: [{ portName, timestamp, usbVid, usbPid, detectedChipset, ... }] }  （兜底）
         │
         ▼
 [app.js setupUsbMonitor 函数]  listen("port-changed", payload => { ... })
   │
-  ├─ if removed.includes(state.connectedPort):
+  ├─ 先把每个 added/removed 条目带时间戳写入前端终端日志
+  ├─ if removed.portName includes(state.connectedPort):
   │     state.connected = false
   │     updateConnectionUI()
   │     disconnect_data()

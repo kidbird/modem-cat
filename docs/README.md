@@ -40,7 +40,7 @@
 
 补充说明：
 轻量免安装包和完整免安装包都包含 `modem-cat.exe`、ADB 运行组件、`r26-cli` 固件 sidecar。
-两者唯一差异是完整免安装包额外包含 `webview2-runtime/`。
+两者唯一差异是完整免安装包额外包含与 `modem-cat.exe` 同层的 `webview2-runtime/`。
 详细构建方式和注意事项见 [BUILD.md](BUILD.md)。
 
 ## 文档维护原则

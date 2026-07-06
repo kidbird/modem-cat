@@ -57,6 +57,7 @@
 - `r26-cli` sidecar
   - PAC 解析与固件下载执行
   - 由 `src-tauri/src/dloader.rs` 管理
+  - Windows 包额外携带 `src-tauri/resources/r26-runtime/vcruntime140.dll`，并在启动 sidecar 时注入到子进程 `PATH`
   - 真正刷机能力当前只随 Windows 二进制交付；非 Windows 目标保留占位 sidecar 以保证本地构建 / 测试可通过
 - `adb.exe` + `AdbWin*.dll`
   - Windows ADB 调试 sidecar 资源
@@ -114,8 +115,8 @@ src-tauri/src/dloader.rs
 
 ### 5.1 Windows 打包资产边界
 
-- Windows 发布使用 `.cargo/config.toml` 提供 static CRT 配置，避免目标机器额外依赖 `VCRUNTIME140.dll` / `MSVCP140.dll`
-- `src-tauri/tauri.conf.json` 当前启用 `fixedRuntime`；若使用该模式，仓库根目录的 `webview2-runtime/` 需要在构建机本地预置，但不进入 Git。它属于应用私有 WebView2 运行时，不覆盖系统已安装版本
-- `src-tauri/resources/adb/`、`src-tauri/binaries/r26-cli*` 都属于可复现打包链路的一部分，需保留跟仓
+- Windows 发布使用 `.cargo/config.toml` 提供 static CRT 配置，主程序 `modem-cat.exe` 不额外依赖 VC 运行库；`r26-cli` 由于是独立 x86 sidecar，仍需单独携带 `vcruntime140.dll`
+- `src-tauri/tauri.conf.json` 当前启用 `fixedRuntime`；运行时会从 `modem-cat.exe` 同层的 `webview2-runtime/` 查找 fixed runtime，因此构建机本地需准备 `src-tauri/webview2-runtime/`，且该目录不进入 Git。`build.ps1` 会把它同步到 `dist/webview2-runtime/`，保证 `dist/modem-cat.exe` 也是可直接验证的完整离线产物。若本地仍保留旧的仓库根 `webview2-runtime/` 缓存，`build.ps1` / `build-helper.ps1` 与 `src-tauri/build.rs` 会在构建前同步到 app-local 目录。首次准备该目录时，`scripts/setup-webview2.ps1` 会从官方 WebView2 下载页解析 **Fixed Version CAB** 链接并解包，而不是使用 Evergreen Standalone Installer
+- `src-tauri/resources/adb/`、`src-tauri/binaries/r26-cli*` 都属于可复现打包链路的一部分，需保留跟仓；`src-tauri/resources/r26-runtime/README.md` 作为占位说明保留跟仓，但实际的 `vcruntime140.dll` 由构建脚本在 Windows 构建机上临时同步，不进入 Git
 - Ubuntu runner 可以承接校验和部分构建任务，但不能把“需要 Windows 打包器/运行时的完整 Windows 发版”变成纯 Linux 主机任务
 - `.codegraph/`、`.gitnexus/`、`.specify/`、`.understand-anything/`、`.workbuddy/` 属于本地工具痕迹，不属于源码或发布资产

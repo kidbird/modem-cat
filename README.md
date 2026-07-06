@@ -32,6 +32,7 @@ Windows 发版产物统一输出到 `dist/` 根目录，常见选择如下：
 补充说明：
 
 - `portable-lite.zip` 与 `portable.zip` 都包含 `modem-cat.exe`、ADB 组件、`r26-cli` 固件 sidecar。
+- 两个 portable ZIP 都额外包含 `vcruntime140.dll`（x86），供 `r26-cli` 固件 sidecar 直接运行。
 - 两者唯一差异是 `portable.zip` 额外内置 `webview2-runtime/`。
 - 如果轻量免安装包在目标机器上提示缺少 WebView2，请改用完整免安装包，或先安装系统 WebView2 Runtime。
 
@@ -53,8 +54,11 @@ Windows 发版产物统一输出到 `dist/` 根目录，常见选择如下：
 
 - ADB 调试依赖 `adb.exe`、`AdbWinApi.dll`、`AdbWinUsbApi.dll`，仓库和发布包都已包含。
 - 固件下载依赖 `r26-cli` sidecar，仓库和发布包都已包含。
+- `r26-cli` 额外需要 x86 `vcruntime140.dll`；发布脚本会一起带上，缺它只会影响固件下载，不影响主程序启动。
 - MQTT 没有公开默认 broker / 凭据；若要启用，必须显式设置环境变量。
 - 轻量免安装包不自带 WebView2 运行时，这是它体积更小的原因。
+- `dist/modem-cat.exe` 现在不是“裸 exe”示例，而是和同层 `dist/webview2-runtime/` 一起构成可直接双击验证的完整离线产物；少了这个目录就会提示缺少 WebView2。
+- 如果目标机器双击后“完全没反应”，先看 `%LOCALAPPDATA%\\Modem Cat\\logs\\startup.log`；日志会直接写出 `exe` 路径、工作目录以及 `webview2-runtime/msedgewebview2.exe` 是否存在。完整 `portable.zip` 会把 app-local `webview2-runtime/` 一起带上。
 
 ## 架构概览
 
@@ -116,8 +120,8 @@ cargo install tauri-cli --version "^2" --locked
 | 组件 | 是否必需 | 用途 |
 |---|---|---|
 | 系统 WebView2 Runtime | 运行 `portable-lite.zip` 时通常必需 | 目标机器如果没有系统 WebView2，请改用完整 `portable.zip` 或先安装系统 WebView2 |
-| 本地 `webview2-runtime/` 目录 | 仅构建完整离线包时必需 | 用于把 fixed WebView2 一起打进完整 portable 和安装包 |
-| PowerShell 5.1+ | 建议具备 | 执行 `scripts/build-release.ps1` |
+| 本地 `src-tauri/webview2-runtime/` 目录 | 仅构建完整离线包时必需 | 用于把 fixed WebView2 一起打进完整 portable 和安装包，并在运行时与 `modem-cat.exe` 同层可达 |
+| PowerShell 5.1+ | 建议具备 | 执行 `build.ps1` |
 | Git | 建议具备 | 同步仓库、切分支、提交和发布 |
 
 建议按下面顺序准备环境：
@@ -132,19 +136,21 @@ cargo install tauri-cli --version "^2" --locked
    发布脚本当前以 PowerShell 为入口，建议直接在 Windows PowerShell 或 PowerShell 7 中执行。
 5. 按需要准备 WebView2
    - 只开发、测试或发布 `portable-lite.zip`：目标机器有系统 WebView2 即可
-   - 要发布完整离线包：构建机本地必须有仓库根目录 `webview2-runtime/`
+   - 要发布完整离线包：构建机本地必须有 `src-tauri/webview2-runtime/`
 6. 按需要准备 ADB 来源目录
    如果你要替换随仓的 ADB 二进制，可以在仓库根放 `Sdk/` 或 `sdk/`，发布脚本会优先从这里同步
 
 仓库内已跟踪的发布资产：
 
 - `src-tauri/resources/adb/`
+- `src-tauri/resources/r26-runtime/README.md`
 - `src-tauri/binaries/r26-cli*`
 
 本地额外准备：
 
-- 若要构建完整离线包，需要在仓库根目录准备 `webview2-runtime/`
+- 若要构建完整离线包，需要在 `src-tauri/webview2-runtime/` 准备 fixed runtime；`scripts/setup-webview2.ps1` 会从官方 WebView2 下载页解析 Fixed Version CAB 并解包到这里
 - 若你要替换 ADB 二进制来源，可在 `Sdk/` 或 `sdk/` 中放置 ADB 文件，构建脚本会同步到 `src-tauri/resources/adb/`
+- 若你要完整打包固件下载能力，Windows 构建机还需要本地可用的 x86 `vcruntime140.dll`；`build.ps1` / `scripts/build-helper.ps1` 会自动同步到 `src-tauri/resources/r26-runtime/` 与 `dist/vcruntime140.dll`
 
 建议先用下面两条命令确认环境：
 
@@ -167,11 +173,12 @@ where.exe cargo-tauri
 - Rust MSVC toolchain
 - VS Build Tools + “使用 C++ 的桌面开发”
 - PowerShell
-- 仓库内自带的 `src-tauri/resources/adb/` 与 `src-tauri/binaries/r26-cli*`
+- 仓库内自带的 `src-tauri/resources/adb/`、`src-tauri/resources/r26-runtime/README.md` 与 `src-tauri/binaries/r26-cli*`
 
 而“完整离线发版环境”则是在上面基础上，再额外准备：
 
-- 仓库根目录 `webview2-runtime/`
+- `src-tauri/webview2-runtime/`
+- 构建机本地可用的 x86 `vcruntime140.dll`（脚本会自动同步，不要求跟仓）
 
 ### macOS / Linux
 
@@ -191,13 +198,13 @@ bash scripts/verify-docs.sh
 ### Windows 正式打包
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
 如果只想快速验证编译和安装包，不生成 portable ZIP：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Quick
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Quick
 ```
 
 ## 发版建议
@@ -218,6 +225,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Q
 src/desktop/                前端页面与脚本
 src-tauri/src/              Tauri 后端
 src-tauri/resources/adb/    ADB 发布资源
+src-tauri/resources/r26-runtime/ r26 sidecar 运行库占位目录
 src-tauri/binaries/         固件 sidecar
 modem-hal/src/              transport / vendor / parser
 scripts/                    构建、验证、辅助脚本

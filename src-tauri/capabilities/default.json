@@ -11,6 +11,7 @@
     "core:window:allow-set-focus",
     "dialog:allow-open",
     "dialog:allow-confirm",
+    "dialog:allow-save",
     "shell:allow-spawn",
     "shell:allow-kill",
     "shell:allow-stdin-write",

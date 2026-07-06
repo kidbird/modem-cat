@@ -21,6 +21,76 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
+
+function Get-NonEmptyDirectory([string]$Path) {
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+    return ((Get-ChildItem $Path -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
+}
+
+function Sync-Webview2Runtime {
+    $stagedRuntime = Join-Path $root "src-tauri\webview2-runtime"
+    $legacyRuntime = Join-Path $root "webview2-runtime"
+
+    if (Get-NonEmptyDirectory $stagedRuntime) {
+        return $stagedRuntime
+    }
+
+    if (Get-NonEmptyDirectory $legacyRuntime) {
+        if (Test-Path $stagedRuntime) {
+            Remove-Item -LiteralPath $stagedRuntime -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $stagedRuntime -Force | Out-Null
+        Copy-Item -Path (Join-Path $legacyRuntime "*") -Destination $stagedRuntime -Recurse -Force
+        Write-Host "  staged fixed WebView2 runtime from legacy root cache"
+        return $stagedRuntime
+    }
+
+    throw "fixed WebView2 runtime not found. Expected src-tauri\\webview2-runtime or legacy webview2-runtime. Run scripts\\setup-webview2.ps1 first."
+}
+
+function Find-R26RuntimeDll {
+    $exactCandidates = @(
+        "C:\Windows\SysWOW64\vcruntime140.dll"
+    )
+    foreach ($candidate in $exactCandidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    $globCandidates = @(
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\vcruntime140.dll",
+        "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\vcruntime140.dll",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\vcruntime140.dll",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\vcruntime140.dll",
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\vcruntime140.dll"
+    )
+    foreach ($pattern in $globCandidates) {
+        $match = Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($match) {
+            return $match.FullName
+        }
+    }
+
+    throw "x86 vcruntime140.dll not found. Install the VC++ x86 runtime or Visual Studio x86 redist before packaging the r26 sidecar."
+}
+
+function Sync-R26Runtime {
+    $runtimeDir = Join-Path $root "src-tauri\resources\r26-runtime"
+    $runtimeSrc = Find-R26RuntimeDll
+    $runtimeDst = Join-Path $runtimeDir "vcruntime140.dll"
+    if (-not (Test-Path $runtimeDir)) {
+        New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
+    }
+    Copy-Item -LiteralPath $runtimeSrc -Destination $runtimeDst -Force
+    Write-Host "  staged x86 r26 runtime: $runtimeSrc"
+    return $runtimeDst
+}
+
 try {
     # 1. 读取 version
     $cfgPath = "src-tauri\tauri.conf.json"
@@ -52,7 +122,12 @@ try {
         Set-Content -LiteralPath $tempCfg -Value $tempContent -Encoding UTF8
         $activeCfg = $tempCfg
         Write-Host "  generated temp config: $tempCfg  (webviewInstallMode=skip, path=null)"
+    } else {
+        $stagedRuntime = Sync-Webview2Runtime
+        Write-Host "  using fixed runtime: $stagedRuntime"
     }
+    $stagedR26Runtime = Sync-R26Runtime
+    Write-Host "  using r26 runtime: $stagedR26Runtime"
 
     # 4. 预置 WebView2 缓存（避免重复下载）
     $wixDir = Join-Path $root "target\release\wix\x64"

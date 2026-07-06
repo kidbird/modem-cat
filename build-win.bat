@@ -103,6 +103,22 @@ echo [OK]   MSVC 环境已就绪 ^(x64^)
 REM ── 切换到项目根目录并构建 ────────────────────────────────────────────────────
 cd /d "%~dp0"
 echo [INFO] 工作目录: %CD%
+set "WEBVIEW2_STAGE=%CD%\src-tauri\webview2-runtime"
+set "WEBVIEW2_LEGACY=%CD%\webview2-runtime"
+if not exist "%WEBVIEW2_STAGE%\msedgewebview2.exe" (
+    if exist "%WEBVIEW2_LEGACY%\msedgewebview2.exe" (
+        echo [INFO] 从旧目录同步 fixed WebView2 runtime 到 src-tauri\webview2-runtime
+        if exist "%WEBVIEW2_STAGE%" rmdir /s /q "%WEBVIEW2_STAGE%"
+        mkdir "%WEBVIEW2_STAGE%"
+        xcopy "%WEBVIEW2_LEGACY%\*" "%WEBVIEW2_STAGE%\" /E /I /Y >nul
+    )
+)
+if not exist "%WEBVIEW2_STAGE%\msedgewebview2.exe" (
+    echo [ERR] 未找到 fixed WebView2 runtime: %WEBVIEW2_STAGE%
+    echo       请先运行 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-webview2.ps1
+    exit /b 1
+)
+echo [OK]   fixed WebView2 runtime: %WEBVIEW2_STAGE%
 echo.
 echo ───────────────────────────────────────────────
 echo   开始构建...

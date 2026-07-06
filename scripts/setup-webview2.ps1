@@ -1,16 +1,18 @@
-# setup-webview2.ps1 — 下载并配置 WebView2 固定版本
-# 用法:
+# setup-webview2.ps1 - prepare an app-local WebView2 Fixed Version package
+# Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-webview2.ps1
 #
-# 功能:
-#   1. 下载 WebView2 固定版本（Evergreen Standalone Installer）
-#   2. 解压到本地目录
-#   3. 更新 tauri.conf.json 使用 fixedRuntime 模式
+# What it does:
+#   1. Reads the official WebView2 download page and finds Fixed Version CAB links
+#   2. Extracts the selected package into src-tauri\webview2-runtime\
+#   3. Ensures tauri.conf.json uses app-local fixedRuntime mode
 #
-# 只需运行一次，后续构建完全离线
+# Run it once on the build machine. Subsequent builds stay offline.
 
 param(
     [string]$Version = "latest",
+    [ValidateSet("x64", "x86", "arm64")]
+    [string]$Architecture = "x64",
     [switch]$Force
 )
 
@@ -18,154 +20,214 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 
+function Get-FixedVersionOptions {
+    $downloadPage = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/?form=MA13LH"
+    $response = Invoke-WebRequest -Uri $downloadPage -UseBasicParsing
+    $pattern = 'https:\\u002F\\u002F[^"]+Microsoft\.WebView2\.FixedVersionRuntime\.([0-9.]+)\.(x64|x86|arm64)\.cab'
+    $matches = [regex]::Matches($response.Content, $pattern)
+
+    if ($matches.Count -eq 0) {
+        throw "failed to find Fixed Version package links on $downloadPage"
+    }
+
+    $seen = @{}
+    $options = @()
+    foreach ($match in $matches) {
+        $version = $match.Groups[1].Value
+        $arch = $match.Groups[2].Value
+        $url = $match.Value -replace '\\u002F', '/' -replace '\\u0026', '&'
+        $key = "$version|$arch"
+        if (-not $seen.ContainsKey($key)) {
+            $seen[$key] = $true
+            $options += [PSCustomObject]@{
+                Version = $version
+                Architecture = $arch
+                Url = $url
+            }
+        }
+    }
+
+    return $options
+}
+
+function Select-FixedVersionPackage([string]$RequestedVersion, [string]$RequestedArchitecture) {
+    $options = Get-FixedVersionOptions | Where-Object { $_.Architecture -eq $RequestedArchitecture }
+    if (-not $options) {
+        throw "no Fixed Version package found for architecture $RequestedArchitecture"
+    }
+
+    if ($RequestedVersion -eq "latest") {
+        return $options[0]
+    }
+
+    $exact = $options | Where-Object { $_.Version -eq $RequestedVersion } | Select-Object -First 1
+    if ($exact) {
+        return $exact
+    }
+
+    $available = ($options | Select-Object -ExpandProperty Version) -join ", "
+    throw "fixed version $RequestedVersion for $RequestedArchitecture not found on the official WebView2 download page. Available versions: $available"
+}
+
+function Normalize-FixedRuntimeLayout([string]$RuntimeDir) {
+    $rootRuntimeExe = Join-Path $RuntimeDir "msedgewebview2.exe"
+    if (Test-Path $rootRuntimeExe) {
+        return
+    }
+
+    $nestedRoots = Get-ChildItem -Path $RuntimeDir -Directory -ErrorAction SilentlyContinue | Where-Object {
+        Test-Path (Join-Path $_.FullName "msedgewebview2.exe")
+    }
+
+    if ($nestedRoots.Count -ne 1) {
+        return
+    }
+
+    $nestedRoot = $nestedRoots[0]
+    Get-ChildItem -LiteralPath $nestedRoot.FullName -Force | ForEach-Object {
+        Move-Item -LiteralPath $_.FullName -Destination $RuntimeDir -Force
+    }
+    Remove-Item -LiteralPath $nestedRoot.FullName -Recurse -Force
+}
+
+function Write-Utf8NoBomJson([string]$Path, [object]$Value) {
+    $json = $Value | ConvertTo-Json -Depth 10
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $json, $utf8NoBom)
+}
+
 try {
-    $webview2Dir = Join-Path $root "webview2-runtime"
+    $webview2Dir = Join-Path $root "src-tauri\webview2-runtime"
+    $legacyWebview2Dir = Join-Path $root "webview2-runtime"
     $configPath = Join-Path $root "src-tauri\tauri.conf.json"
-    
+
     Write-Host ""
     Write-Host " ==================================================="
-    Write-Host "  WebView2 固定版本设置"
+    Write-Host "  WebView2 Fixed Version Setup"
     Write-Host " ==================================================="
     Write-Host ""
-    
-    # 检查是否已存在
+
     if ((Test-Path $webview2Dir) -and (-not $Force)) {
         $fileCount = (Get-ChildItem $webview2Dir -File -ErrorAction SilentlyContinue | Measure-Object).Count
         if ($fileCount -gt 0) {
-            Write-Host "[INFO] WebView2 固定版本已存在于: $webview2Dir"
-            Write-Host "[INFO] 文件数量: $fileCount"
+            Write-Host "[INFO] WebView2 fixed runtime already exists at: $webview2Dir"
+            Write-Host "[INFO] File count: $fileCount"
             Write-Host ""
-            Write-Host "如需重新下载，请使用: -Force 参数"
+            Write-Host "Use -Force to refresh the local runtime."
             Write-Host ""
-            
-            # 询问是否更新配置
-            $updateConfig = Read-Host "是否更新 tauri.conf.json 使用此版本? (y/n)"
+
+            $updateConfig = Read-Host "Update tauri.conf.json to use this runtime? (y/n)"
             if ($updateConfig -eq 'y' -or $updateConfig -eq 'Y') {
-                # 更新配置
                 $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
                 $cfg.bundle.windows.webviewInstallMode = [PSCustomObject]@{
                     type = "fixedRuntime"
-                    path = $webview2Dir
+                    path = "webview2-runtime"
                 }
-                $cfg | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath -Encoding UTF8
-                Write-Host "[OK] 已更新 tauri.conf.json"
+                Write-Utf8NoBomJson -Path $configPath -Value $cfg
+                Write-Host "[OK] tauri.conf.json updated"
             }
             exit 0
         }
     }
-    
-    # 下载 WebView2
-    Write-Host "[1/3] 下载 WebView2 固定版本..."
+
+    Write-Host "[1/3] Download WebView2 Fixed Version package..."
     Write-Host ""
-    
-    # Evergreen Bootstrapper URL
-    $bootstrapperUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
-    $bootstrapperPath = Join-Path $root "MicrosoftEdgeWebview2Setup.exe"
-    
-    # Evergreen Standalone Installer URL (x64)
-    $installerUrl = "https://go.microsoft.com/fwlink/?linkid=2124701"
-    $installerPath = Join-Path $root "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
-    
-    # 尝试下载离线安装包
-    Write-Host "  下载离线安装包 (约 200MB)..."
-    Write-Host "  URL: $installerUrl"
+
+    $package = Select-FixedVersionPackage -RequestedVersion $Version -RequestedArchitecture $Architecture
+    $packageName = "Microsoft.WebView2.FixedVersionRuntime.$($package.Version).$($package.Architecture).cab"
+    $packagePath = Join-Path $root $packageName
+
+    Write-Host "  Version: $($package.Version)"
+    Write-Host "  Arch:    $($package.Architecture)"
+    Write-Host "  URL:     $($package.Url)"
     Write-Host ""
-    
+
     try {
-        if (-not (Test-Path $installerPath)) {
-            # 使用 PowerShell 下载
+        if (-not (Test-Path $packagePath)) {
             $ProgressPreference = 'SilentlyContinue'
-            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
+            Invoke-WebRequest -Uri $package.Url -OutFile $packagePath -UseBasicParsing
             $ProgressPreference = 'Continue'
-            Write-Host "  [OK] 下载完成"
+            Write-Host "  [OK] Download complete"
         } else {
-            Write-Host "  [INFO] 安装包已存在，跳过下载"
+            Write-Host "  [INFO] Package already exists, skipping download"
         }
     } catch {
-        Write-Warning "  下载失败: $_"
+        Write-Warning "  Download failed: $_"
         Write-Host ""
-        Write-Host "  请手动下载 WebView2 离线安装包:"
+        Write-Host "  Manually download the official WebView2 Fixed Version package:"
         Write-Host "  https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
-        Write-Host "  选择: Evergreen Standalone Installer (x64)"
-        Write-Host "  下载后放到: $installerPath"
+        Write-Host "  Choose: Fixed Version -> $Architecture -> version $Version"
+        Write-Host "  Then place it at: $packagePath"
         Write-Host ""
         exit 1
     }
-    
-    # 解压安装包
+
     Write-Host ""
-    Write-Host "[2/3] 解压 WebView2 运行时..."
-    
+    Write-Host "[2/3] Extract runtime files..."
+
     if (Test-Path $webview2Dir) {
         Remove-Item $webview2Dir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $webview2Dir -Force | Out-Null
-    
-    # 离线安装包是自解压的，使用 /extract 参数
-    Write-Host "  解压到: $webview2Dir"
-    $process = Start-Process -FilePath $installerPath -ArgumentList "/extract:$webview2Dir /quiet" -Wait -PassThru -NoNewWindow
-    
-    if ($process.ExitCode -ne 0) {
-        Write-Warning "  解压失败，尝试使用 cab 方式..."
-        
-        # 尝试查找 cab 文件
-        $cabFiles = Get-ChildItem $installerPath -Recurse -Filter "*.cab" -ErrorAction SilentlyContinue
-        if ($cabFiles) {
-            foreach ($cab in $cabFiles) {
-                Write-Host "  解压 CAB: $($cab.Name)"
-                expand.exe -F:* $cab.FullName $webview2Dir
-            }
-        }
+
+    Write-Host "  Extract to: $webview2Dir"
+    & expand.exe $packagePath -F:* $webview2Dir | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "expand.exe failed to extract $packageName (exit $LASTEXITCODE)"
     }
-    
-    # 检查解压结果
+
+    Normalize-FixedRuntimeLayout -RuntimeDir $webview2Dir
+
     $extractedFiles = Get-ChildItem $webview2Dir -Recurse -File -ErrorAction SilentlyContinue
     if ($extractedFiles.Count -eq 0) {
-        Write-Warning "  解压后未找到文件"
+        Write-Warning "  No files were extracted"
         Write-Host ""
-        Write-Host "  请手动解压安装包并放到: $webview2Dir"
+        Write-Host "  Manually extract the Fixed Version package to: $webview2Dir"
+        Write-Host ""
         exit 1
     }
-    
-    Write-Host "  [OK] 解压完成，文件数量: $($extractedFiles.Count)"
-    
-    # 更新配置
+
+    $runtimeExe = Join-Path $webview2Dir "msedgewebview2.exe"
+    if (-not (Test-Path $runtimeExe)) {
+        throw "fixed runtime extraction did not produce msedgewebview2.exe at $runtimeExe"
+    }
+
+    Write-Host "  [OK] Extraction complete, file count: $($extractedFiles.Count)"
+
     Write-Host ""
-    Write-Host "[3/3] 更新 tauri.conf.json..."
-    
+    Write-Host "[3/3] Update tauri.conf.json..."
+
     $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
     $cfg.bundle.windows.webviewInstallMode = [PSCustomObject]@{
         type = "fixedRuntime"
-        path = $webview2Dir
+        path = "webview2-runtime"
     }
-    $cfg | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath -Encoding UTF8
-    
-    Write-Host "  [OK] 已更新为 fixedRuntime 模式"
-    
-    # 清理临时文件
+    Write-Utf8NoBomJson -Path $configPath -Value $cfg
+
+    Write-Host "  [OK] fixedRuntime mode enabled"
+
     Write-Host ""
-    Write-Host "[清理] 删除临时安装包..."
-    if (Test-Path $installerPath) {
-        Remove-Item $installerPath -Force
+    Write-Host "[Cleanup] Remove temporary package..."
+    if (Test-Path $packagePath) {
+        Remove-Item $packagePath -Force
     }
-    if (Test-Path $bootstrapperPath) {
-        Remove-Item $bootstrapperPath -Force
+    if (Test-Path $legacyWebview2Dir) {
+        Write-Host "[Cleanup] Keeping legacy repo-root webview2-runtime/ as a compatibility cache"
     }
-    
-    # 完成
+
     Write-Host ""
     Write-Host " ==================================================="
-    Write-Host "  设置完成!"
+    Write-Host "  Setup complete"
     Write-Host " ==================================================="
     Write-Host ""
-    Write-Host "WebView2 固定版本位置: $webview2Dir"
-    Write-Host "文件数量: $($extractedFiles.Count)"
+    Write-Host "WebView2 fixed runtime path: $webview2Dir"
+    Write-Host "Fixed Version: $($package.Version) ($($package.Architecture))"
+    Write-Host "Extracted files: $($extractedFiles.Count)"
     Write-Host ""
-    Write-Host "后续构建将使用此固定版本，完全离线。"
+    Write-Host "Subsequent builds read fixed runtime from src-tauri\\webview2-runtime\\."
     Write-Host ""
-    Write-Host "如需切换回其他模式，请手动编辑: $configPath"
+    Write-Host "To switch modes later, edit: $configPath"
     Write-Host ""
-    
 } finally {
     Pop-Location
 }

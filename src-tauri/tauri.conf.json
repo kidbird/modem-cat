@@ -1,58 +1,61 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Modem Cat",
-  "identifier": "com.modemcat.desktop",
-  "version": "0.3.0",
-  "build": {
-    "beforeDevCommand": "",
-    "beforeBuildCommand": "",
-    "frontendDist": "../src/desktop"
-  },
-  "app": {
-    "withGlobalTauri": true,
-    "windows": [
-      {
-        "title": "Modem Cat",
-        "width": 1200,
-        "height": 720,
-        "resizable": true,
-        "fullscreen": false,
-        "minWidth": 900,
-        "minHeight": 600,
-        "center": true
-      }
-    ],
-    "security": {
-      "csp": null
-    },
-    "trayIcon": {
-      "id": "main",
-      "iconPath": "icons/icon.ico",
-      "iconAsTemplate": false,
-      "menuOnLeftClick": false
-    }
-  },
-  "bundle": {
-    "active": true,
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "resources": [
-      "resources/adb/"
-    ],
-    "externalBin": ["binaries/r26-cli"],
-    "windows": {
-      "wix": {
-        "language": "zh-CN"
-      },
-      "webviewInstallMode": {
-        "type": "fixedRuntime",
-        "path": "../webview2-runtime"
-      }
-    }
-  }
+    "$schema":  "https://schema.tauri.app/config/2",
+    "productName":  "Modem Cat",
+    "identifier":  "com.modemcat.desktop",
+    "version":  "0.3.0",
+    "build":  {
+                  "beforeDevCommand":  "",
+                  "beforeBuildCommand":  "",
+                  "frontendDist":  "../src/desktop"
+              },
+    "app":  {
+                "withGlobalTauri":  true,
+                "windows":  [
+                                {
+                                    "title":  "Modem Cat",
+                                    "width":  1200,
+                                    "height":  720,
+                                    "resizable":  true,
+                                    "fullscreen":  false,
+                                    "minWidth":  900,
+                                    "minHeight":  600,
+                                    "center":  true
+                                }
+                            ],
+                "security":  {
+                                 "csp":  null
+                             },
+                "trayIcon":  {
+                                 "id":  "main",
+                                 "iconPath":  "icons/icon.ico",
+                                 "iconAsTemplate":  false,
+                                 "menuOnLeftClick":  false
+                             }
+            },
+    "bundle":  {
+                   "active":  true,
+                   "icon":  [
+                                "icons/32x32.png",
+                                "icons/128x128.png",
+                                "icons/128x128@2x.png",
+                                "icons/icon.icns",
+                                "icons/icon.ico"
+                            ],
+                   "resources":  [
+                                     "resources/adb/",
+                                     "resources/r26-runtime/"
+                                 ],
+                   "externalBin":  [
+                                       "binaries/r26-cli"
+                                   ],
+                   "windows":  {
+                                   "wix":  {
+                                               "language":  "zh-CN"
+                                           },
+                                   "webviewInstallMode":  {
+                                                              "type":  "fixedRuntime",
+                                                              "path":  "webview2-runtime"
+                                                          }
+                               }
+               }
 }

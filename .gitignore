@@ -20,6 +20,8 @@ out/
 
 # WebView2 fixed runtime (kept outside Git; provision on builder/runner)
 webview2-runtime/
+src-tauri/webview2-runtime/
+src-tauri/resources/r26-runtime/vcruntime140.dll
 
 # Tauri
 src-tauri/target/

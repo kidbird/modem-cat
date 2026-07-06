@@ -5,10 +5,14 @@
 //! output into Tauri `firmware-event`s for the UI.
 
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::process::{Command, CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 // -- Sidecar version gate ----------------------------------------------------
@@ -19,16 +23,81 @@ const SIDECAR_EXPECTED_VERSION: &str = "0.1.0";
 /// Cached once per process -- the sidecar binary can't change while we run.
 static SIDECAR_VERSION_CHECK: OnceLock<Result<(), String>> = OnceLock::new();
 
+const SIDECAR_RUNTIME_DLL: &str = "vcruntime140.dll";
+const SIDECAR_RUNTIME_RESOURCE_DIR: &str = "r26-runtime";
+
+fn resolve_sidecar_runtime_dir_from_paths_with_repo_fallback(
+    resource_dir: Option<&Path>,
+    exe_dir: Option<&Path>,
+    include_repo_fallback: bool,
+) -> Result<PathBuf, String> {
+    let mut candidates = Vec::new();
+
+    if let Some(exe_dir) = exe_dir {
+        candidates.push(exe_dir.to_path_buf());
+    }
+    if let Some(resource_dir) = resource_dir {
+        candidates.push(resource_dir.join(SIDECAR_RUNTIME_RESOURCE_DIR));
+    }
+
+    if include_repo_fallback {
+        let manifest_runtime_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(SIDECAR_RUNTIME_RESOURCE_DIR);
+        if !candidates.iter().any(|candidate| candidate == &manifest_runtime_dir) {
+            candidates.push(manifest_runtime_dir);
+        }
+    }
+
+    candidates
+        .into_iter()
+        .find(|dir| dir.join(SIDECAR_RUNTIME_DLL).is_file())
+        .ok_or_else(|| {
+            format!(
+                "未找到刷机组件依赖 {SIDECAR_RUNTIME_DLL}；请重新执行 build.ps1 或 scripts/build-helper.ps1 以打包 x86 VC 运行库"
+            )
+        })
+}
+
+fn resolve_sidecar_runtime_dir_from_paths(
+    resource_dir: Option<&Path>,
+    exe_dir: Option<&Path>,
+) -> Result<PathBuf, String> {
+    resolve_sidecar_runtime_dir_from_paths_with_repo_fallback(resource_dir, exe_dir, true)
+}
+
+fn resolve_sidecar_runtime_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let resource_dir = app.path().resource_dir().ok();
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(Path::to_path_buf));
+    resolve_sidecar_runtime_dir_from_paths(resource_dir.as_deref(), exe_dir.as_deref())
+}
+
+fn sidecar_runtime_path_env(runtime_dir: &Path) -> Result<OsString, String> {
+    let mut paths = vec![runtime_dir.to_path_buf()];
+    if let Some(existing) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    std::env::join_paths(paths).map_err(|e| format!("构造刷机组件 PATH 失败: {e}"))
+}
+
+fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
+    let runtime_dir = resolve_sidecar_runtime_dir(app)?;
+    let path = sidecar_runtime_path_env(&runtime_dir)?;
+    app.shell()
+        .sidecar("r26-cli")
+        .map(|command| command.env("PATH", path))
+        .map_err(|e| format!("无法定位刷机组件: {e}"))
+}
+
 /// Verify the vendored sidecar reports the expected version.
 async fn ensure_sidecar_version(app: &AppHandle) -> Result<(), String> {
     if let Some(cached) = SIDECAR_VERSION_CHECK.get() {
         return cached.clone();
     }
     let result = async {
-        let output = app
-            .shell()
-            .sidecar("r26-cli")
-            .map_err(|e| format!("无法定位刷机组件: {e}"))?
+        let output = sidecar_command(app)?
             .args(["--version"])
             .output()
             .await
@@ -202,10 +271,7 @@ pub struct DownloadResultDto {
 
 /// Run `r26-cli pac-info <path> --json` and parse the safety report.
 async fn run_pac_info(app: &AppHandle, path: &str) -> Result<SafetyReportDto, String> {
-    let output = app
-        .shell()
-        .sidecar("r26-cli")
-        .map_err(|e| format!("无法定位刷机组件: {e}"))?
+    let output = sidecar_command(app)?
         .args(["pac-info", path, "--json"])
         .output()
         .await
@@ -294,10 +360,7 @@ pub async fn start_firmware_download(app: AppHandle, path: String) -> Result<(),
         if guard.is_some() {
             return Err("下载正在进行中".to_string());
         }
-        let (rx, child) = app
-            .shell()
-            .sidecar("r26-cli")
-            .map_err(|e| format!("无法定位刷机组件: {e}"))?
+        let (rx, child) = sidecar_command(&app)?
             .args(args)
             .spawn()
             .map_err(|e| format!("启动刷机失败: {e}"))?;
@@ -382,6 +445,31 @@ pub fn stop_firmware_download(state: State<'_, DloaderState>) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let suffix = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("modem-cat-{prefix}-{timestamp}-{suffix}"));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    fn touch(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("create parent");
+        }
+        fs::write(path, b"stub").expect("write stub file");
+    }
 
     fn risk(id: &str) -> FileRiskDto {
         FileRiskDto {
@@ -450,6 +538,52 @@ mod tests {
         assert_eq!(serde_json::to_string(&lvl).unwrap(), "\"FutureRisk\"");
         let known: RiskLevel = serde_json::from_str("\"NvWrite\"").unwrap();
         assert_eq!(known, RiskLevel::NvWrite);
+    }
+
+    #[test]
+    fn sidecar_runtime_prefers_exe_dir_when_dll_is_already_next_to_sidecar() {
+        let temp_root = unique_temp_dir("dloader-exe-runtime");
+        let exe_dir = temp_root.join("app");
+        let resource_dir = temp_root.join("resources");
+        touch(&exe_dir.join("vcruntime140.dll"));
+        touch(&resource_dir.join("r26-runtime").join("vcruntime140.dll"));
+
+        let resolved = resolve_sidecar_runtime_dir_from_paths(Some(&resource_dir), Some(&exe_dir))
+            .expect("resolve runtime dir");
+
+        assert_eq!(resolved, exe_dir);
+        fs::remove_dir_all(temp_root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn sidecar_runtime_falls_back_to_resource_dir_when_exe_dir_is_missing_dll() {
+        let temp_root = unique_temp_dir("dloader-resource-runtime");
+        let exe_dir = temp_root.join("app");
+        let resource_dir = temp_root.join("resources");
+        touch(&resource_dir.join("r26-runtime").join("vcruntime140.dll"));
+
+        let resolved = resolve_sidecar_runtime_dir_from_paths(Some(&resource_dir), Some(&exe_dir))
+            .expect("resolve runtime dir");
+
+        assert_eq!(resolved, resource_dir.join("r26-runtime"));
+        fs::remove_dir_all(temp_root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn sidecar_runtime_errors_when_no_packaged_runtime_is_available() {
+        let temp_root = unique_temp_dir("dloader-missing-runtime");
+        let exe_dir = temp_root.join("app");
+        let resource_dir = temp_root.join("resources");
+
+        let error = resolve_sidecar_runtime_dir_from_paths_with_repo_fallback(
+            Some(&resource_dir),
+            Some(&exe_dir),
+            false,
+        )
+        .expect_err("runtime should be missing");
+
+        assert!(error.contains("vcruntime140.dll"));
+        fs::remove_dir_all(temp_root).expect("cleanup temp dir");
     }
 
     #[test]

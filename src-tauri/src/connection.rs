@@ -16,8 +16,47 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 // ── Port listing helpers ──
 
+#[derive(Debug, Clone, Default)]
+struct WindowsPortInfo {
+    description: Option<String>,
+    manufacturer: Option<String>,
+    usb_vid: Option<u16>,
+    usb_pid: Option<u16>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ResolvedPortInfo {
+    description: Option<String>,
+    manufacturer: Option<String>,
+    usb_vid: Option<u16>,
+    usb_pid: Option<u16>,
+    detected_model: Option<String>,
+    detected_chipset: Option<String>,
+}
+
+fn extract_hex_id_from_identifier(identifier: &str, marker: &str) -> Option<u16> {
+    let upper = identifier.to_uppercase();
+    let start = upper.find(marker)? + marker.len();
+    let hex: String = upper[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_hexdigit())
+        .take(4)
+        .collect();
+    if hex.len() != 4 {
+        return None;
+    }
+    u16::from_str_radix(&hex, 16).ok()
+}
+
+fn parse_vid_pid_from_identifier(identifier: &str) -> (Option<u16>, Option<u16>) {
+    (
+        extract_hex_id_from_identifier(identifier, "VID_"),
+        extract_hex_id_from_identifier(identifier, "PID_"),
+    )
+}
+
 #[cfg(target_os = "windows")]
-pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> HashMap<String, WindowsPortInfo> {
     use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
 
@@ -59,8 +98,17 @@ pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Op
 
                 let friendly_name: Option<String> = func_key.get_value("FriendlyName").ok();
                 let manufacturer: Option<String> = func_key.get_value("Manufacturer").ok();
+                let (usb_vid, usb_pid) = parse_vid_pid_from_identifier(&device);
 
-                result.insert(port_name, (friendly_name, manufacturer));
+                result.insert(
+                    port_name,
+                    WindowsPortInfo {
+                        description: friendly_name,
+                        manufacturer,
+                        usb_vid,
+                        usb_pid,
+                    },
+                );
             }
         }
     }
@@ -69,36 +117,69 @@ pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Op
 }
 
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn get_windows_all_port_info() -> HashMap<String, (Option<String>, Option<String>)> {
+fn get_windows_all_port_info() -> HashMap<String, WindowsPortInfo> {
     HashMap::new()
 }
 
 fn resolve_port_info(
     port: &serialport::SerialPortInfo,
-    win_info: &HashMap<String, (Option<String>, Option<String>)>,
-) -> (Option<String>, Option<String>) {
+    win_info: &HashMap<String, WindowsPortInfo>,
+) -> ResolvedPortInfo {
     let mut description: Option<String> = None;
     let mut manufacturer: Option<String> = None;
+    let mut usb_vid: Option<u16> = None;
+    let mut usb_pid: Option<u16> = None;
 
     if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
         description = info.product.clone();
         manufacturer = info.manufacturer.clone();
+        usb_vid = Some(info.vid);
+        usb_pid = Some(info.pid);
     }
 
-    if let Some((win_caption, win_mfg)) = win_info.get(&port.port_name) {
-        if win_caption.is_some() {
-            description = win_caption.clone();
+    if let Some(info) = win_info.get(&port.port_name) {
+        if info.description.is_some() {
+            description = info.description.clone();
         }
-        if win_mfg.is_some() && manufacturer.is_none() {
-            manufacturer = win_mfg.clone();
+        if info.manufacturer.is_some() && manufacturer.is_none() {
+            manufacturer = info.manufacturer.clone();
+        }
+        if usb_vid.is_none() {
+            usb_vid = info.usb_vid;
+        }
+        if usb_pid.is_none() {
+            usb_pid = info.usb_pid;
         }
     }
 
-    (description, manufacturer)
+    let detected_model = usb_vid
+        .zip(usb_pid)
+        .and_then(|(vid, pid)| ModemFactory::detect_model_from_vid_pid(vid, pid))
+        .map(str::to_string);
+    let detected_chipset = usb_vid
+        .zip(usb_pid)
+        .and_then(|(vid, pid)| ModemFactory::detect_vendor_from_vid_pid(vid, pid))
+        .map(|vendor| vendor.as_str().to_string());
+
+    ResolvedPortInfo {
+        description,
+        manufacturer,
+        usb_vid,
+        usb_pid,
+        detected_model,
+        detected_chipset,
+    }
 }
 
-#[tauri::command]
-pub(crate) fn list_ports() -> Result<Vec<modem_hal::types::PortInfo>, String> {
+fn lookup_usb_ids_for_port(port_name: &str) -> Option<(u16, u16)> {
+    let ports = serialport::available_ports().ok()?;
+    let win_info = get_windows_all_port_info();
+    let port = ports.into_iter().find(|port| port.port_name == port_name)?;
+    let resolved = resolve_port_info(&port, &win_info);
+    resolved.usb_vid.zip(resolved.usb_pid)
+}
+
+pub(crate) fn snapshot_ports() -> Result<Vec<modem_hal::types::PortInfo>, String> {
     let ports =
         serialport::available_ports().map_err(|e| format!("Failed to list ports: {}", e))?;
 
@@ -107,21 +188,29 @@ pub(crate) fn list_ports() -> Result<Vec<modem_hal::types::PortInfo>, String> {
     let result: Vec<modem_hal::types::PortInfo> = ports
         .into_iter()
         .map(|port| {
-            let (description, manufacturer) = resolve_port_info(&port, &win_info);
+            let resolved = resolve_port_info(&port, &win_info);
 
             let is_at_port = is_at_port(
                 &port.port_name,
-                &description.as_ref(),
-                &manufacturer.as_ref(),
+                &resolved.description.as_ref(),
+                &resolved.manufacturer.as_ref(),
             );
 
-            let display_name =
-                build_display_name(&port.port_name, &description, &manufacturer, is_at_port);
+            let display_name = build_display_name(
+                &port.port_name,
+                &resolved.description,
+                &resolved.manufacturer,
+                is_at_port,
+            );
 
             modem_hal::types::PortInfo {
                 port_name: port.port_name,
-                description,
-                manufacturer,
+                description: resolved.description,
+                manufacturer: resolved.manufacturer,
+                usb_vid: resolved.usb_vid,
+                usb_pid: resolved.usb_pid,
+                detected_model: resolved.detected_model,
+                detected_chipset: resolved.detected_chipset,
                 is_at_port,
                 display_name,
             }
@@ -129,6 +218,11 @@ pub(crate) fn list_ports() -> Result<Vec<modem_hal::types::PortInfo>, String> {
         .collect();
 
     Ok(result)
+}
+
+#[tauri::command]
+pub(crate) fn list_ports() -> Result<Vec<modem_hal::types::PortInfo>, String> {
+    snapshot_ports()
 }
 
 fn build_display_name(
@@ -258,17 +352,20 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
 
     let win_info = get_windows_all_port_info();
 
-    let mut at_candidates: Vec<String> = Vec::new();
+    let mut at_candidates: Vec<(String, Option<(u16, u16)>)> = Vec::new();
 
     for port in &ports {
-        let (description, manufacturer) = resolve_port_info(port, &win_info);
+        let resolved = resolve_port_info(port, &win_info);
 
         if is_at_port(
             &port.port_name,
-            &description.as_ref(),
-            &manufacturer.as_ref(),
+            &resolved.description.as_ref(),
+            &resolved.manufacturer.as_ref(),
         ) {
-            at_candidates.push(port.port_name.clone());
+            at_candidates.push((
+                port.port_name.clone(),
+                resolved.usb_vid.zip(resolved.usb_pid),
+            ));
         }
     }
 
@@ -279,16 +376,16 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
     // 首选端口：名称或描述里带 "AT" 的串口（典型 Quectel 多口中，AT 口响应
     // `AT` 最快，诊断/NMEA 口会拖慢或失败）。stable-sort 保持同组内原有 COM 号顺序。
     at_candidates.sort_by(|a, b| {
-        let a_at = a.to_uppercase().contains("AT")
+        let a_at = a.0.to_uppercase().contains("AT")
             || win_info
-                .get(a)
-                .and_then(|(d, _)| d.as_ref())
+                .get(&a.0)
+                .and_then(|info| info.description.as_ref())
                 .map(|s| s.to_uppercase().contains("AT"))
                 .unwrap_or(false);
-        let b_at = b.to_uppercase().contains("AT")
+        let b_at = b.0.to_uppercase().contains("AT")
             || win_info
-                .get(b)
-                .and_then(|(d, _)| d.as_ref())
+                .get(&b.0)
+                .and_then(|info| info.description.as_ref())
                 .map(|s| s.to_uppercase().contains("AT"))
                 .unwrap_or(false);
         b_at.cmp(&a_at)
@@ -297,8 +394,9 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
     log::info!("AT candidates (AT-preferred): {:?}", at_candidates);
 
     let mut handles = Vec::with_capacity(at_candidates.len());
-    for port_name in &at_candidates {
+    for (port_name, usb_ids) in &at_candidates {
         let pn = port_name.clone();
+        let usb_ids = *usb_ids;
         log::info!("Probing port: {}", pn);
         handles.push(tokio::spawn(async move {
             let pn_block = pn.clone();
@@ -325,8 +423,9 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
                 },
                 move |mut transport| async move {
                     tokio::task::spawn_blocking(move || {
-                        let vendor_result = ModemFactory::create(&mut transport);
-                        Ok((transport, vendor_result))
+                        let vendor_result =
+                            ModemFactory::create_with_usb_ids(&mut transport, usb_ids);
+                        Ok((transport, usb_ids, vendor_result))
                     })
                     .await
                     .map_err(|e| {
@@ -343,6 +442,7 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
     let vendor_arc = state.vendor.clone();
     let at_log = state.at_command_log.clone();
     let connected_port_arc = state.connected_port.clone();
+    let connected_usb_ids_arc = state.connected_usb_ids.clone();
 
     for h in handles {
         let (pn, probe_result) = match h.await {
@@ -352,7 +452,7 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
                 continue;
             }
         };
-        let (transport, vendor_result) = match probe_result {
+        let (transport, usb_ids, vendor_result) = match probe_result {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("Failed to open/probe {}: {}", pn, e);
@@ -376,6 +476,9 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
                 *connected_port_arc
                     .lock()
                     .map_err(|e| format!("Lock poisoned: {}", e))? = Some(pn.clone());
+                *connected_usb_ids_arc
+                    .lock()
+                    .map_err(|e| format!("Lock poisoned: {}", e))? = usb_ids;
                 return Ok(pn);
             }
             Err(e) => {
@@ -385,7 +488,11 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
         }
     }
 
-    Err(format!("所有候选端口均无法打开: {:?}", at_candidates))
+    let attempted_ports: Vec<String> = at_candidates
+        .into_iter()
+        .map(|(port_name, _)| port_name)
+        .collect();
+    Err(format!("所有候选端口均无法打开: {:?}", attempted_ports))
 }
 
 // ── Connection management ──
@@ -399,13 +506,15 @@ pub(crate) async fn connect_serial(
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
+    let conn_usb_state = state.connected_usb_ids.clone();
     let at_log_state = state.at_command_log.clone();
 
     let port_name_clone = port_name.clone();
     tokio::task::spawn_blocking(move || {
+        let usb_ids = lookup_usb_ids_for_port(&port_name_clone);
         let mut transport =
             modem_hal::transport::SerialTransport::new(&port_name_clone, baud_rate)?;
-        let vendor = ModemFactory::create(&mut transport);
+        let vendor = ModemFactory::create_with_usb_ids(&mut transport, usb_ids);
         let id = format!("serial_{}", port_name_clone);
 
         let v = match vendor {
@@ -426,6 +535,9 @@ pub(crate) async fn connect_serial(
         *conn_port_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = Some(port_name_clone.clone());
+        *conn_usb_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = usb_ids;
         log::info!(
             "Connected to serial port {} at {} baud",
             port_name_clone,
@@ -446,6 +558,7 @@ pub(crate) async fn connect_tcp(
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
+    let conn_usb_state = state.connected_usb_ids.clone();
     let at_log_state = state.at_command_log.clone();
 
     let host_clone = host.clone();
@@ -460,6 +573,9 @@ pub(crate) async fn connect_tcp(
         };
 
         *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *conn_usb_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *transport_state
@@ -484,6 +600,7 @@ pub(crate) async fn disconnect(state: tauri::State<'_, AppState>) -> Result<Stri
     let transport = state.transport.clone();
     let vendor = state.vendor.clone();
     let connected_port = state.connected_port.clone();
+    let connected_usb_ids = state.connected_usb_ids.clone();
     let data_cid = state.data_cid.clone();
 
     tokio::task::spawn_blocking(move || {
@@ -496,6 +613,9 @@ pub(crate) async fn disconnect(state: tauri::State<'_, AppState>) -> Result<Stri
         *t = None;
         *vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *connected_port
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *connected_usb_ids
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         data_cid.store(1, Ordering::Relaxed);
@@ -619,11 +739,7 @@ pub(crate) async fn list_network_adapters() -> Result<Vec<NetworkAdapter>, Strin
                     gateway: item.gateway,
                 }]),
                 Err(e) => {
-                    log::warn!(
-                        "Failed to parse PowerShell JSON: {}, raw: {}",
-                        e,
-                        trimmed
-                    );
+                    log::warn!("Failed to parse PowerShell JSON: {}, raw: {}", e, trimmed);
                     Ok(vec![])
                 }
             }
@@ -648,6 +764,7 @@ pub(crate) async fn connect_websocket(
     let transport_state = state.transport.clone();
     let vendor_state = state.vendor.clone();
     let conn_port_state = state.connected_port.clone();
+    let conn_usb_state = state.connected_usb_ids.clone();
     let at_log_state = state.at_command_log.clone();
 
     let host_clone = host.clone();
@@ -671,6 +788,9 @@ pub(crate) async fn connect_websocket(
         };
 
         *conn_port_state
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        *conn_usb_state
             .lock()
             .map_err(|e| format!("Lock poisoned: {}", e))? = None;
         *transport_state
@@ -700,8 +820,25 @@ pub(crate) async fn connect_websocket(
 
 #[cfg(test)]
 mod tests {
+    use super::parse_vid_pid_from_identifier;
     #[cfg(target_os = "windows")]
     use super::windows_network_adapter_query_plan;
+
+    #[test]
+    fn parse_vid_pid_from_usb_hardware_id() {
+        assert_eq!(
+            parse_vid_pid_from_identifier(r"USB\VID_2C7C&PID_0900&MI_04"),
+            (Some(0x2C7C), Some(0x0900))
+        );
+        assert_eq!(
+            parse_vid_pid_from_identifier(r"usb\vid_2c7c&pid_0900"),
+            (Some(0x2C7C), Some(0x0900))
+        );
+        assert_eq!(
+            parse_vid_pid_from_identifier("ROOT\\SOMETHING"),
+            (None, None)
+        );
+    }
 
     #[cfg(target_os = "windows")]
     #[test]

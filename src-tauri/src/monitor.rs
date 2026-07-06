@@ -1,14 +1,41 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::AppState;
+use crate::{connection, AppState};
 use tauri::Emitter;
 
 #[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PortChangeEntry {
+    pub port_name: String,
+    pub timestamp: String,
+    pub usb_vid: Option<u16>,
+    pub usb_pid: Option<u16>,
+    pub detected_model: Option<String>,
+    pub detected_chipset: Option<String>,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct PortChangeEvent {
-    pub added: Vec<String>,
-    pub removed: Vec<String>,
+    pub added: Vec<PortChangeEntry>,
+    pub removed: Vec<PortChangeEntry>,
+}
+
+fn now_timestamp() -> String {
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+fn make_entry(port: &modem_hal::types::PortInfo, timestamp: &str) -> PortChangeEntry {
+    PortChangeEntry {
+        port_name: port.port_name.clone(),
+        timestamp: timestamp.to_string(),
+        usb_vid: port.usb_vid,
+        usb_pid: port.usb_pid,
+        detected_model: port.detected_model.clone(),
+        detected_chipset: port.detected_chipset.clone(),
+    }
 }
 
 pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
@@ -16,37 +43,81 @@ pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
         .name("usb-monitor".into())
         .spawn(move || loop {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let mut previous_ports: HashSet<String> = serialport::available_ports()
-                    .map(|ps| ps.into_iter().map(|p| p.port_name).collect())
-                    .unwrap_or_default();
+                let mut previous_ports: HashMap<String, modem_hal::types::PortInfo> =
+                    connection::snapshot_ports()
+                        .map(|ports| {
+                            ports
+                                .into_iter()
+                                .map(|port| (port.port_name.clone(), port))
+                                .collect()
+                        })
+                        .unwrap_or_default();
                 loop {
                     std::thread::sleep(Duration::from_secs(2));
 
-                    let ports = match serialport::available_ports() {
-                        Ok(p) => p,
-                        Err(e) => {
-                            log::warn!("[USB监控] available_ports 失败: {}", e);
-                            continue;
-                        }
-                    };
+                    let current_ports: HashMap<String, modem_hal::types::PortInfo> =
+                        match connection::snapshot_ports() {
+                            Ok(ports) => ports
+                                .into_iter()
+                                .map(|port| (port.port_name.clone(), port))
+                                .collect(),
+                            Err(e) => {
+                                log::warn!("[USB监控] snapshot_ports 失败: {}", e);
+                                continue;
+                            }
+                        };
 
-                    let current_names: HashSet<String> =
-                        ports.iter().map(|p| p.port_name.clone()).collect();
+                    let timestamp = now_timestamp();
+                    let mut added: Vec<PortChangeEntry> = current_ports
+                        .iter()
+                        .filter(|(name, _)| !previous_ports.contains_key(*name))
+                        .map(|(_, port)| make_entry(port, &timestamp))
+                        .collect();
+                    let mut removed: Vec<PortChangeEntry> = previous_ports
+                        .iter()
+                        .filter(|(name, _)| !current_ports.contains_key(*name))
+                        .map(|(_, port)| make_entry(port, &timestamp))
+                        .collect();
 
-                    let added: Vec<String> =
-                        current_names.difference(&previous_ports).cloned().collect();
-                    let removed: Vec<String> =
-                        previous_ports.difference(&current_names).cloned().collect();
-                    previous_ports = current_names;
+                    previous_ports = current_ports;
 
                     if added.is_empty() && removed.is_empty() {
                         continue;
                     }
 
+                    added.sort_by(|left, right| left.port_name.cmp(&right.port_name));
+                    removed.sort_by(|left, right| left.port_name.cmp(&right.port_name));
+
                     log::info!(
                         "[USB监控] 端口变化 — 新增: {:?}, 移除: {:?}",
-                        added,
+                        added
+                            .iter()
+                            .map(|item| format!(
+                                "{} {}:{} {}",
+                                item.port_name,
+                                item.usb_vid
+                                    .map(|value| format!("{:04X}", value))
+                                    .unwrap_or_else(|| "----".to_string()),
+                                item.usb_pid
+                                    .map(|value| format!("{:04X}", value))
+                                    .unwrap_or_else(|| "----".to_string()),
+                                item.detected_chipset.as_deref().unwrap_or("unknown")
+                            ))
+                            .collect::<Vec<_>>(),
                         removed
+                            .iter()
+                            .map(|item| format!(
+                                "{} {}:{} {}",
+                                item.port_name,
+                                item.usb_vid
+                                    .map(|value| format!("{:04X}", value))
+                                    .unwrap_or_else(|| "----".to_string()),
+                                item.usb_pid
+                                    .map(|value| format!("{:04X}", value))
+                                    .unwrap_or_else(|| "----".to_string()),
+                                item.detected_chipset.as_deref().unwrap_or("unknown")
+                            ))
+                            .collect::<Vec<_>>()
                     );
 
                     if let Err(e) = app_handle.emit(
@@ -129,16 +200,41 @@ pub(crate) fn start_connection_heartbeat(app_handle: tauri::AppHandle, state: Ap
                         continue;
                     }
 
-                    log::warn!("[心跳] 连续 {} 次失败，确认硬件断连，端口: {}", consecutive_failures, port);
+                    log::warn!(
+                        "[心跳] 连续 {} 次失败，确认硬件断连，端口: {}",
+                        consecutive_failures,
+                        port
+                    );
                     consecutive_failures = 0;
+                    let usb_ids = match state.connected_usb_ids.lock() {
+                        Ok(guard) => *guard,
+                        Err(_) => None,
+                    };
+                    let removed_entry = PortChangeEntry {
+                        port_name: port.clone(),
+                        timestamp: now_timestamp(),
+                        usb_vid: usb_ids.map(|(vid, _)| vid),
+                        usb_pid: usb_ids.map(|(_, pid)| pid),
+                        detected_model: usb_ids
+                            .and_then(|(vid, pid)| {
+                                modem_hal::ModemFactory::detect_model_from_vid_pid(vid, pid)
+                            })
+                            .map(str::to_string),
+                        detected_chipset: usb_ids
+                            .and_then(|(vid, pid)| {
+                                modem_hal::ModemFactory::detect_vendor_from_vid_pid(vid, pid)
+                            })
+                            .map(|vendor| vendor.as_str().to_string()),
+                    };
                     // Coordinate with other disconnect paths.
                     state.disconnecting.store(true, Ordering::SeqCst);
                     // Best-effort: fully tear down transport + vendor + port.
                     // We can't .await across threads, so do it inline.
-                    if let (Ok(mut tg), Ok(mut vg), Ok(mut pg)) = (
+                    if let (Ok(mut tg), Ok(mut vg), Ok(mut pg), Ok(mut ug)) = (
                         state.transport.lock(),
                         state.vendor.lock(),
                         state.connected_port.lock(),
+                        state.connected_usb_ids.lock(),
                     ) {
                         if let Some(ref mut t) = *tg {
                             t.force_shutdown();
@@ -146,6 +242,7 @@ pub(crate) fn start_connection_heartbeat(app_handle: tauri::AppHandle, state: Ap
                         *tg = None;
                         *vg = None;
                         *pg = None;
+                        *ug = None;
                     }
                     state.disconnecting.store(false, Ordering::SeqCst);
 
@@ -153,7 +250,7 @@ pub(crate) fn start_connection_heartbeat(app_handle: tauri::AppHandle, state: Ap
                         "port-changed",
                         PortChangeEvent {
                             added: vec![],
-                            removed: vec![port],
+                            removed: vec![removed_entry],
                         },
                     ) {
                         log::warn!("[心跳] 发送断连事件失败: {}", e);

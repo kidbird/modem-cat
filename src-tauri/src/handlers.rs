@@ -25,7 +25,16 @@ pub(crate) async fn get_modem_status(
 pub(crate) async fn get_hardware_info(
     state: tauri::State<'_, AppState>,
 ) -> Result<HardwareInfo, String> {
-    with_vendor!(state, |t, v| v.query_hardware_info(t))
+    let mut info = with_vendor!(state, |t, v| v.query_hardware_info(t))?;
+    if let Some((vid, pid)) = *state
+        .connected_usb_ids
+        .lock()
+        .map_err(|e| format!("Lock poisoned: {}", e))?
+    {
+        info.usb_vid = Some(vid);
+        info.usb_pid = Some(pid);
+    }
+    Ok(info)
 }
 
 #[tauri::command]
@@ -337,6 +346,46 @@ pub(crate) fn pop_at_commands(state: tauri::State<'_, AppState>) -> Result<Vec<S
         .lock()
         .map_err(|e| format!("Lock poisoned: {}", e))?;
     Ok(log.drain(..).collect())
+}
+
+/// Export the AT terminal text to a user-chosen file via a native save dialog.
+///
+/// `content` is the full terminal text assembled by the frontend from the
+/// on-screen DOM (the user's "what you see is what you export" view). This does
+/// NOT touch the backend AT ring buffer, which only holds redacted command
+/// echoes without their full responses. Default file name is `at_log.txt`,
+/// default directory is the program's own directory (`current_exe` parent).
+/// Returns `Ok(None)` when the user cancels the dialog.
+#[tauri::command]
+pub(crate) async fn export_at_log(
+    app: tauri::AppHandle,
+    content: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut builder = app
+        .dialog()
+        .file()
+        .set_file_name("at_log.txt")
+        .add_filter("文本文件", &["txt"]);
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            builder = builder.set_directory(dir);
+        }
+    }
+    builder.save_file(move |file_path| {
+        let _ = tx.send(file_path);
+    });
+
+    let Some(file_path) = rx.await.map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let path = file_path
+        .into_path()
+        .map_err(|e| format!("解析路径失败: {e}"))?;
+    std::fs::write(&path, &content).map_err(|e| format!("写入文件失败: {e}"))?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]

@@ -203,7 +203,10 @@ fn resolve_bundled_adb_path(app: &AppHandle) -> Result<PathBuf, String> {
         })
 }
 
-fn adb_start_server_plan(adb_path: &std::path::Path, adb_dir: &std::path::Path) -> ProcessLaunchPlan {
+fn adb_start_server_plan(
+    adb_path: &std::path::Path,
+    adb_dir: &std::path::Path,
+) -> ProcessLaunchPlan {
     ProcessLaunchPlan {
         program: adb_path.to_path_buf(),
         args: vec!["start-server".to_string()],
@@ -296,18 +299,8 @@ fn spawn_adb_thread(
             let stderr = child.stderr.take().ok_or("无法打开 ADB stderr")?;
 
             emit_output(&app, kind, "system", "ADB shell 已启动");
-            spawn_reader_thread(
-                app.clone(),
-                kind,
-                "stdout",
-                stdout,
-            );
-            spawn_reader_thread(
-                app.clone(),
-                kind,
-                "stderr",
-                stderr,
-            );
+            spawn_reader_thread(app.clone(), kind, "stdout", stdout);
+            spawn_reader_thread(app.clone(), kind, "stderr", stderr);
 
             loop {
                 match rx.recv_timeout(Duration::from_millis(100)) {
@@ -403,8 +396,11 @@ fn spawn_ssh_thread(
             if !session.authenticated() {
                 return Err("SSH 认证未通过".to_string());
             }
-            session.set_blocking(false);
 
+            // 建链阶段保持阻塞模式：handshake / auth / channel_session / pty / shell
+            // 都需要网络往返，阻塞模式下会自动等待，避免在非阻塞模式下返回
+            // LIBSSH2_ERROR_EAGAIN (-37 "Would block")。只有在 shell 建立之后，
+            // 进入交互式读循环时才切换到非阻塞模式（读/写路径已处理 WouldBlock）。
             let mut channel = session
                 .channel_session()
                 .map_err(|e| format!("创建 SSH channel 失败: {e}"))?;
@@ -417,6 +413,8 @@ fn spawn_ssh_thread(
             channel
                 .shell()
                 .map_err(|e| format!("启动 SSH shell 失败: {e}"))?;
+            // shell 已建立，后续交互式读写循环采用非阻塞模式轮询
+            session.set_blocking(false);
 
             emit_output(&app, kind, "system", "SSH shell 已连接");
 

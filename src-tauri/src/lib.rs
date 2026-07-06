@@ -19,6 +19,8 @@ pub struct AppState {
     /// The serial port name when connected via serial/AT (None if TCP or disconnected).
     /// Used by the USB monitor to know if the active port was unplugged.
     pub connected_port: Arc<Mutex<Option<String>>>,
+    /// USB VID/PID of the current live serial connection, if available.
+    pub connected_usb_ids: Arc<Mutex<Option<(u16, u16)>>>,
     /// Log of AT commands sent internally (not from raw AT terminal).
     /// Populated by LoggingTransport, consumed by pop_at_commands.
     pub at_command_log: Arc<Mutex<VecDeque<String>>>,
@@ -140,6 +142,7 @@ pub mod factory;
 mod handlers;
 mod monitor;
 mod mqtt;
+mod startup_diagnostics;
 
 #[cfg(test)]
 mod tests {
@@ -229,12 +232,23 @@ mod tests {
 
 // ── Timing ──
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    log::info!("Starting Modem Cat application");
+pub fn install_startup_diagnostics() {
+    startup_diagnostics::install_panic_hook();
+}
 
-    tauri::Builder::default()
+pub fn report_startup_error(error: &str) {
+    let _ = startup_diagnostics::append_startup_log(error);
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() -> Result<(), String> {
+    let log_path = startup_diagnostics::init_env_logger()?;
+    let _ = startup_diagnostics::append_runtime_layout_snapshot();
+    let _ = startup_diagnostics::append_startup_log("startup begin");
+    log::info!("Starting Modem Cat application");
+    log::info!("Startup diagnostics path: {}", log_path.display());
+
+    let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -249,6 +263,7 @@ pub fn run() {
             vendor: Arc::new(Mutex::new(None)),
             data_cid: Arc::new(AtomicI32::new(1)),
             connected_port: Arc::new(Mutex::new(None)),
+            connected_usb_ids: Arc::new(Mutex::new(None)),
             at_command_log: Arc::new(Mutex::new(VecDeque::new())),
             mqtt_task: Arc::new(Mutex::new(None)),
             disconnecting: Arc::new(AtomicBool::new(false)),
@@ -278,12 +293,14 @@ pub fn run() {
                 vendor: state.vendor.clone(),
                 data_cid: state.data_cid.clone(),
                 connected_port: state.connected_port.clone(),
+                connected_usb_ids: state.connected_usb_ids.clone(),
                 at_command_log: state.at_command_log.clone(),
                 mqtt_task: state.mqtt_task.clone(),
                 disconnecting: state.disconnecting.clone(),
                 connecting: state.connecting.clone(),
             };
             monitor::start_connection_heartbeat(app.handle().clone(), hb_state);
+            let _ = startup_diagnostics::append_startup_log("tauri setup completed");
 
             let show_item =
                 tauri::menu::MenuItemBuilder::with_id("show_window", "控制面板").build(app)?;
@@ -394,6 +411,7 @@ pub fn run() {
             handlers::set_sim_slot,
             handlers::send_raw_at,
             handlers::pop_at_commands,
+            handlers::export_at_log,
             // Cell lock / PLMN lock
             handlers::query_cell_lock,
             handlers::set_cell_lock,
@@ -432,6 +450,18 @@ pub fn run() {
                 api.prevent_close();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    match run_result {
+        Ok(()) => {
+            let _ = startup_diagnostics::append_startup_log("tauri runtime exited cleanly");
+            Ok(())
+        }
+        Err(e) => {
+            let message = format!("error while running tauri application: {e}");
+            log::error!("{}", message);
+            let _ = startup_diagnostics::append_startup_log(&message);
+            Err(message)
+        }
+    }
 }

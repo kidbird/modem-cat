@@ -1013,27 +1013,39 @@
     <!-- ══ AT 调试 ══ -->
     <div class="page" id="page-at">
       <div class="panel">
-        <div class="panel-title" data-i18n="panel_at">AT 命令终端</div>
+        <div class="panel-header">
+          <div class="panel-title" data-i18n="panel_at">AT 命令终端</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="exportAtLog()" data-i18n="btn_export_at">导出</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearTerminal()" data-i18n="btn_clear_at">清除</button>
+          </div>
+        </div>
         <div class="terminal-wrap">
           <div class="terminal" id="terminal">
             <div class="terminal-line info">› Modem Cat AT Terminal — 等待连接</div>
           </div>
           <div class="shortcut-bar">
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('ATI')">ATI</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QENG=&quot;servingcell&quot;')">AT+QENG</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+COPS?')">AT+COPS?</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGDCONT?')">AT+CGDCONT?</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CPIN?')">AT+CPIN?</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGACT?')">AT+CGACT?</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNETDEVSTATUS=1')">AT+QNETDEV</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QICSGP?')">AT+QICSGP?</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;mode_pref&quot;')">AT+QNWPREFCFG=mode</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;nr5g_band&quot;')">AT+QNWPREFCFG=nr5g</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGPADDR')">AT+CGPADDR</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;mpdn_rule&quot;')">AT+QMAP=mpdn_rule</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;wwan&quot;')">AT+QMAP=wwan</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;auto_connect&quot;')">AT+QMAP=auto_connect</button>
-            <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;lanip&quot;')">AT+QMAP=lanip</button>
+            <div class="shortcut-row">
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('ATI')">ATI</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CPIN?')">AT+CPIN?</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+COPS?')">AT+COPS?</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGDCONT?')">AT+CGDCONT?</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGACT?')">AT+CGACT?</button>
+            </div>
+            <div class="shortcut-row">
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QENG=&quot;servingcell&quot;')">AT+QENG</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;mode_pref&quot;')">AT+QNWPREFCFG=mode</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNWPREFCFG=&quot;nr5g_band&quot;')">AT+QNWPREFCFG=nr5g</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QNETDEVSTATUS=1')">AT+QNETDEV</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+CGPADDR')">AT+CGPADDR</button>
+            </div>
+            <div class="shortcut-row">
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QICSGP?')">AT+QICSGP?</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;mpdn_rule&quot;')">AT+QMAP=mpdn_rule</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;wwan&quot;')">AT+QMAP=wwan</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;auto_connect&quot;')">AT+QMAP=auto_connect</button>
+              <button class="btn btn-secondary btn-sm" onclick="quickAt('AT+QMAP=&quot;lanip&quot;')">AT+QMAP=lanip</button>
+            </div>
           </div>
           <div class="terminal-input">
             <span class="terminal-prompt">›</span>
@@ -1121,6 +1133,10 @@
           <div class="info-row">
             <span class="info-label" data-i18n="label_manufacturer">生产厂家</span>
             <span class="info-value" id="hwManufacturer">--</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">USB VID/PID</span>
+            <span class="info-value" id="hwUsbVidPid">--</span>
           </div>
           <div class="info-row">
             <span class="info-label" data-i18n="label_firmware">固件版本</span>

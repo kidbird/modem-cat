@@ -645,7 +645,7 @@
       const ids = ['simStatus','regStatus','connStatus','imei','iccid',
         'operator','networkType','band','pci','cellid','arfcn','bandwidth','rsrp','rsrq','sinr','txPower','rxLevel','cqi','scs',
         'ant0','ant1','ant2','ant3','ulBandwidth','dlBandwidth','ulTraffic','dlTraffic',
-        'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp',
+        'hwModel','hwManufacturer','hwFirmware','hwApBaseline','hwCpBaseline','hwSocTemp','hwPaTemp','hwSn','hwUsbVidPid',
         'ipv4Addr','ipv4Mask','ipv4Gw','ipv4Dns','ipv6Addr','ipv6Dns'];
       ids.forEach(id => {
         const el = document.getElementById(id);
@@ -675,6 +675,40 @@
       if (!el) return;
       el.textContent = val;
       el.className = (val && val !== '--' && val !== '') ? 'info-value data' : 'info-value muted';
+    }
+
+    function formatUsbHex(value) {
+      if (value === null || value === undefined || Number.isNaN(Number(value))) return '----';
+      return '0x' + Number(value).toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function formatUsbVidPid(vid, pid) {
+      if (vid === null || vid === undefined || pid === null || pid === undefined) return '--';
+      return `${formatUsbHex(vid)} / ${formatUsbHex(pid)}`;
+    }
+
+    function normalizePortChangeEntries(entries) {
+      return Array.isArray(entries)
+        ? entries.map(entry => typeof entry === 'string' ? { portName: entry } : (entry || {}))
+        : [];
+    }
+
+    function summarizePortChangeEntry(entry) {
+      const portName = entry.portName || '--';
+      const usbVidPid = formatUsbVidPid(entry.usbVid, entry.usbPid);
+      const chipset = entry.detectedChipset ? String(entry.detectedChipset).toUpperCase() : '';
+      const model = entry.detectedModel || '';
+      const extra = [usbVidPid !== '--' ? usbVidPid : '', chipset, model]
+        .filter(Boolean)
+        .join(', ');
+      return extra ? `${portName} (${extra})` : portName;
+    }
+
+    function logPortChangeEntries(actionText, entries, lineType) {
+      normalizePortChangeEntries(entries).forEach(entry => {
+        const timestamp = entry.timestamp || new Date().toLocaleString();
+        addTerminalLine(`[USB] ${timestamp} ${actionText}: ${summarizePortChangeEntry(entry)}`, lineType);
+      });
     }
 
     // ── AT Terminal ──
@@ -751,6 +785,22 @@
 
     function clearTerminal() {
       $.terminal.innerHTML = '';
+    }
+
+    async function exportAtLog() {
+      const lines = Array.from($.terminal.children).map(el => el.textContent || '');
+      const content = lines.join('\n');
+      if (!content.trim()) {
+        addTerminalLine('[导出] 终端为空，无内容可导出', 'info');
+        return;
+      }
+      try {
+        const saved = await invoke('export_at_log', { content });
+        if (saved) addTerminalLine('[导出] 已保存到 ' + saved, 'ok');
+        else addTerminalLine('[导出] 已取消', 'info');
+      } catch (e) {
+        addTerminalLine('[导出] 失败: ' + (e.message || String(e)), 'err');
+      }
     }
 
     // ── 蜂窝网络 Tab 切换 ──
@@ -2015,6 +2065,7 @@
         const hw = await invoke('get_hardware_info');
         setTextData('hwModel', hw.model || '--');
         setTextData('hwManufacturer', hw.manufacturer || '--');
+        setTextData('hwUsbVidPid', formatUsbVidPid(hw.usbVid, hw.usbPid));
         setTextData('hwFirmware', hw.firmware || '--');
         setTextData('hwApBaseline', hw.apBaseline || '--');
         setTextData('hwCpBaseline', hw.cpBaseline || '--');
@@ -2454,17 +2505,26 @@
         return;
       }
       listen('port-changed', (event) => {
-        const { added, removed } = event.payload;
+        const added = normalizePortChangeEntries(event.payload?.added);
+        const removed = normalizePortChangeEntries(event.payload?.removed);
+        const removedNames = removed.map(item => item.portName).filter(Boolean);
 
         // Connected port was physically removed → force disconnect.
         // Match by exact name OR by basename (handles /dev/ttyUSB0 vs ttyUSB0
         // discrepancies across serialport versions / ASR platforms).
         const portBasename = state.connectedPort ? state.connectedPort.replace(/^.*[\\/]/, '') : '';
-        const removedBasenames = removed.map(r => r.replace(/^.*[\\/]/, ''));
+        const removedBasenames = removedNames.map(r => r.replace(/^.*[\\/]/, ''));
         const portRemoved = state.connected && state.connectedPort && (
-          removed.includes(state.connectedPort) ||
+          removedNames.includes(state.connectedPort) ||
           removedBasenames.includes(portBasename)
         );
+
+        if (added.length > 0) {
+          logPortChangeEntries('插入', added, 'info');
+        }
+        if (removed.length > 0) {
+          logPortChangeEntries('拔出', removed, 'warn');
+        }
 
         if (portRemoved) {
           console.log('[USB] Connected port removed, disconnecting');

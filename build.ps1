@@ -2,10 +2,10 @@
 # 入口脚本, 取代 build.bat 让脚本也能在 PowerShell 环境下直接运行
 #
 # 产出 (全部在 dist/ 根目录):
-#   dist\Modem Cat_<ver>_webview_*.msi/.exe        (Webview 安装包)
-#   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (无 Webview 安装包)
-#   dist\ModemCat_v<ver>_portable.zip               (完整便携包, 含 fixed WebView2)
-#   dist\ModemCat_v<ver>_portable-lite.zip          (轻量便携包, 依赖系统 WebView2)
+#   dist\Modem Cat_<ver>_webview_*.msi/.exe        (embedBootstrapper 安装包)
+#   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (skip WebView2 安装包)
+#   dist\ModemCat_v<ver>_portable.zip              (便携包, 依赖系统 WebView2)
+#   dist\ModemCat_v<ver>_portable-lite.zip         (兼容别名, 当前同样依赖系统 WebView2)
 #   dist\modem-cat.exe                              (便携版主程序)
 #   dist\r26-cli-x86_64-pc-windows-msvc.exe         (固件下载 sidecar)
 #   dist\vcruntime140.dll                           (r26 sidecar 的 x86 VC 运行库)
@@ -17,34 +17,6 @@ param(
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 Push-Location $root
-
-function Get-NonEmptyDirectory([string]$Path) {
-    if (-not (Test-Path $Path)) {
-        return $false
-    }
-    return ((Get-ChildItem $Path -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
-}
-
-function Sync-Webview2Runtime {
-    $stagedRuntime = Join-Path $root "src-tauri\webview2-runtime"
-    $legacyRuntime = Join-Path $root "webview2-runtime"
-
-    if (Get-NonEmptyDirectory $stagedRuntime) {
-        return $stagedRuntime
-    }
-
-    if (Get-NonEmptyDirectory $legacyRuntime) {
-        if (Test-Path $stagedRuntime) {
-            Remove-Item -LiteralPath $stagedRuntime -Recurse -Force
-        }
-        New-Item -ItemType Directory -Path $stagedRuntime -Force | Out-Null
-        Copy-Item -Path (Join-Path $legacyRuntime "*") -Destination $stagedRuntime -Recurse -Force
-        Write-Host "       staged fixed WebView2 runtime from legacy root cache"
-        return $stagedRuntime
-    }
-
-    throw "fixed WebView2 runtime not found. Expected src-tauri\\webview2-runtime or legacy webview2-runtime. Run scripts\\setup-webview2.ps1 first."
-}
 
 function Find-R26RuntimeDll {
     $exactCandidates = @(
@@ -175,10 +147,9 @@ if ($vcvars) {
 }
 Write-Host ""
 
-# ── 2. Webview installer ───────────────────────────────
-Write-Host "[2/6] Webview installer (offline WebView2 bundle)..."
+# ── 2. Installer (embed bootstrapper) ─────────────────
+Write-Host "[2/6] Installer build (embed WebView2 bootstrapper)..."
 $tauriCli = $null
-$stagedWebview2 = $null
 $stagedR26Runtime = $null
 try { $tauriCli = (Get-Command "cargo-tauri" -ErrorAction SilentlyContinue) ; if (-not $tauriCli) { cargo tauri --version | Out-Null } } catch {}
 $tauriOk = $LASTEXITCODE -eq 0
@@ -186,16 +157,14 @@ if (-not $tauriOk) {
     Write-Host "       SKIP - tauri-cli not installed"
     Write-Host "       To install: cargo install tauri-cli --version ^2 --locked"
 } else {
-    $stagedWebview2 = Sync-Webview2Runtime
     $stagedR26Runtime = Sync-R26Runtime
-    Write-Host "       using fixed runtime: $stagedWebview2"
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\scripts\build-helper.ps1" -Variant webview
     if ($LASTEXITCODE -ne 0) { throw "webview installer build failed (exit $LASTEXITCODE)" }
 }
 Write-Host ""
 
 # ── 3. No-webview installer ────────────────────────────
-Write-Host "[3/6] No-webview installer (online WebView2 download)..."
+Write-Host "[3/6] Installer build (skip WebView2 bootstrapper)..."
 if ($vcvars) {
     & powershell -NoProfile -ExecutionPolicy Bypass -File "$root\scripts\build-helper.ps1" -Variant nowebview
     if ($LASTEXITCODE -ne 0) { throw "no-webview installer build failed (exit $LASTEXITCODE)" }
@@ -216,18 +185,12 @@ $ver = $cfg.version
 $distDir = Join-Path $root "dist"
 if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir | Out-Null }
 Remove-StaleDistArtifacts -DistDir $distDir -Version $ver
-if (-not $stagedWebview2) {
-    $stagedWebview2 = Sync-Webview2Runtime
-}
 if (-not $stagedR26Runtime) {
     $stagedR26Runtime = Sync-R26Runtime
 }
 
 Copy-Item -LiteralPath "$root\target\release\modem-cat.exe" -Destination (Join-Path $distDir "modem-cat.exe") -Force
 Write-Host "       dist\modem-cat.exe"
-$distRuntimeDir = Join-Path $distDir "webview2-runtime"
-Copy-Item -LiteralPath $stagedWebview2 -Destination $distRuntimeDir -Recurse -Force
-Write-Host "       dist\webview2-runtime\"
 
 # Sidecar must keep its target-triple suffix
 $sidecarSrc = Join-Path $root "src-tauri\binaries\r26-cli-x86_64-pc-windows-msvc.exe"
@@ -260,9 +223,6 @@ Write-Host "[5/6] Portable ZIPs..."
 if ($Quick) {
     Write-Host "       SKIP - Quick mode"
 } else {
-    if (-not $stagedWebview2) {
-        $stagedWebview2 = Sync-Webview2Runtime
-    }
     $pFull = Join-Path $env:TEMP "mc-pfull"
     $pLite = Join-Path $env:TEMP "mc-plite"
     foreach ($d in @($pFull, $pLite)) {
@@ -277,7 +237,6 @@ if ($Quick) {
             Copy-Item $src $pLite -Force
         }
     }
-    Copy-Item -LiteralPath $stagedWebview2 -Destination (Join-Path $pFull "webview2-runtime") -Recurse -Force
 
     $zipFull = Join-Path $distDir "ModemCat_v${ver}_portable.zip"
     $zipLite = Join-Path $distDir "ModemCat_v${ver}_portable-lite.zip"

@@ -4,10 +4,10 @@
 #   powershell -NoProfile -File scripts\build-helper.ps1 -Variant nowebview
 #
 # 行为:
-#   - Variant=webview:  使用 tauri.conf.json 原始 (fixedRuntime)，包含完整 WebView2
+#   - Variant=webview:  使用 tauri.conf.json 原始 (embedBootstrapper)
 #   - Variant=nowebview: 在临时目录生成 tauri.nowebview.conf.json (skip)
 #     因为 Tauri 2 schema 不支持 `extends`, 必须完整覆盖
-#   - 预置 WebView2 缓存：从 %LOCALAPPDATA%\tauri 复制已缓存的安装包，避免重复下载
+#   - 预置 WebView2 bootstrapper 缓存：从 %LOCALAPPDATA%\tauri 复制已缓存文件，避免重复下载
 #   - 运行 cargo tauri build
 #   - 把生成的 msi / nsis exe 改名带 _<variant>_x64_ 后缀, 复制到 dist/
 #   - 不再修改任何源码或配置, 纯产物处理
@@ -21,34 +21,6 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
-
-function Get-NonEmptyDirectory([string]$Path) {
-    if (-not (Test-Path $Path)) {
-        return $false
-    }
-    return ((Get-ChildItem $Path -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
-}
-
-function Sync-Webview2Runtime {
-    $stagedRuntime = Join-Path $root "src-tauri\webview2-runtime"
-    $legacyRuntime = Join-Path $root "webview2-runtime"
-
-    if (Get-NonEmptyDirectory $stagedRuntime) {
-        return $stagedRuntime
-    }
-
-    if (Get-NonEmptyDirectory $legacyRuntime) {
-        if (Test-Path $stagedRuntime) {
-            Remove-Item -LiteralPath $stagedRuntime -Recurse -Force
-        }
-        New-Item -ItemType Directory -Path $stagedRuntime -Force | Out-Null
-        Copy-Item -Path (Join-Path $legacyRuntime "*") -Destination $stagedRuntime -Recurse -Force
-        Write-Host "  staged fixed WebView2 runtime from legacy root cache"
-        return $stagedRuntime
-    }
-
-    throw "fixed WebView2 runtime not found. Expected src-tauri\\webview2-runtime or legacy webview2-runtime. Run scripts\\setup-webview2.ps1 first."
-}
 
 function Find-R26RuntimeDll {
     $exactCandidates = @(
@@ -122,46 +94,15 @@ try {
         Set-Content -LiteralPath $tempCfg -Value $tempContent -Encoding UTF8
         $activeCfg = $tempCfg
         Write-Host "  generated temp config: $tempCfg  (webviewInstallMode=skip, path=null)"
-    } else {
-        $stagedRuntime = Sync-Webview2Runtime
-        Write-Host "  using fixed runtime: $stagedRuntime"
     }
     $stagedR26Runtime = Sync-R26Runtime
     Write-Host "  using r26 runtime: $stagedR26Runtime"
 
-    # 4. 预置 WebView2 缓存（避免重复下载）
+    # 4. 预置 WebView2 bootstrapper 缓存（避免重复下载）
     $wixDir = Join-Path $root "target\release\wix\x64"
     if (-not (Test-Path $wixDir)) { New-Item -ItemType Directory -Path $wixDir -Force | Out-Null }
     
     if ($Variant -eq "webview") {
-        # offlineInstaller 模式：需要复制到 <GUID> 子目录
-        # 从缓存中找一个已有的 installer
-        $cacheDir = Join-Path $env:LOCALAPPDATA "tauri\x64"
-        $cachedInstaller = $null
-        if (Test-Path $cacheDir) {
-            foreach ($guidDir in (Get-ChildItem $cacheDir -Directory -ErrorAction SilentlyContinue)) {
-                $installer = Join-Path $guidDir.FullName "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
-                if (Test-Path $installer) {
-                    $cachedInstaller = $installer
-                    $guid = $guidDir.Name
-                    break
-                }
-            }
-        }
-        
-        if ($cachedInstaller) {
-            $destInstallerDir = Join-Path $wixDir "x64\$guid"
-            if (-not (Test-Path $destInstallerDir)) { New-Item -ItemType Directory -Path $destInstallerDir -Force | Out-Null }
-            $destInstaller = Join-Path $destInstallerDir "MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
-            if (-not (Test-Path $destInstaller)) {
-                Copy-Item -LiteralPath $cachedInstaller -Destination $destInstaller -Force
-                Write-Host "  pre-cached WebView2 offline installer from $guid"
-            }
-        } else {
-            Write-Warning "  no cached WebView2 installer found in $cacheDir - will attempt download"
-        }
-    } else {
-        # downloadBootstrapper 模式：检查 bootstrapper 缓存
         $bootstrapperCache = Join-Path $wixDir "MicrosoftEdgeWebview2Setup.exe"
         if (-not (Test-Path $bootstrapperCache)) {
             # 尝试从 %LOCALAPPDATA%\tauri 查找
@@ -170,6 +111,8 @@ try {
             if ($cachedBootstrapper) {
                 Copy-Item -LiteralPath $cachedBootstrapper.FullName -Destination $bootstrapperCache -Force
                 Write-Host "  pre-cached WebView2 bootstrapper"
+            } else {
+                Write-Warning "  no cached WebView2 bootstrapper found in $tauriCache - will allow tauri-cli to fetch it"
             }
         }
     }
@@ -181,7 +124,7 @@ try {
             Write-Host "  running: cargo tauri build --config $activeCfg"
             cargo tauri build --config $activeCfg
         } else {
-            Write-Host "  running: cargo tauri build  (default = with webview)"
+            Write-Host "  running: cargo tauri build  (default = embedBootstrapper)"
             cargo tauri build
         }
         if ($LASTEXITCODE -ne 0) {

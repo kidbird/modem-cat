@@ -63,6 +63,65 @@ fn query_required_qcfg_usbcfg_adb(t: &mut dyn AtTransport) -> Result<bool, Strin
         .ok_or_else(|| format!("Failed to parse live usbcfg state from {}", response.trim()))
 }
 
+fn parse_qcfg_values(response: &str, key: &str) -> Option<Vec<String>> {
+    let prefix = format!(r#"+QCFG: "{}","#, key);
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix(&prefix) {
+            return Some(
+                rest.split(',')
+                    .map(|part| part.trim().trim_matches('"').to_string())
+                    .collect(),
+            );
+        }
+    }
+    None
+}
+
+fn parse_cfun_mode(response: &str) -> Option<i32> {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix("+CFUN:") {
+            return rest.trim().parse::<i32>().ok();
+        }
+    }
+    None
+}
+
+fn parse_qmap_lanip(response: &str) -> Option<LanConfig> {
+    for line in extract_data_lines(response) {
+        if let Some(rest) = line.strip_prefix(r#"+QMAP: "LANIP","#) {
+            let parts: Vec<String> = rest.split(',').map(|part| part.trim().to_string()).collect();
+            if parts.len() >= 3 {
+                return Some(LanConfig {
+                    gateway: parts[2].clone(),
+                    netmask: None,
+                    dhcp_start: parts[0].clone(),
+                    dhcp_end: parts[1].clone(),
+                });
+            }
+        }
+    }
+    None
+}
+
+fn parse_qcfg_lan_config(response: &str, key: &str) -> Option<LanConfig> {
+    let parts = parse_qcfg_values(response, key)?;
+    match parts.as_slice() {
+        [gateway, netmask, dhcp_start, dhcp_end, ..] => Some(LanConfig {
+            gateway: gateway.clone(),
+            netmask: Some(netmask.clone()),
+            dhcp_start: dhcp_start.clone(),
+            dhcp_end: dhcp_end.clone(),
+        }),
+        [gateway, dhcp_start, dhcp_end, ..] => Some(LanConfig {
+            gateway: gateway.clone(),
+            netmask: None,
+            dhcp_start: dhcp_start.clone(),
+            dhcp_end: dhcp_end.clone(),
+        }),
+        _ => None,
+    }
+}
+
 /// Parse `AT+QNWLOCK` or `AT+QNWLOCKFREQ` response.
 /// Returns (arfcn, pci) pairs for each active lock entry.
 fn parse_qnwlock_response(resp: &str, prefix: &str) -> Vec<(String, String)> {
@@ -834,6 +893,124 @@ impl ModemVendor for QuectelModem {
         Ok(())
     }
 
+    fn query_ims_enabled(&mut self, t: &mut dyn AtTransport) -> Result<bool, String> {
+        let response = send_and_delay(t, r#"AT+QCFG="ims""#)?;
+        let values = parse_qcfg_values(&response, "ims")
+            .ok_or_else(|| format!("Failed to parse live ims state from {}", response.trim()))?;
+        let enabled = match self.chip {
+            QuectelChip::Qualcomm => values.get(1),
+            QuectelChip::UniSoc => values.first(),
+        }
+        .ok_or_else(|| format!("Failed to parse live ims state from {}", response.trim()))?;
+        match enabled.as_str() {
+            "0" => Ok(false),
+            "1" => Ok(true),
+            _ => Err(format!("Failed to parse live ims state from {}", response.trim())),
+        }
+    }
+
+    fn set_ims_enabled(
+        &mut self,
+        t: &mut dyn AtTransport,
+        enabled: bool,
+    ) -> Result<(), String> {
+        let command = match self.chip {
+            QuectelChip::Qualcomm => {
+                if enabled {
+                    r#"AT+QCFG="ims",1,1"#.to_string()
+                } else {
+                    r#"AT+QCFG="ims",2,0"#.to_string()
+                }
+            }
+            QuectelChip::UniSoc => format!(r#"AT+QCFG="ims",{}"#, if enabled { 1 } else { 0 }),
+        };
+        send_and_check(t, &command)?;
+        Ok(())
+    }
+
+    fn query_cfun_mode(&mut self, t: &mut dyn AtTransport) -> Result<i32, String> {
+        let response = send_and_delay(t, "AT+CFUN?")?;
+        parse_cfun_mode(&response)
+            .ok_or_else(|| format!("Failed to parse live CFUN state from {}", response.trim()))
+    }
+
+    fn set_mtu(&mut self, t: &mut dyn AtTransport, value: i32) -> Result<(), String> {
+        send_and_check(t, &format!(r#"AT+QCFG="mtu",{}"#, value))?;
+        Ok(())
+    }
+
+    fn query_lan_config(&mut self, t: &mut dyn AtTransport) -> Result<LanConfig, String> {
+        let is_asr = self.model.to_uppercase().contains("RG255");
+        if matches!(self.chip, QuectelChip::Qualcomm) {
+            let response = send_and_delay(t, r#"AT+QMAP="LANIP""#)?;
+            return parse_qmap_lanip(&response)
+                .ok_or_else(|| format!("Failed to parse live LAN state from {}", response.trim()));
+        }
+
+        let (command, key) = if is_asr {
+            (r#"AT+QCFG="lanip""#, "lanip")
+        } else {
+            (r#"AT+QCFG="lanip_ex""#, "lanip_ex")
+        };
+        let response = send_and_delay(t, command)?;
+        parse_qcfg_lan_config(&response, key)
+            .ok_or_else(|| format!("Failed to parse live LAN state from {}", response.trim()))
+    }
+
+    fn set_lan_config(
+        &mut self,
+        t: &mut dyn AtTransport,
+        config: &LanConfig,
+    ) -> Result<(), String> {
+        let is_asr = self.model.to_uppercase().contains("RG255");
+        let command = match self.chip {
+            QuectelChip::Qualcomm => format!(
+                r#"AT+QMAP="LANIP",{},{},{}"#,
+                config.dhcp_start, config.dhcp_end, config.gateway
+            ),
+            QuectelChip::UniSoc if is_asr => match config.netmask.as_deref() {
+                Some(netmask) if !netmask.is_empty() => format!(
+                    r#"AT+QCFG="lanip","{}","{}","{}","{}""#,
+                    config.gateway, netmask, config.dhcp_start, config.dhcp_end
+                ),
+                _ => format!(
+                    r#"AT+QCFG="lanip","{}","{}","{}""#,
+                    config.gateway, config.dhcp_start, config.dhcp_end
+                ),
+            },
+            QuectelChip::UniSoc => match config.netmask.as_deref() {
+                Some(netmask) if !netmask.is_empty() => format!(
+                    r#"AT+QCFG="lanip_ex","{}","{}","{}","{}""#,
+                    config.gateway, netmask, config.dhcp_start, config.dhcp_end
+                ),
+                _ => format!(
+                    r#"AT+QCFG="lanip_ex","{}","{}","{}""#,
+                    config.gateway, config.dhcp_start, config.dhcp_end
+                ),
+            },
+        };
+        send_and_check(t, &command)?;
+        Ok(())
+    }
+
+    fn set_dmz(&mut self, t: &mut dyn AtTransport, ip: &str) -> Result<(), String> {
+        let command = match self.chip {
+            QuectelChip::Qualcomm => format!(r#"AT+QMAP="DMZ",1,4,"{}""#, ip),
+            QuectelChip::UniSoc => format!("AT+QDMZ=1,4,{}", ip),
+        };
+        send_and_check(t, &command)?;
+        Ok(())
+    }
+
+    fn clear_dmz(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
+        let command = match self.chip {
+            QuectelChip::Qualcomm => r#"AT+QMAP="DMZ",0,4"#,
+            QuectelChip::UniSoc => "AT+QDMZ=0,4",
+        };
+        send_and_check(t, command)?;
+        Ok(())
+    }
+
     fn query_qualcomm_config(&mut self, t: &mut dyn AtTransport) -> Result<QualcommConfig, String> {
         if matches!(self.chip, QuectelChip::UniSoc) {
             return Err("query_qualcomm_config not supported on UniSoc platform".to_string());
@@ -1437,6 +1614,164 @@ mod tests {
                 "AT+QCFG=\"usbcfg\",0x2C7C,0x600C,1,1,1,1,1,1,0",
             ]
         );
+    }
+
+    #[test]
+    fn query_ims_enabled_qualcomm_uses_dedicated_query() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec!["+QCFG: \"ims\",1,1\r\nOK"]);
+
+        let enabled = modem
+            .query_ims_enabled(&mut transport)
+            .expect("Qualcomm IMS query should succeed");
+
+        assert!(enabled);
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="ims""#]);
+    }
+
+    #[test]
+    fn query_ims_enabled_unisoc_uses_dedicated_query() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["+QCFG: \"ims\",0\r\nOK"]);
+
+        let enabled = modem
+            .query_ims_enabled(&mut transport)
+            .expect("UniSoc IMS query should succeed");
+
+        assert!(!enabled);
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="ims""#]);
+    }
+
+    #[test]
+    fn set_ims_enabled_qualcomm_uses_platform_command() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_ims_enabled(&mut transport, true)
+            .expect("set IMS should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="ims",1,1"#]);
+    }
+
+    #[test]
+    fn set_ims_enabled_unisoc_uses_platform_command() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_ims_enabled(&mut transport, false)
+            .expect("set IMS should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="ims",0"#]);
+    }
+
+    #[test]
+    fn query_cfun_mode_uses_dedicated_query() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec!["+CFUN: 1\r\nOK"]);
+
+        let mode = modem
+            .query_cfun_mode(&mut transport)
+            .expect("CFUN query should succeed");
+
+        assert_eq!(mode, 1);
+        assert_eq!(transport.sent, vec!["AT+CFUN?"]);
+    }
+
+    #[test]
+    fn set_mtu_uses_dedicated_command() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_mtu(&mut transport, 1500)
+            .expect("MTU set should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="mtu",1500"#]);
+    }
+
+    #[test]
+    fn query_lan_config_qualcomm_parses_qmap() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+QMAP: \"LANIP\",192.168.8.2,192.168.8.254,192.168.8.1\r\nOK",
+        ]);
+
+        let config = modem
+            .query_lan_config(&mut transport)
+            .expect("LAN query should succeed");
+
+        assert_eq!(config.gateway, "192.168.8.1");
+        assert_eq!(config.netmask, None);
+        assert_eq!(config.dhcp_start, "192.168.8.2");
+        assert_eq!(config.dhcp_end, "192.168.8.254");
+        assert_eq!(transport.sent, vec![r#"AT+QMAP="LANIP""#]);
+    }
+
+    #[test]
+    fn query_lan_config_unisoc_parses_qcfg() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec![
+            "+QCFG: \"lanip_ex\",\"192.168.42.1\",\"255.255.255.0\",\"192.168.42.2\",\"192.168.42.254\"\r\nOK",
+        ]);
+
+        let config = modem
+            .query_lan_config(&mut transport)
+            .expect("LAN query should succeed");
+
+        assert_eq!(config.gateway, "192.168.42.1");
+        assert_eq!(config.netmask.as_deref(), Some("255.255.255.0"));
+        assert_eq!(config.dhcp_start, "192.168.42.2");
+        assert_eq!(config.dhcp_end, "192.168.42.254");
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="lanip_ex""#]);
+    }
+
+    #[test]
+    fn set_lan_config_asr_uses_lanip_command() {
+        let mut modem = QuectelModem::unisoc("RG255AA".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_lan_config(
+                &mut transport,
+                &LanConfig {
+                    gateway: "192.168.50.1".to_string(),
+                    netmask: Some("255.255.255.0".to_string()),
+                    dhcp_start: "192.168.50.2".to_string(),
+                    dhcp_end: "192.168.50.200".to_string(),
+                },
+            )
+            .expect("LAN config set should succeed");
+
+        assert_eq!(
+            transport.sent,
+            vec![r#"AT+QCFG="lanip","192.168.50.1","255.255.255.0","192.168.50.2","192.168.50.200""#]
+        );
+    }
+
+    #[test]
+    fn set_dmz_qualcomm_uses_qmap() {
+        let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_dmz(&mut transport, "192.168.8.100")
+            .expect("DMZ set should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QMAP="DMZ",1,4,"192.168.8.100""#]);
+    }
+
+    #[test]
+    fn clear_dmz_unisoc_uses_qdmz() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .clear_dmz(&mut transport)
+            .expect("DMZ clear should succeed");
+
+        assert_eq!(transport.sent, vec!["AT+QDMZ=0,4"]);
     }
 
     #[test]

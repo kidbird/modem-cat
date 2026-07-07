@@ -1,5 +1,6 @@
 use modem_hal::types::*;
 use modem_hal::{validate_at_string, validate_cid, validate_raw_at_command};
+use std::net::Ipv4Addr;
 use std::sync::atomic::Ordering;
 
 use crate::{mqtt, AppState};
@@ -10,6 +11,14 @@ fn current_data_cid(
     let cid = data_cid.load(Ordering::Relaxed);
     validate_cid(cid)?;
     Ok(cid)
+}
+
+fn parse_ipv4_field(value: &str, field: &str) -> Result<String, String> {
+    validate_at_string(value)?;
+    value
+        .parse::<Ipv4Addr>()
+        .map(|addr| addr.to_string())
+        .map_err(|_| format!("Invalid {} IPv4 address: {}", field, value))
 }
 
 // ── High-level modem queries ──
@@ -26,11 +35,13 @@ pub(crate) async fn get_hardware_info(
     state: tauri::State<'_, AppState>,
 ) -> Result<HardwareInfo, String> {
     let mut info = with_vendor!(state, |t, v| v.query_hardware_info(t))?;
-    if let Some((vid, pid)) = *state
+    let stored_ids = *state
         .connected_usb_ids
         .lock()
-        .map_err(|e| format!("Lock poisoned: {}", e))?
-    {
+        .map_err(|e| format!("Lock poisoned: {}", e))?;
+
+    let resolved_ids = stored_ids.or(info.usb_vid.zip(info.usb_pid));
+    if let Some((vid, pid)) = resolved_ids {
         info.usb_vid = Some(vid);
         info.usb_pid = Some(pid);
     }
@@ -70,6 +81,79 @@ pub(crate) async fn get_qos_info(state: tauri::State<'_, AppState>) -> Result<Qo
 #[tauri::command]
 pub(crate) async fn get_network_mode(state: tauri::State<'_, AppState>) -> Result<String, String> {
     with_vendor!(state, |t, v| v.query_network_mode(t))
+}
+
+#[tauri::command]
+pub(crate) async fn get_ims_enabled(state: tauri::State<'_, AppState>) -> Result<bool, String> {
+    with_vendor!(state, |t, v| v.query_ims_enabled(t))
+}
+
+#[tauri::command]
+pub(crate) async fn set_ims_enabled(
+    enabled: bool,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    with_vendor!(state, |t, v| v.set_ims_enabled(t, enabled))
+}
+
+#[tauri::command]
+pub(crate) async fn get_cfun_mode(state: tauri::State<'_, AppState>) -> Result<i32, String> {
+    with_vendor!(state, |t, v| v.query_cfun_mode(t))
+}
+
+#[tauri::command]
+pub(crate) async fn set_mtu(value: i32, state: tauri::State<'_, AppState>) -> Result<(), String> {
+    if !(576..=9000).contains(&value) {
+        return Err(format!("Invalid MTU {}: must be between 576 and 9000", value));
+    }
+    with_vendor!(state, |t, v| v.set_mtu(t, value))
+}
+
+#[tauri::command]
+pub(crate) async fn get_lan_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<LanConfig, String> {
+    with_vendor!(state, |t, v| v.query_lan_config(t))
+}
+
+#[tauri::command]
+pub(crate) async fn set_lan_config(
+    gateway: String,
+    netmask: Option<String>,
+    dhcp_start: String,
+    dhcp_end: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let gateway = parse_ipv4_field(&gateway, "gateway")?;
+    let dhcp_start = parse_ipv4_field(&dhcp_start, "DHCP start")?;
+    let dhcp_end = parse_ipv4_field(&dhcp_end, "DHCP end")?;
+    let netmask = match netmask {
+        Some(mask) if !mask.trim().is_empty() => Some(parse_ipv4_field(mask.trim(), "netmask")?),
+        _ => None,
+    };
+    with_vendor!(state, |t, v| v.set_lan_config(
+        t,
+        &LanConfig {
+            gateway,
+            netmask,
+            dhcp_start,
+            dhcp_end,
+        }
+    ))
+}
+
+#[tauri::command]
+pub(crate) async fn set_dmz(
+    ip: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let ip = parse_ipv4_field(&ip, "DMZ host")?;
+    with_vendor!(state, |t, v| v.set_dmz(t, &ip))
+}
+
+#[tauri::command]
+pub(crate) async fn clear_dmz(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    with_vendor!(state, |t, v| v.clear_dmz(t))
 }
 
 // ── Write operations ──

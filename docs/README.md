@@ -33,14 +33,14 @@
 
 | 产物 | 路径模式 | 使用场景 |
 |---|---|---|
-| 轻量免安装包 | `dist/ModemCat_vX.Y.Z_portable-lite.zip` | 目标 Windows 机器已安装系统 WebView2，想优先减小下载体积 |
-| 完整免安装包 | `dist/ModemCat_vX.Y.Z_portable.zip` | 目标机器可能没有 WebView2，需要离线直接运行 |
-| NSIS 安装包 | `dist/Modem Cat_X.Y.Z_x64-setup.exe` | 需要常规安装流程、桌面/开始菜单入口、适合普通终端用户 |
-| MSI 安装包 | `dist/Modem Cat_X.Y.Z_x64_zh-CN.msi` | 需要企业分发、统一部署或更标准的 Windows 安装介质 |
+| 便携包 | `dist/ModemCat_vX.Y.Z_portable.zip` | 已知目标 Windows 机器具备系统 WebView2，解压即用 |
+| 便携包兼容别名 | `dist/ModemCat_vX.Y.Z_portable-lite.zip` | 当前与 `portable.zip` 同内容，保留给既有分发链路 |
+| NSIS 安装包 | `dist/Modem Cat_X.Y.Z_[webview|nowebview]_x64-setup.exe` | 需要常规安装流程；`webview` 变体会在缺少运行时时拉起 bootstrapper |
+| MSI 安装包 | `dist/Modem Cat_X.Y.Z_[webview|nowebview]_x64_zh-CN.msi` | 需要企业分发、统一部署或更标准的 Windows 安装介质 |
 
 补充说明：
-轻量免安装包和完整免安装包都包含 `modem-cat.exe`、ADB 运行组件、`r26-cli` 固件 sidecar。
-两者唯一差异是完整免安装包额外包含与 `modem-cat.exe` 同层的 `webview2-runtime/`。
+两个便携 ZIP 都包含 `modem-cat.exe`、ADB 运行组件、`r26-cli` 固件 sidecar 和 `vcruntime140.dll`。
+便携包不再内置 app-local `webview2-runtime/`，默认要求目标机器已有系统 WebView2。
 详细构建方式和注意事项见 [BUILD.md](BUILD.md)。
 
 ## 文档维护原则

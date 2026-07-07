@@ -55,6 +55,7 @@ fn parse_vid_pid_from_identifier(identifier: &str) -> (Option<u16>, Option<u16>)
     )
 }
 
+
 #[cfg(target_os = "windows")]
 fn get_windows_all_port_info() -> HashMap<String, WindowsPortInfo> {
     use winreg::enums::HKEY_LOCAL_MACHINE;
@@ -98,7 +99,28 @@ fn get_windows_all_port_info() -> HashMap<String, WindowsPortInfo> {
 
                 let friendly_name: Option<String> = func_key.get_value("FriendlyName").ok();
                 let manufacturer: Option<String> = func_key.get_value("Manufacturer").ok();
-                let (usb_vid, usb_pid) = parse_vid_pid_from_identifier(&device);
+                let (mut usb_vid, mut usb_pid) = parse_vid_pid_from_identifier(&device);
+
+                // Fallback: read HardwareID multi-string value from device or func key
+                if usb_vid.is_none() || usb_pid.is_none() {
+                    let hw_ids: Option<Vec<String>> = device_key
+                        .get_value("HardwareID")
+                        .ok()
+                        .or_else(|| func_key.get_value("HardwareID").ok());
+                    if let Some(ids) = hw_ids {
+                        for hw_id in &ids {
+                            if usb_vid.is_none() || usb_pid.is_none() {
+                                let (v, p) = parse_vid_pid_from_identifier(hw_id);
+                                if usb_vid.is_none() {
+                                    usb_vid = v;
+                                }
+                                if usb_pid.is_none() {
+                                    usb_pid = p;
+                                }
+                            }
+                        }
+                    }
+                }
 
                 result.insert(
                     port_name,
@@ -135,6 +157,18 @@ fn resolve_port_info(
         manufacturer = info.manufacturer.clone();
         usb_vid = Some(info.vid);
         usb_pid = Some(info.pid);
+        log::debug!(
+            "resolve_port_info [{}]: UsbPort vid={:#04x}, pid={:#04x}",
+            port.port_name,
+            info.vid,
+            info.pid
+        );
+    } else {
+        log::debug!(
+            "resolve_port_info [{}]: not UsbPort (type={:?})",
+            port.port_name,
+            port.port_type
+        );
     }
 
     if let Some(info) = win_info.get(&port.port_name) {
@@ -146,11 +180,28 @@ fn resolve_port_info(
         }
         if usb_vid.is_none() {
             usb_vid = info.usb_vid;
+            log::debug!(
+                "resolve_port_info [{}]: registry fallback vid={:#06x?}",
+                port.port_name,
+                usb_vid
+            );
         }
         if usb_pid.is_none() {
             usb_pid = info.usb_pid;
+            log::debug!(
+                "resolve_port_info [{}]: registry fallback pid={:#06x?}",
+                port.port_name,
+                usb_pid
+            );
         }
     }
+
+    log::debug!(
+        "resolve_port_info [{}]: final vid={:#06x?}, pid={:#06x?}",
+        port.port_name,
+        usb_vid,
+        usb_pid
+    );
 
     let detected_model = usb_vid
         .zip(usb_pid)
@@ -362,10 +413,14 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
             &resolved.description.as_ref(),
             &resolved.manufacturer.as_ref(),
         ) {
-            at_candidates.push((
-                port.port_name.clone(),
-                resolved.usb_vid.zip(resolved.usb_pid),
-            ));
+            let usb_ids = resolved.usb_vid.zip(resolved.usb_pid);
+            log::debug!(
+                "auto_connect: candidate {} vid={:#06x?} pid={:#06x?}",
+                port.port_name,
+                resolved.usb_vid,
+                resolved.usb_pid
+            );
+            at_candidates.push((port.port_name.clone(), usb_ids));
         }
     }
 
@@ -476,9 +531,11 @@ pub(crate) async fn auto_connect_at(state: tauri::State<'_, AppState>) -> Result
                 *connected_port_arc
                     .lock()
                     .map_err(|e| format!("Lock poisoned: {}", e))? = Some(pn.clone());
+
                 *connected_usb_ids_arc
                     .lock()
                     .map_err(|e| format!("Lock poisoned: {}", e))? = usb_ids;
+                log::debug!("auto_connect: stored connected_usb_ids = {:?}", usb_ids);
                 return Ok(pn);
             }
             Err(e) => {
@@ -851,3 +908,4 @@ mod tests {
         assert!(plan.args.iter().any(|arg| arg.contains("Get-NetAdapter")));
     }
 }
+

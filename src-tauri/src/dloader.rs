@@ -44,7 +44,10 @@ fn resolve_sidecar_runtime_dir_from_paths_with_repo_fallback(
         let manifest_runtime_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("resources")
             .join(SIDECAR_RUNTIME_RESOURCE_DIR);
-        if !candidates.iter().any(|candidate| candidate == &manifest_runtime_dir) {
+        if !candidates
+            .iter()
+            .any(|candidate| candidate == &manifest_runtime_dir)
+        {
             candidates.push(manifest_runtime_dir);
         }
     }

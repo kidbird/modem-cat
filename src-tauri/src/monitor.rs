@@ -38,20 +38,30 @@ fn make_entry(port: &modem_hal::types::PortInfo, timestamp: &str) -> PortChangeE
     }
 }
 
+fn port_map_from_snapshot(
+    snapshot: Result<Vec<modem_hal::types::PortInfo>, String>,
+) -> Result<HashMap<String, modem_hal::types::PortInfo>, String> {
+    snapshot.map(|ports| {
+        ports
+            .into_iter()
+            .map(|port| (port.port_name.clone(), port))
+            .collect()
+    })
+}
+
 pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("usb-monitor".into())
         .spawn(move || loop {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let mut previous_ports: HashMap<String, modem_hal::types::PortInfo> =
-                    connection::snapshot_ports()
-                        .map(|ports| {
-                            ports
-                                .into_iter()
-                                .map(|port| (port.port_name.clone(), port))
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                let mut previous_ports = match port_map_from_snapshot(connection::snapshot_ports()) {
+                    Ok(ports) => ports,
+                    Err(e) => {
+                        log::warn!("[USB监控] 初始化 snapshot_ports 失败: {}", e);
+                        std::thread::sleep(Duration::from_secs(2));
+                        return;
+                    }
+                };
                 loop {
                     std::thread::sleep(Duration::from_secs(2));
 
@@ -144,6 +154,37 @@ pub(crate) fn start_port_monitor(app_handle: tauri::AppHandle) {
             }
         })
         .expect("无法创建 USB 监控线程");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::port_map_from_snapshot;
+    use modem_hal::types::PortInfo;
+
+    #[test]
+    fn port_map_from_snapshot_preserves_initial_error() {
+        let err = port_map_from_snapshot(Err("probe failed".to_string()))
+            .expect_err("initial snapshot error must not degrade to empty map");
+        assert!(err.contains("probe failed"));
+    }
+
+    #[test]
+    fn port_map_from_snapshot_keeps_ports_when_snapshot_succeeds() {
+        let ports = vec![PortInfo {
+            port_name: "COM7".to_string(),
+            description: Some("Quectel AT Port".to_string()),
+            manufacturer: Some("Quectel".to_string()),
+            usb_vid: Some(0x2C7C),
+            usb_pid: Some(0x0900),
+            detected_model: Some("RG200U/RM500U 5G".to_string()),
+            detected_chipset: Some("unisoc".to_string()),
+            is_at_port: true,
+            display_name: "Quectel AT Port (COM7) [AT]".to_string(),
+        }];
+
+        let map = port_map_from_snapshot(Ok(ports)).expect("snapshot should succeed");
+        assert!(map.contains_key("COM7"));
+    }
 }
 
 pub(crate) fn start_connection_heartbeat(app_handle: tauri::AppHandle, state: AppState) {

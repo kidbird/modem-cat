@@ -80,6 +80,15 @@ pub struct IpInfo {
     pub ipv6_dns: String,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanConfig {
+    pub gateway: String,
+    pub netmask: Option<String>,
+    pub dhcp_start: String,
+    pub dhcp_end: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ApnEntry {
@@ -256,4 +265,78 @@ pub struct TemperatureInfo {
 pub struct BaselineInfo {
     pub ap_baseline: String,
     pub cp_baseline: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Verifies that the HardwareInfo payload that get_hardware_info returns
+    /// carries USB VID/PID under camelCase keys (`usbVid`, `usbPid`) so the
+    /// frontend `formatUsbVidPid(hw.usbVid, hw.usbPid)` call in app.js reads
+    /// them correctly. If this test fails, the rename_all attribute on
+    /// HardwareInfo has been removed/changed and the 模组设置 page will show
+    /// `--` for USB VID/PID.
+    #[test]
+    fn hardware_info_json_uses_camelcase_usb_fields() {
+        let info = HardwareInfo {
+            model: "RM500U".to_string(),
+            manufacturer: "Quectel".to_string(),
+            firmware: "RM500UQDLAR02A03M4G".to_string(),
+            ap_baseline: "M4G_01".to_string(),
+            cp_baseline: "M4G_01".to_string(),
+            soc_temp: "30.0".to_string(),
+            pa_temp: "31.0".to_string(),
+            usb_vid: Some(0x2C7C),
+            usb_pid: Some(0x0900),
+            serial_number: String::new(),
+        };
+        let json = serde_json::to_string(&info).expect("serialize");
+        assert!(
+            json.contains("\"usbVid\":11388"),
+            "expected usbVid as camelCase key with decimal 0x2C7C, got: {json}"
+        );
+        assert!(
+            json.contains("\"usbPid\":2304"),
+            "expected usbPid as camelCase key with decimal 0x0900, got: {json}"
+        );
+        // Frontend decoding path: Tauri serialises back from the same
+        // HardwareInfo struct, but a round-trip through serde_json also
+        // exercises the #[serde(rename_all = "camelCase")] Deserialize impl.
+        let parsed: HardwareInfo = serde_json::from_str(&json).expect("round-trip");
+        assert_eq!(parsed.usb_vid, Some(0x2C7C));
+        assert_eq!(parsed.usb_pid, Some(0x0900));
+    }
+
+    /// The frontend can also receive HardwareInfo with USB IDs set to null
+    /// (e.g. when connected over TCP/WebSocket or when serialport failed to
+    /// resolve the port's VID/PID). Make sure the None case round-trips as
+    /// `null` and not as a missing key, otherwise the JS side would see
+    /// `undefined` and `formatUsbVidPid` would still return `--`.
+    #[test]
+    fn hardware_info_json_round_trips_null_usb_ids() {
+        let info = HardwareInfo {
+            model: "RM500U".to_string(),
+            manufacturer: "Quectel".to_string(),
+            firmware: "RM500UQDLAR02A03M4G".to_string(),
+            ap_baseline: String::new(),
+            cp_baseline: String::new(),
+            soc_temp: String::new(),
+            pa_temp: String::new(),
+            usb_vid: None,
+            usb_pid: None,
+            serial_number: String::new(),
+        };
+        let value = serde_json::to_value(&info).expect("to_value");
+        assert!(
+            value.get("usbVid").is_some(),
+            "usbVid must be present (null), not missing"
+        );
+        assert!(
+            value.get("usbPid").is_some(),
+            "usbPid must be present (null), not missing"
+        );
+        assert!(value["usbVid"].is_null());
+        assert!(value["usbPid"].is_null());
+    }
 }

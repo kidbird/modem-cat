@@ -1,6 +1,6 @@
 # 函数调用流程
 
-> 最近更新：2026-06-22（对齐 `main` 分支当前代码）
+> 最近更新：2026-07-07（对齐 `main` 分支当前代码）
 
 ## 1. 启动与初始化
 
@@ -65,7 +65,7 @@
                                       │
                                       └─ ModemFactory::create_with_usb_ids()
                                               ├─ 已知 USB VID/PID → 直接选 AT 分支（`0x2C7C:0x0900` → UniSoc，`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR）
-                                              └─ 未命中 / 非 USB → `AT+CGMM` 型号检测 fallback
+                                              └─ 系统枚举没拿到 / 枚举值未知 → `AT+CGMM` 型号检测 fallback
                                               └─→ 成功：建 LoggingTransport → AppState.transport，并把 USB `VID/PID` 写入 `AppState.connected_usb_ids`
                                               └─→ 失败：尝试下一个端口
 
@@ -74,7 +74,7 @@
                                   ├─ sequential try/catch（非并行）
                                   │   ├─ refreshModemStatus()    → get_modem_status
                                   │   ├─ refreshIpInfo()         → get_ip_info
-                                  │   ├─ refreshHardwareInfo()   → get_hardware_info（AT 硬件信息 + `AppState.connected_usb_ids`）
+                                  │   ├─ refreshHardwareInfo()   → get_hardware_info（AT 硬件信息 + `AppState.connected_usb_ids`；若未枚举到 USB ID，则保持空值）
                                   │   ├─ refreshApnList()        → get_apn_list
                                   │   ├─ refreshQos()            → get_qos_info
                                   │   └─ refreshTraffic()        → get_traffic
@@ -99,9 +99,9 @@ main.rs
   ├─ 当前项加 .active
   ├─ 对应 #page-xxx 加 .active
   │
-  └─ 懒加载检查（仅 4 个页面）
+       └─ 懒加载检查（仅 4 个页面）
        ├─ hardware → loadHardwarePage()  → refreshHardwareInfo
-       ├─ ip       → refreshLanConfig()  → send_raw_at（按芯片走 `AT+QMAP="LANIP"` / `AT+QCFG="lanip"` / `AT+QCFG="lanip_ex"`）
+       ├─ ip       → refreshLanConfig()  → get_lan_config
        ├─ scene    → loadScenePage()     → 并发拉 feature_toggles / nat_mode / usbnet_mode
        └─ atmanual → initAtdbPage()      → 纯前端 AT_DB 索引
 ```
@@ -266,6 +266,66 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
         │
         ├─ feature="adb" → 读当前 usbcfg，修改最后一位，写回
         └─ 其它          → AT+QCFG="<feature>",<0|1>
+```
+
+## 9.1 业务配置专用流程（IMS / CFUN 查询 / MTU / LAN / DMZ）
+
+> 这些页面级业务配置必须走专用 typed IPC；`send_raw_at` 只保留给 AT 调试页。
+
+```
+[网络配置页]
+  loadNetlockData()
+    └─ invoke('get_ims_enabled')
+          └─→ handlers.rs::get_ims_enabled
+                └─→ vendor.query_ims_enabled()
+                      └─ Qualcomm / UniSoc 共用 `AT+QCFG="ims"`，平台差异在 HAL 内部解析
+
+  setIms(val)
+    └─ invoke('set_ims_enabled', { enabled })
+          └─→ handlers.rs::set_ims_enabled
+                └─→ vendor.set_ims_enabled()
+                      ├─ Qualcomm → `AT+QCFG="ims",1,1` / `AT+QCFG="ims",2,0`
+                      └─ UniSoc   → `AT+QCFG="ims",<0|1>`
+
+[连接 UI]
+  syncRfState()
+    └─ invoke('get_cfun_mode')
+          └─→ handlers.rs::get_cfun_mode
+                └─→ vendor.query_cfun_mode()
+                      └─ `AT+CFUN?`
+
+[IP 页面]
+  applyMtu()
+    └─ invoke('set_mtu', { value })
+          └─→ handlers.rs::set_mtu
+                └─→ vendor.set_mtu()
+                      └─ `AT+QCFG="mtu",<value>`
+
+  refreshLanConfig()
+    └─ invoke('get_lan_config')
+          └─→ handlers.rs::get_lan_config
+                └─→ vendor.query_lan_config()
+                      ├─ Qualcomm → `AT+QMAP="LANIP"`
+                      ├─ ASR      → `AT+QCFG="lanip"`
+                      └─ UniSoc   → `AT+QCFG="lanip_ex"`
+
+  applyLanConfig()
+    └─ invoke('set_lan_config', { gateway, netmask, dhcpStart, dhcpEnd })
+          └─→ handlers.rs::set_lan_config
+                ├─ validate_at_string + IPv4 parse
+                └─→ vendor.set_lan_config()
+                      ├─ Qualcomm → `AT+QMAP="LANIP",<start>,<end>,<gw>`
+                      ├─ ASR      → `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"`
+                      └─ UniSoc   → `AT+QCFG="lanip_ex",...`
+
+  applyDmz() / clearDmz()
+    ├─ invoke('set_dmz', { ip })
+    └─ invoke('clear_dmz')
+          └─→ handlers.rs::set_dmz / clear_dmz
+                ├─ validate_at_string + IPv4 parse
+                └─→ vendor.set_dmz / clear_dmz
+                      ├─ Qualcomm → `AT+QMAP="DMZ",1,4,"<ip>"` / `AT+QMAP="DMZ",0,4`
+                      └─ UniSoc   → `AT+QDMZ=1,4,<ip>` / `AT+QDMZ=0,4`
 ```
 
 ## 10. AT 调试页（`send_raw_at`）

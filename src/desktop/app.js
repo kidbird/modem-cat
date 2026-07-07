@@ -1186,19 +1186,8 @@
       }
       // Load IMS state
       try {
-        const isQualcomm = state.chipVendor === 'qualcomm';
-        const resp = await invoke('send_raw_at', { command: 'AT+QCFG="ims"' });
-        let imsVal = 0;
-        if (isQualcomm) {
-          // Qualcomm: +QCFG: "ims",<mode>,<enable>  — second param is the toggle
-          const m = resp.match(/\+QCFG:\s*"ims",\d,\s*(\d)/i);
-          if (m) imsVal = parseInt(m[1]);
-        } else {
-          // UniSoc: +QCFG: "ims",<enable>  — single value
-          const m = resp.match(/\+QCFG:\s*"ims",(\d)/i);
-          if (m) imsVal = parseInt(m[1]);
-        }
-        updateImsToggle(imsVal);
+        const enabled = await invoke('get_ims_enabled');
+        updateImsToggle(enabled ? 1 : 0);
       } catch (e) {
         console.warn('get IMS failed:', e);
       }
@@ -1216,15 +1205,7 @@
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       try {
         showLoading('正在设置 IMS...');
-        const isQualcomm = state.chipVendor === 'qualcomm';
-        // Qualcomm: AT+QCFG="ims",<ims_conf>,<volte_cap>
-        //   Enable:  AT+QCFG="ims",1,1
-        //   Disable: AT+QCFG="ims",2,0
-        // UniSoc:  AT+QCFG="ims",<enable>
-        const cmd = isQualcomm
-          ? `AT+QCFG="ims",${val === 1 ? '1,1' : '2,0'}`
-          : `AT+QCFG="ims",${val}`;
-        await invoke('send_raw_at', { command: cmd });
+        await invoke('set_ims_enabled', { enabled: val === 1 });
         await flushAtLog();
         hideLoading();
         updateImsToggle(val);
@@ -1648,7 +1629,7 @@
       if (!val || val < 576 || val > 9000) { showToast('MTU 范围：576 ~ 9000', 'err'); return; }
       try {
         showLoading('正在设置 MTU...');
-        await invoke('send_raw_at', { command: `AT+QCFG="mtu",${val}` });
+        await invoke('set_mtu', { value: val });
         await flushAtLog();
         hideLoading();
         showToast(`MTU 已设置为 ${val}，重启后生效`, 'ok');
@@ -1667,11 +1648,7 @@
       if (ip.split('.').some(o => parseInt(o) > 255)) { showToast('IP 地址格式无效', 'err'); return; }
       try {
         showLoading('正在设置 DMZ...');
-        const isQualcomm = state.chipVendor === 'qualcomm';
-        const cmd = isQualcomm
-          ? `AT+QMAP="DMZ",1,4,"${ip}"`
-          : `AT+QDMZ=1,4,${ip}`;
-        await invoke('send_raw_at', { command: cmd });
+        await invoke('set_dmz', { ip });
         await flushAtLog();
         hideLoading();
         showToast('DMZ 设置成功', 'ok');
@@ -1687,11 +1664,7 @@
       if (!state.connected) { showToast('请先连接模组', 'err'); return; }
       try {
         showLoading('正在清除 DMZ...');
-        const isQualcomm = state.chipVendor === 'qualcomm';
-        const cmd = isQualcomm
-          ? `AT+QMAP="DMZ",0,4`
-          : `AT+QDMZ=0,4`;
-        await invoke('send_raw_at', { command: cmd });
+        await invoke('clear_dmz');
         await flushAtLog();
         hideLoading();
         showToast('DMZ 已清除', 'ok');
@@ -1711,55 +1684,12 @@
       const formEl    = document.getElementById('lanForm');
       loadingEl.style.display = '';
       formEl.style.display    = 'none';
-      const isQualcomm = state.chipVendor === 'qualcomm';
       try {
-        if (isQualcomm) {
-          // Qualcomm: AT+QMAP="LANIP" → +QMAP: "LANIP",<start>,<end>,<gw>
-          const resp = await invoke('send_raw_at', { command: 'AT+QMAP="LANIP"' });
-          for (const line of (resp || '').split('\n')) {
-            const m = line.match(/\+QMAP:\s*"LANIP",\s*([^,]+),\s*([^,]+),\s*([^,\s]+)/i);
-            if (m) {
-              document.getElementById('dhcpStart').value = m[1].trim();
-              document.getElementById('dhcpEnd').value   = m[2].trim();
-              document.getElementById('lanGw').value     = m[3].trim();
-              document.getElementById('lanMask').value   = '';  // QMAP has no mask field
-              break;
-            }
-          }
-        } else if (state.chipVendor === 'asr') {
-          // ASR: AT+QCFG="lanip" → +QCFG: "lanip","<gw>","<mask>","<start>","<end>",<lease_time>
-          const resp = await invoke('send_raw_at', { command: 'AT+QCFG="lanip"' });
-          for (const line of (resp || '').split('\n')) {
-            const m5 = line.match(/\+QCFG:\s*"lanip",\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?(?:,\s*"?([^",\s]+)"?)?/i);
-            if (m5) {
-              document.getElementById('lanGw').value     = m5[1];
-              document.getElementById('lanMask').value   = m5[2];
-              document.getElementById('dhcpStart').value = m5[3];
-              document.getElementById('dhcpEnd').value   = m5[4];
-              break;
-            }
-          }
-        } else {
-          // UniSoc: AT+QCFG="lanip_ex" → +QCFG: "lanip_ex","<gw>","<mask>","<start>","<end>"
-          const resp = await invoke('send_raw_at', { command: 'AT+QCFG="lanip_ex"' });
-          for (const line of (resp || '').split('\n')) {
-            const m4 = line.match(/\+QCFG:\s*"lanip_ex",\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?/i);
-            if (m4) {
-              document.getElementById('lanGw').value     = m4[1];
-              document.getElementById('lanMask').value   = m4[2];
-              document.getElementById('dhcpStart').value = m4[3];
-              document.getElementById('dhcpEnd').value   = m4[4];
-              break;
-            }
-            const m3 = line.match(/\+QCFG:\s*"lanip_ex",\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?,\s*"?([^",\s]+)"?/i);
-            if (m3) {
-              document.getElementById('lanGw').value     = m3[1];
-              document.getElementById('dhcpStart').value = m3[2];
-              document.getElementById('dhcpEnd').value   = m3[3];
-              break;
-            }
-          }
-        }
+        const config = await invoke('get_lan_config');
+        document.getElementById('lanGw').value = config.gateway || '';
+        document.getElementById('lanMask').value = config.netmask || '';
+        document.getElementById('dhcpStart').value = config.dhcpStart || '';
+        document.getElementById('dhcpEnd').value = config.dhcpEnd || '';
       } catch (e) {
         addTerminalLine('[LAN] 查询失败: ' + e, 'err');
       } finally {
@@ -1831,22 +1761,14 @@
       const start = document.getElementById('dhcpStart').value.trim();
       const end   = document.getElementById('dhcpEnd').value.trim();
       if (!gw || !start || !end) { showToast('请填写完整的 LAN 配置', 'err'); return; }
-      const isQualcomm = state.chipVendor === 'qualcomm';
       try {
         showLoading('正在设置 LAN 配置...');
-        let cmd;
-        if (isQualcomm) {
-          cmd = `AT+QMAP="LANIP",${start},${end},${gw}`;
-        } else if (state.chipVendor === 'asr') {
-          cmd = mask
-            ? `AT+QCFG="lanip","${gw}","${mask}","${start}","${end}"`
-            : `AT+QCFG="lanip","${gw}","${start}","${end}"`;
-        } else {
-          cmd = mask
-            ? `AT+QCFG="lanip_ex","${gw}","${mask}","${start}","${end}"`
-            : `AT+QCFG="lanip_ex","${gw}","${start}","${end}"`;
-        }
-        await invoke('send_raw_at', { command: cmd });
+        await invoke('set_lan_config', {
+          gateway: gw,
+          netmask: mask || null,
+          dhcpStart: start,
+          dhcpEnd: end,
+        });
         await flushAtLog();
         hideLoading();
         showToast('LAN 配置已保存，重启后生效', 'ok');
@@ -2424,13 +2346,9 @@
     async function syncRfState() {
       if (!state.connected) return;
       try {
-        const resp = await invoke('send_raw_at', { command: 'AT+CFUN?' });
-        const m = resp.match(/\+CFUN:\s*(\d+)/);
-        if (m) {
-          const on = m[1] === '1';
-          const cb = document.getElementById('rfToggle');
-          if (cb) cb.checked = on;
-        }
+        const mode = await invoke('get_cfun_mode');
+        const cb = document.getElementById('rfToggle');
+        if (cb) cb.checked = mode === 1;
       } catch (e) {
         console.warn('[CFUN] query failed:', e);
       }

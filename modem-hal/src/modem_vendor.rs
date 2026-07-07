@@ -329,6 +329,54 @@ pub trait ModemVendor: Send {
         Err("Not implemented".to_string())
     }
 
+    /// Query IMS / VoLTE enable state.
+    fn query_ims_enabled(&mut self, _transport: &mut dyn AtTransport) -> Result<bool, String> {
+        Err("IMS query not supported".to_string())
+    }
+
+    /// Set IMS / VoLTE enable state.
+    fn set_ims_enabled(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _enabled: bool,
+    ) -> Result<(), String> {
+        Err("IMS config not supported".to_string())
+    }
+
+    /// Query current CFUN mode.
+    fn query_cfun_mode(&mut self, _transport: &mut dyn AtTransport) -> Result<i32, String> {
+        Err("CFUN query not supported".to_string())
+    }
+
+    /// Set MTU value.
+    fn set_mtu(&mut self, _transport: &mut dyn AtTransport, _value: i32) -> Result<(), String> {
+        Err("MTU config not supported".to_string())
+    }
+
+    /// Query LAN gateway / netmask / DHCP range.
+    fn query_lan_config(&mut self, _transport: &mut dyn AtTransport) -> Result<LanConfig, String> {
+        Err("LAN config query not supported".to_string())
+    }
+
+    /// Set LAN gateway / netmask / DHCP range.
+    fn set_lan_config(
+        &mut self,
+        _transport: &mut dyn AtTransport,
+        _config: &LanConfig,
+    ) -> Result<(), String> {
+        Err("LAN config set not supported".to_string())
+    }
+
+    /// Set DMZ host IP.
+    fn set_dmz(&mut self, _transport: &mut dyn AtTransport, _ip: &str) -> Result<(), String> {
+        Err("DMZ config not supported".to_string())
+    }
+
+    /// Clear DMZ host IP.
+    fn clear_dmz(&mut self, _transport: &mut dyn AtTransport) -> Result<(), String> {
+        Err("DMZ config not supported".to_string())
+    }
+
     /// Query Qualcomm specific configuration
     fn query_qualcomm_config(
         &mut self,

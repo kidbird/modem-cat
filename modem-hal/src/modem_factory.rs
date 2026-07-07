@@ -154,6 +154,7 @@ mod tests {
     struct MockTransport {
         cgmm_response: Option<String>,
         send_count: usize,
+        sent: Vec<String>,
     }
 
     impl MockTransport {
@@ -161,6 +162,7 @@ mod tests {
             Self {
                 cgmm_response: None,
                 send_count: 0,
+                sent: Vec::new(),
             }
         }
 
@@ -168,6 +170,7 @@ mod tests {
             Self {
                 cgmm_response: Some(response.to_string()),
                 send_count: 0,
+                sent: Vec::new(),
             }
         }
     }
@@ -175,8 +178,12 @@ mod tests {
     impl AtTransport for MockTransport {
         fn send_at(&mut self, command: &str) -> Result<String, String> {
             self.send_count += 1;
-            match (command, &self.cgmm_response) {
-                ("AT+CGMM", Some(response)) => Ok(response.clone()),
+            self.sent.push(command.to_string());
+            match command {
+                "AT+CGMM" => self
+                    .cgmm_response
+                    .clone()
+                    .ok_or_else(|| format!("Unexpected AT command: {}", command)),
                 _ => Err(format!("Unexpected AT command: {}", command)),
             }
         }
@@ -323,9 +330,20 @@ mod tests {
         let modem = ModemFactory::create_with_usb_ids(&mut transport, Some((0x2C7C, 0x9999)))
             .expect("unknown USB VID/PID should fall back to CGMM");
 
-        assert_eq!(transport.send_count, 1);
+        assert_eq!(transport.sent, vec!["AT+CGMM"]);
         assert_eq!(modem.vendor(), ChipsetVendor::Qualcomm);
         assert_eq!(modem.model(), "RM520N-GL");
+    }
+
+    #[test]
+    fn create_with_usb_ids_without_enumerated_usb_ids_uses_cgmm_only() {
+        let mut transport = MockTransport::with_cgmm_response("AT+CGMM\r\nRG255AA\r\nOK\r\n");
+        let modem = ModemFactory::create_with_usb_ids(&mut transport, None)
+            .expect("CGMM should remain the only fallback when USB IDs are unavailable");
+
+        assert_eq!(transport.sent, vec!["AT+CGMM"]);
+        assert_eq!(modem.vendor(), ChipsetVendor::Asr);
+        assert_eq!(modem.model(), "RG255AA");
     }
 
     #[test]

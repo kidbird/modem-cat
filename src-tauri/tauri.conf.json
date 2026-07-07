@@ -53,8 +53,7 @@
                                                "language":  "zh-CN"
                                            },
                                    "webviewInstallMode":  {
-                                                              "type":  "fixedRuntime",
-                                                              "path":  "webview2-runtime"
+                                                              "type":  "embedBootstrapper"
                                                           }
                                }
                }

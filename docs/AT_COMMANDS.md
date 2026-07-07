@@ -1,6 +1,6 @@
 # AT 指令功能映射
 
-> 最近更新：2026-06-25
+> 最近更新：2026-07-07
 > 本文档只记录**当前正式主合同** AT 路径；历史兼容命令留在手册资料中，不作为 live 代码设计依据。
 
 ## 使用规则
@@ -8,7 +8,7 @@
 - 实时状态查询失败必须直接报错，不要改发第二条 AT 掩盖失败。
 - `Unknown` 型号的正式合同是直接报错，不允许猜测 adapter。
 - 只有主合同命令写在本表；历史兼容命令请回原始手册查询，不视为 live 合同。
-- 若本地串口枚举已拿到已知 USB `VID/PID`，连接链路可先据此确认芯片平台与 AT 分支；`AT+CGMM` 作为未知 USB 或非 USB transport 的兜底识别路径。
+- 若本地串口枚举已拿到已知 USB `VID/PID`，连接链路可先据此确认芯片平台与 AT 分支；若枚举阶段缺失 USB ID，则直接回退 `AT+CGMM`。`AT+QCFG="usbcfg"` 不是跨厂商通用合同，不能作为 USB ID 恢复前置步骤。
 
 ## 平台划分（按检测优先级）
 
@@ -21,7 +21,7 @@
 | `0x2C7C:0x0801` | Qualcomm（高通） | 直接走 Qualcomm AT 分支 |
 | `0x2C7C:0x0600` | ASR | 5G RedCap，直接走 ASR 分支（当前 AT 仍复用 UniSoc adapter） |
 
-若 USB 未命中已知表，再回退 `AT+CGMM` 关键字识别。
+若 USB 未命中已知表，或当前 transport 拿不到系统枚举 USB ID，则直接回退 `AT+CGMM` 关键字识别。
 
 | 优先级 | 厂商 | 关键字（CGMM 大写后子串匹配） | 代表型号 |
 |---|---|---|---|
@@ -154,7 +154,7 @@
 | NAPT | `AT+QCFG="napt"` | `AT+QCFG="napt",{0/1}` | |
 | Netmask | `AT+QCFG="netmask"` | `AT+QCFG="netmask",{0/1}` | |
 | USB 网卡模式 | `AT+QCFG="usbnet"` | `AT+QCFG="usbnet",{mode}` | |
-| IMS / VoLTE | `AT+QCFG="ims"` | Qualcomm: `AT+QCFG="ims",<mode>,<enable>` (开=`,1,1` 关=`,2,0`)；UniSoc: `AT+QCFG="ims",<enable>` | 仅前端快捷 AT 直发（`send_raw_at`）；HAL 命令层未实现专用 IPC |
+| IMS / VoLTE | `AT+QCFG="ims"` | Qualcomm: `AT+QCFG="ims",<mode>,<enable>` (开=`,1,1` 关=`,2,0`)；UniSoc: `AT+QCFG="ims",<enable>` | live 主路径由 `get_ims_enabled` / `set_ims_enabled` 统一封装 |
 
 ## 7. 高通专用配置（仅 Qualcomm 平台）
 
@@ -164,21 +164,24 @@
 | USB 速度 | `AT+QCFG="usbspeed"` | |
 | 以太网驱动 | `AT+QETH="eth_driver"` | |
 
-## 7.6 QMAP 扩展指令（仅 Qualcomm 平台）
+## 7.6 LAN / DMZ / MTU 扩展指令
 
 | 功能 | AT 指令 | 备注 |
 |------|---------|------|
 | VLAN 查询 | `AT+QMAP="VLAN"` | 返回已启用的 VLAN ID 列表 |
 | VLAN 启用 | `AT+QMAP="VLAN",<vid>,"enable",1` | 1=ETH 类型 |
 | VLAN 禁用 | `AT+QMAP="VLAN",<vid>,"disable"` | |
-| LAN IP 查询 | `AT+QMAP="LANIP"` | 前端快捷 AT，HAL 命令层未实现 |
-| LAN IP 设置 | `AT+QMAP="LANIP",<ip>,<mask>` | 前端快捷 AT |
-| DMZ 查询 (Qualcomm) | `AT+QMAP="DMZ"` | 前端快捷 AT，HAL 命令层未实现 |
-| DMZ 设置 (Qualcomm) | `AT+QMAP="DMZ",<ip>` | 前端快捷 AT |
-| DMZ 查询 (UniSoc) | `AT+QDMZ?` | 前端快捷 AT |
-| DMZ 设置 (UniSoc) | `AT+QDMZ=<ip>` | 前端快捷 AT |
-| MTU 查询 | `AT+QCFG="mtu"` | 前端快捷 AT，HAL 命令层未实现 |
-| MTU 设置 | `AT+QCFG="mtu",<value>` | 前端快捷 AT |
+| LAN IP 查询 (Qualcomm) | `AT+QMAP="LANIP"` | `get_lan_config` 内部使用；返回 `<dhcp_start>,<dhcp_end>,<gw>` |
+| LAN IP 设置 (Qualcomm) | `AT+QMAP="LANIP",<start>,<end>,<gw>` | `set_lan_config` 内部使用 |
+| LAN IP 查询 (ASR) | `AT+QCFG="lanip"` | `get_lan_config` 内部使用；返回 `gw,mask,start,end[,lease_time]` |
+| LAN IP 设置 (ASR) | `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"` | `set_lan_config` 内部使用 |
+| LAN IP 查询 (UniSoc) | `AT+QCFG="lanip_ex"` | `get_lan_config` 内部使用；支持 `gw,start,end` 或 `gw,mask,start,end` |
+| LAN IP 设置 (UniSoc) | `AT+QCFG="lanip_ex","<gw>","<mask>","<start>","<end>"` | `set_lan_config` 内部使用；mask 为空时走三字段变体 |
+| DMZ 设置 (Qualcomm) | `AT+QMAP="DMZ",1,4,"<ip>"` | `set_dmz` 内部使用 |
+| DMZ 清除 (Qualcomm) | `AT+QMAP="DMZ",0,4` | `clear_dmz` 内部使用 |
+| DMZ 设置 (UniSoc) | `AT+QDMZ=1,4,<ip>` | `set_dmz` 内部使用 |
+| DMZ 清除 (UniSoc) | `AT+QDMZ=0,4` | `clear_dmz` 内部使用 |
+| MTU 设置 | `AT+QCFG="mtu",<value>` | `set_mtu` 内部使用 |
 
 ---
 
@@ -193,8 +196,8 @@
 | 恢复出厂 | `AT&F`（Qualcomm）/ `AT+QPRTPARA=3`（UniSoc） | 代码按芯片分支下发（`factory_reset()`），非 `AT+QFACT` |
 | SIM 卡槽查询 | `AT+QUIMSLOT?` | |
 | SIM 卡槽切换 | `AT+QUIMSLOT={1/2}` | |
-| LAN IP 查询 | Qualcomm: `AT+QMAP="LANIP"` / ASR: `AT+QCFG="lanip"` / UniSoc: `AT+QCFG="lanip_ex"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现；详见 §3 |
-| LAN IP 设置 | Qualcomm: `AT+QMAP="LANIP",<start>,<end>,<gw>` / ASR: `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"` / UniSoc: `AT+QCFG="lanip_ex","<gw>","<start>","<end>"` | ⚠️ 仅前端快捷 AT，HAL 命令层未实现；详见 §3 |
+| LAN IP 查询 | Qualcomm: `AT+QMAP="LANIP"` / ASR: `AT+QCFG="lanip"` / UniSoc: `AT+QCFG="lanip_ex"` | 由 `get_lan_config` 统一封装；详见 §7.6 |
+| LAN IP 设置 | Qualcomm: `AT+QMAP="LANIP",<start>,<end>,<gw>` / ASR: `AT+QCFG="lanip","<gw>","<mask>","<start>","<end>"` / UniSoc: `AT+QCFG="lanip_ex","<gw>","<mask>","<start>","<end>"` | 由 `set_lan_config` 统一封装；详见 §7.6 |
 | 设置 APN | `AT+QICSGP={cid},{type},"<apn>","<user>","<pass>",{auth}` | |
 | 查询所有 APN | `AT+QICSGP?` | `query_apn_list()` 首选 |
 | 删除 APN | `AT+CGDCONT={cid}` | |

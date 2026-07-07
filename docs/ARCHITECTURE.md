@@ -1,6 +1,6 @@
 # 项目架构设计
 
-> 最近更新：2026-06-18
+> 最近更新：2026-07-07
 > 适用于：modem-cat 当前主线
 
 ## 1. 总体结构
@@ -47,14 +47,15 @@ src-tauri/src/
 ```text
 前端 invoke(...)
   → src-tauri/src/lib.rs 中的 #[tauri::command]
-  → with_vendor! / with_vendor_cid! / send_raw_at
+  → with_vendor! / with_vendor_cid! / send_raw_at（仅 AT 调试页）
   → AppState.transport (Mutex<Option<Box<dyn AtTransport>>>)
   → ModemVendor 实现
   → AtTransport::send_at(...)
 ```
 
 - `AppState.transport` 是当前唯一 live AT 队列 owner。
-- `send_raw_at` 也必须走同一把 `transport` 锁，不能成为第二条直连路径。
+- `send_raw_at` 也必须走同一把 `transport` 锁，但它只服务 AT 调试页，不能承载 IMS / MTU / DMZ / LAN / CFUN 查询这类业务主路径。
+- 业务页的 live 配置必须通过 `handlers.rs` 专用 typed IPC → `ModemVendor` 专用方法收敛，禁止前端自行拼接完整业务 AT。
 - `mqtt.rs` 已改为复用同一把 `transport` 锁，并按 `transport -> vendor` 顺序取锁。
 - 所有 live 查询（如 feature toggle / NAT / 设备认证状态）失败时必须直接报错，不得伪装成 `false` / `0` / 空值。
 - `factory.rs` 的 HTTP 请求和 `dloader.rs` 的 sidecar 不是 AT 路径，不得反向引入第二条 modem AT 队列。
@@ -101,7 +102,7 @@ src-tauri/src/
 ### 4.2 `src-tauri/src/handlers.rs`
 
 - live 业务 IPC handler
-- `data_cid` / feature toggle / NAT / AT / MQTT 状态入口
+- `data_cid` / feature toggle / NAT / IMS / CFUN / MTU / LAN / DMZ / AT / MQTT 状态入口
 - 所有 live 查询必须返回真实结果或明确错误
 
 ### 4.3 `src-tauri/src/connection.rs`
@@ -109,7 +110,8 @@ src-tauri/src/
 - 串口 / TCP / WebSocket 连接
 - 自动连接、端口筛选、网卡枚举
 - 串口枚举时优先读取 USB `VID/PID`，命中已知映射后先确认芯片平台与 AT 分支：`0x2C7C:0x0900` → UniSoc（RG200U/RM500U 系），`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR RedCap；未命中时再回退到 `AT+CGMM`
-- `get_hardware_info` 通过 `AppState.connected_usb_ids` 回填当前连接口的 `usbVid` / `usbPid`
+- 若系统枚举阶段没拿到 USB `VID/PID`，`ModemFactory::create_with_usb_ids` 直接回退 `AT+CGMM`；禁止把 `AT+QCFG="usbcfg"` 当成跨厂商的通用 USB ID 恢复路径
+- `get_hardware_info` 只使用 `AppState.connected_usb_ids` 和 vendor 已返回的字段；若当前连接没有系统枚举到的 `usbVid` / `usbPid`，页面保持空值，不额外假设所有平台都支持 `AT+QCFG="usbcfg"`
 - WebSocket 认证只接受显式提供的凭据；禁止公开默认值
 
 ### 4.4 `src-tauri/src/monitor.rs`
@@ -148,7 +150,7 @@ src-tauri/src/
 - 启动阶段文件日志路径统一为 `%LOCALAPPDATA%\Modem Cat\logs\startup.log`
 - 若 `LOCALAPPDATA` 不可用，则依次回退到 `%TEMP%`、当前工作目录
 - `main.rs` 启动前安装 panic hook；`lib.rs::run()` 在进入 Tauri runtime 前初始化文件 logger
-- 启动最前面会额外记录 `modem-cat.exe` 路径、当前工作目录、`webview2-runtime/` 目录和 `msedgewebview2.exe` 是否存在
+- 启动最前面会额外记录 `modem-cat.exe` 路径、当前工作目录、以及同层遗留 `webview2-runtime/` / `msedgewebview2.exe` 是否存在，便于区分“旧 fixed runtime 包残留”与当前 `embedBootstrapper` / 系统 WebView2 路径
 - 目标是把“窗口子系统下双击无反应”的启动失败收敛成可回收的本地日志，而不是只写 stdout/stderr
 
 ## 5. HAL 结构
@@ -172,7 +174,7 @@ pub trait AtTransport: Send {
 ### 5.2 厂商层
 
 - `modem_factory.rs`
-  `USB VID/PID` 已知映射 → 先选芯片平台/AT 分支并保留型号提示；未知或非 USB transport 时回退 `AT+CGMM` → 型号字符串 → 芯片平台识别
+  `USB VID/PID` 已知映射 → 先选芯片平台/AT 分支并保留型号提示；未知、缺失或非 USB transport 时直接回退 `AT+CGMM` → 型号字符串 → 芯片平台识别
 - `modem_vendor.rs`
   统一业务 trait
 - `vendors/quectel/mod.rs`

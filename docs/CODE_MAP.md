@@ -1,16 +1,17 @@
 # Code Map
 
-> 最近更新：2026-07-02
+> 最近更新：2026-07-07
 > 覆盖：前端 UI 元素 → IPC 命令 → 后端 live handler 三列映射
 
 ## 1. 后端 live IPC 命令清单
 
 > 当前 live IPC 统一注册在 `src-tauri/src/lib.rs::generate_handler!`，但实际执行面分散在 `handlers.rs`、`connection.rs`、`debug_terminal.rs`、`dloader.rs`。
 > `list_ports` 对 USB 串口会附带 `usbVid` / `usbPid` / `detectedModel` / `detectedChipset`，供前端和自动连接链路复用同一份识别结果。
+> `get_hardware_info` 只展示 `AppState.connected_usb_ids` 或 vendor 已返回的 `usbVid` / `usbPid`；若系统枚举阶段没有拿到 USB ID，则保持空值，不补发 `AT+QCFG="usbcfg"`。
 
 - 连接类：`list_ports` / `auto_connect_at` / `connect_serial` / `connect_tcp` / `list_network_adapters` / `connect_websocket` / `disconnect`
-- 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
-- 写操作：`set_apn_config` / `delete_apn_config` / `set_apn_active` / `set_5glan` / `set_network_mode_cmd` / `set_nr5g_band_cmd` / `set_bands` / `reset_all_bands` / `set_feature_toggle` / `set_usbnet_mode` / `set_sim_slot` / `set_nat_mode` / `set_vlan` / `set_qualcomm_config`
+- 状态类：`get_app_version` / `get_modem_status` / `get_hardware_info` / `get_ip_info` / `get_apn_list` / `get_neighbor_cells` / `get_qos_info` / `get_network_mode` / `get_ims_enabled` / `get_cfun_mode` / `get_lan_config` / `get_bands` / `get_feature_toggles` / `get_usbnet_mode` / `get_traffic` / `get_5glan` / `get_sim_slot` / `get_nat_mode` / `get_vlan` / `get_qualcomm_config`
+- 写操作：`set_apn_config` / `delete_apn_config` / `set_apn_active` / `set_5glan` / `set_network_mode_cmd` / `set_ims_enabled` / `set_mtu` / `set_lan_config` / `set_dmz` / `clear_dmz` / `set_nr5g_band_cmd` / `set_bands` / `reset_all_bands` / `set_feature_toggle` / `set_usbnet_mode` / `set_sim_slot` / `set_nat_mode` / `set_vlan` / `set_qualcomm_config`
 - 数据 / 射频 / 系统：`connect_data` / `disconnect_data` / `set_cfun` / `reboot_modem` / `factory_reset`
 - 锁网 / 小区锁：`query_cell_lock` / `set_cell_lock` / `clear_cell_lock` / `set_plmn_lock` / `clear_plmn_lock`
 - Qualcomm 5GLAN：`query_qualcomm_5glan_status` / `configure_qualcomm_5glan` / `enable_eth_pdu` / `connect_qualcomm_5glan`
@@ -30,6 +31,7 @@
 | IMEI / ICCID / 运营商 / 网络类型 | 各自 ID | 同上 | `get_modem_status` |
 | 流量 | `#ulTraffic` / `#dlTraffic` | refreshTraffic | `get_traffic` |
 | 射频开关 | `#rfToggle` | onRfToggle | `set_cfun` + `get_modem_status` |
+| 连接后射频状态回读 | `#rfToggle` | syncRfState | `get_cfun_mode` |
 | SIM 卡槽切换 | `.sim-slot-option` | setSimSlot | `set_sim_slot` + `get_sim_slot` |
 | 数据连接按钮 | `#dataConnectBtn` | toggleDataConnection | `connect_data` / `disconnect_data` |
 
@@ -53,7 +55,7 @@
 | 应用频段 | applyBandLock | `set_bands` |
 | 重置频段 | resetBandLock | `reset_all_bands` |
 | PLMN 锁 | applyOperatorLock / clearOperatorLock | `set_plmn_lock` / `clear_plmn_lock` |
-| IMS 状态 | loadNetlockData / setIms | `send_raw_at`（当前以前端快捷 AT 直发） |
+| IMS 状态 | loadNetlockData / setIms | `get_ims_enabled` / `set_ims_enabled` |
 
 #### 小区/频点锁定 tab（`#ctab-celllock`）
 
@@ -139,10 +141,10 @@
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
 | IP/掩码/网关/DNS | refreshIpInfo | `get_ip_info` |
-| MTU 设置 | applyMtu | `send_raw_at`（当前以前端快捷 AT 直发） |
-| DMZ 设置 | applyDmz / clearDmz | `send_raw_at`（当前以前端快捷 AT 直发） |
-| LAN IP 查询 | refreshLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
-| LAN IP 配置 | applyLanConfig | `send_raw_at`（当前以前端快捷 AT 直发） |
+| MTU 设置 | applyMtu | `set_mtu` |
+| DMZ 设置 | applyDmz / clearDmz | `set_dmz` / `clear_dmz` |
+| LAN IP 查询 | refreshLanConfig | `get_lan_config` |
+| LAN IP 配置 | applyLanConfig | `set_lan_config` |
 
 > WebSocket 网关连接当前由状态页连接区域触发：`toggleConnection()` 在 `connectionType=ethernet` 时调用 `connect_websocket`，并可选传递显式用户名/密码；未提供时保持匿名模式，不再自动填入默认凭据。
 

@@ -14,7 +14,7 @@ Modem Cat 是一个面向 5G 模组调试、配置和交付的 Tauri 桌面工�
 
 - 现场测试人员：需要快速连接模组、查看状态、执行基础调试
 - 研发与联调人员：需要 AT、ADB、SSH、网络配置、固件下载放在同一工具里
-- 发布与交付人员：需要明确区分轻量免安装包、完整免安装包和安装包
+- 发布与交付人员：需要明确区分便携包、安装包，以及是否需要自动补齐 WebView2 的交付方式
 
 ## 如何使用
 
@@ -24,17 +24,16 @@ Windows 发版产物统一输出到 `dist/` 根目录，常见选择如下：
 
 | 产物 | 文件名模式 | 适用场景 |
 |---|---|---|
-| 轻量免安装包 | `ModemCat_vX.Y.Z_portable-lite.zip` | 目标机器已经安装系统 WebView2，想要更小体积、更快分发 |
-| 完整免安装包 | `ModemCat_vX.Y.Z_portable.zip` | 目标机器可能没有 WebView2，需要离线开箱即用 |
-| NSIS 安装包 | `Modem Cat_X.Y.Z_x64-setup.exe` | 常规终端用户安装，适合桌面快捷方式和开始菜单交付 |
-| MSI 安装包 | `Modem Cat_X.Y.Z_x64_zh-CN.msi` | 企业分发、批量部署、标准 Windows 安装介质 |
+| 便携包 | `ModemCat_vX.Y.Z_portable.zip` | 直接解压运行；要求目标机器已有系统 WebView2 |
+| 便携包兼容别名 | `ModemCat_vX.Y.Z_portable-lite.zip` | 当前与 `portable.zip` 同内容，保留给既有分发链路 |
+| NSIS 安装包 | `Modem Cat_X.Y.Z_webview_x64-setup.exe` / `Modem Cat_X.Y.Z_nowebview_x64-setup.exe` | 常规终端用户安装；`webview` 版内置 bootstrapper，`nowebview` 版要求环境已备好 WebView2 |
+| MSI 安装包 | `Modem Cat_X.Y.Z_webview_x64_zh-CN.msi` / `Modem Cat_X.Y.Z_nowebview_x64_zh-CN.msi` | 企业分发、批量部署、标准 Windows 安装介质 |
 
 补充说明：
 
-- `portable-lite.zip` 与 `portable.zip` 都包含 `modem-cat.exe`、ADB 组件、`r26-cli` 固件 sidecar。
-- 两个 portable ZIP 都额外包含 `vcruntime140.dll`（x86），供 `r26-cli` 固件 sidecar 直接运行。
-- 两者唯一差异是 `portable.zip` 额外内置 `webview2-runtime/`。
-- 如果轻量免安装包在目标机器上提示缺少 WebView2，请改用完整免安装包，或先安装系统 WebView2 Runtime。
+- `portable.zip` 与 `portable-lite.zip` 都包含 `modem-cat.exe`、ADB 组件、`r26-cli` 固件 sidecar，以及供 sidecar 使用的 `vcruntime140.dll`（x86）。
+- 便携包不再内置 app-local `webview2-runtime/`；目标机器需要已有系统 WebView2 Runtime（Windows 10/11 大多已自带）。
+- 若目标机器没有系统 WebView2，请优先使用 `webview` 安装包；它会复用系统运行时，缺失时再自动拉起 bootstrapper 安装。
 
 ### 2. 启动后做什么
 
@@ -56,9 +55,8 @@ Windows 发版产物统一输出到 `dist/` 根目录，常见选择如下：
 - 固件下载依赖 `r26-cli` sidecar，仓库和发布包都已包含。
 - `r26-cli` 额外需要 x86 `vcruntime140.dll`；发布脚本会一起带上，缺它只会影响固件下载，不影响主程序启动。
 - MQTT 没有公开默认 broker / 凭据；若要启用，必须显式设置环境变量。
-- 轻量免安装包不自带 WebView2 运行时，这是它体积更小的原因。
-- `dist/modem-cat.exe` 现在不是“裸 exe”示例，而是和同层 `dist/webview2-runtime/` 一起构成可直接双击验证的完整离线产物；少了这个目录就会提示缺少 WebView2。
-- 如果目标机器双击后“完全没反应”，先看 `%LOCALAPPDATA%\\Modem Cat\\logs\\startup.log`；日志会直接写出 `exe` 路径、工作目录以及 `webview2-runtime/msedgewebview2.exe` 是否存在。完整 `portable.zip` 会把 app-local `webview2-runtime/` 一起带上。
+- 便携版现在依赖系统 WebView2；这不是 `r26-cli` 的依赖，只影响桌面壳启动。
+- 如果目标机器双击后“完全没反应”，先看 `%LOCALAPPDATA%\\Modem Cat\\logs\\startup.log`；日志会写出 `exe` 路径、工作目录，以及是否还残留旧的 `webview2-runtime/msedgewebview2.exe` 布局，便于区分“旧包残留”还是系统 WebView2 缺失。
 
 ## 架构概览
 
@@ -119,8 +117,7 @@ cargo install tauri-cli --version "^2" --locked
 
 | 组件 | 是否必需 | 用途 |
 |---|---|---|
-| 系统 WebView2 Runtime | 运行 `portable-lite.zip` 时通常必需 | 目标机器如果没有系统 WebView2，请改用完整 `portable.zip` 或先安装系统 WebView2 |
-| 本地 `src-tauri/webview2-runtime/` 目录 | 仅构建完整离线包时必需 | 用于把 fixed WebView2 一起打进完整 portable 和安装包，并在运行时与 `modem-cat.exe` 同层可达 |
+| 系统 WebView2 Runtime | 运行便携包时必需 | Windows 10/11 通常已内置；若缺失，改用 `webview` 安装包最省心 |
 | PowerShell 5.1+ | 建议具备 | 执行 `build.ps1` |
 | Git | 建议具备 | 同步仓库、切分支、提交和发布 |
 
@@ -134,9 +131,9 @@ cargo install tauri-cli --version "^2" --locked
    可手动安装，也可以在第一次执行发布脚本时让脚本自动补装。
 4. 确认 PowerShell 可用
    发布脚本当前以 PowerShell 为入口，建议直接在 Windows PowerShell 或 PowerShell 7 中执行。
-5. 按需要准备 WebView2
-   - 只开发、测试或发布 `portable-lite.zip`：目标机器有系统 WebView2 即可
-   - 要发布完整离线包：构建机本地必须有 `src-tauri/webview2-runtime/`
+5. 按需要确认 WebView2
+   - 开发、测试或发布便携包：目标机器要有系统 WebView2
+   - 发布安装包：默认 `webview` 变体会在缺少 WebView2 时拉起 bootstrapper；若环境明确已自备运行时，也可交付 `nowebview` 变体
 6. 按需要准备 ADB 来源目录
    如果你要替换随仓的 ADB 二进制，可以在仓库根放 `Sdk/` 或 `sdk/`，发布脚本会优先从这里同步
 
@@ -148,7 +145,6 @@ cargo install tauri-cli --version "^2" --locked
 
 本地额外准备：
 
-- 若要构建完整离线包，需要在 `src-tauri/webview2-runtime/` 准备 fixed runtime；`scripts/setup-webview2.ps1` 会从官方 WebView2 下载页解析 Fixed Version CAB 并解包到这里
 - 若你要替换 ADB 二进制来源，可在 `Sdk/` 或 `sdk/` 中放置 ADB 文件，构建脚本会同步到 `src-tauri/resources/adb/`
 - 若你要完整打包固件下载能力，Windows 构建机还需要本地可用的 x86 `vcruntime140.dll`；`build.ps1` / `scripts/build-helper.ps1` 会自动同步到 `src-tauri/resources/r26-runtime/` 与 `dist/vcruntime140.dll`
 
@@ -175,9 +171,8 @@ where.exe cargo-tauri
 - PowerShell
 - 仓库内自带的 `src-tauri/resources/adb/`、`src-tauri/resources/r26-runtime/README.md` 与 `src-tauri/binaries/r26-cli*`
 
-而“完整离线发版环境”则是在上面基础上，再额外准备：
+而“完整发版环境”则是在上面基础上，再额外准备：
 
-- `src-tauri/webview2-runtime/`
 - 构建机本地可用的 x86 `vcruntime140.dll`（脚本会自动同步，不要求跟仓）
 
 ### macOS / Linux
@@ -201,6 +196,8 @@ bash scripts/verify-docs.sh
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
+`build-win.bat` 现在只是这个入口的包装器，便于双击或兼容旧习惯；发布规则和 WebView2 约束统一以 `build.ps1` / `docs/BUILD.md` 为准。
+
 如果只想快速验证编译和安装包，不生成 portable ZIP：
 
 ```powershell
@@ -209,10 +206,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Quick
 
 ## 发版建议
 
-推荐同时交付两种 portable：
+推荐优先交付：
 
-- `portable-lite.zip`：给大多数已有系统 WebView2 的内部同事或客户
-- `portable.zip`：给环境不确定、需要离线兜底的现场或外部机器
+- `portable.zip`：给已知有系统 WebView2 的内部同事或客户
+- `webview` 安装包：给环境不确定、希望安装时自动补齐 WebView2 的现场或外部机器
 
 安装包建议：
 

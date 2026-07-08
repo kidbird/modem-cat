@@ -23,6 +23,10 @@
 
 ## Hard Constraints
 
+- **Ponytail 原则**：YAGNI — 只做当前需求，不做"以防万一"的抽象；优先用标准库/平台原生能力，不引入不必要的依赖；最简方案优先，一行能解决的不写五十行。
+- **禁止 fallback/备用流程**：禁止静默降级、`unwrap_or_default()`、`unwrap_or(0)`、伪默认值、空 catch 块。失败必须显式返回错误或记录明确日志。
+- **禁止讨好型表达**：回答直接切入正题，禁止"Great question!"、"Excellent choice!"等讨好语。
+- **完成前必须验证**：声称完成前必须先跑验证命令（`cargo test --workspace`、`cargo build -p modem-hal`、`bash scripts/verify-docs.sh`），拿到通过证据再声称完成。
 - **唯一 AT 队列**：所有 live modem I/O 只能复用 `AppState.transport` 持有的 `AtTransport`，最终统一汇聚到 `AtTransport::send_at`。禁止新增第二条 AT 发送队列、后台直连 transport、或绕过现有串行化路径的 helper。
 - **唯一业务主路径**：同一业务只允许一条 live IPC / transport / parser 主路径。替换旧路径时，旧 handler、旧模块、旧脚本、旧文档必须同一次删除或改写。
 - **实时读取必须严格失败**：状态查询、配置读取、认证配置读取失败时必须直接返回错误。禁止二次改发 AT、`unwrap_or_default()`、`unwrap_or(0)`、伪默认值、静默吞错。

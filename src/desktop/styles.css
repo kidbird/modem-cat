@@ -66,8 +66,8 @@
 
     body {
       /* Emoji-capable font stack: system UI → emoji → CJK → sans fallback.
-       * Without an emoji font, the blue-light "🌐" button (U+1F310) tofu's on
-       * Windows 10 / headless Linux / stripped WebView. */
+       * Without an emoji font, emoji glyphs tofu on Windows 10 / headless
+       * Linux / stripped WebView. */
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Roboto, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
@@ -296,6 +296,13 @@
       margin-bottom: 16px;
     }
     .panel-header .panel-title { margin-bottom: 0; }
+    .panel-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .airplane-toggle { display: flex; align-items: center; gap: 6px; }
+    .airplane-label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
 
     /* ── Forms ── */
     .form-row {
@@ -582,11 +589,6 @@
     }
     .settings-select:hover { border-color: var(--accent); }
     .settings-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,160,255,0.15); }
-    .settings-action {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
 
     /* ── SIM Slot Selector ── */
     .sim-card-item { position: relative; }
@@ -868,8 +870,6 @@
       border-bottom: 1px solid var(--border-color);
     }
     .toggle-row:last-child { border-bottom: none; }
-    .toggle-label { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
-    .toggle-desc { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
 
     .toggle-switch {
       position: relative;
@@ -899,28 +899,6 @@
     .toggle-switch input:checked + .toggle-track { background: var(--accent); }
     .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
 
-    /* ── Danger zone ── */
-    .danger-zone {
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 16px 20px;
-      background: var(--bg-secondary);
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    }
-    .danger-zone .panel-title { color: var(--text-primary); margin-bottom: 12px; }
-    .danger-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-
-    /* ── Section label ── */
-    .section-label {
-      font-size: 10.5px;
-      font-weight: 700;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin: 18px 0 10px;
-    }
-    .section-label:first-child { margin-top: 0; }
-
     /* ── APN list ── */
     .apn-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
     .apn-item {
@@ -939,16 +917,6 @@
     .apn-item-info { flex: 1; min-width: 0; }
     .apn-item-name { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
     .apn-item-meta { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
-    .apn-item-active {
-      font-size: 10.5px;
-      font-weight: 700;
-      background: var(--accent);
-      color: #fff;
-      padding: 2.5px 7px;
-      border-radius: 4px;
-      flex-shrink: 0;
-      box-shadow: 0 2px 6px var(--accent-glow);
-    }
 
     /* ── APN modal ── */
     .apn-modal-overlay {
@@ -1007,18 +975,6 @@
       flex-shrink: 0;
     }
     .lock-item-info { flex: 1; color: var(--text-primary); }
-    .lock-item-del {
-      background: none;
-      border: none;
-      color: var(--text-secondary);
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
-      padding: 0 4px;
-      flex-shrink: 0;
-      transition: color 0.12s;
-    }
-    .lock-item-del:hover { color: var(--error); }
     .lock-quota { font-size: 11.5px; color: var(--text-secondary); margin-bottom: 12px; }
 
     /* ── Neighbor sub-tabs ── */
@@ -1049,21 +1005,6 @@
     }
     .sub-tab-btn.active { color: var(--text-primary); }
     .sub-tab-btn:hover:not(.active) { color: var(--text-secondary); }
-
-    /* ── Placeholder ── */
-    .placeholder-page {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 14px;
-      color: var(--text-secondary);
-      min-height: 300px;
-    }
-    .placeholder-icon { font-size: 40px; opacity: 0.3; color: var(--accent); }
-    .placeholder-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
-    .placeholder-sub { font-size: 12.5px; opacity: 0.8; }
 
     /* ── Scene Mode ── */
     .scene-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -1171,40 +1112,9 @@
   color-scheme: light;
 }
 
-/* [data-theme="blue-light"] no longer needs !important on every var:
- *   - :root has specificity (0,0,1); [data-theme="blue-light"] has (0,1,0).
- *   - When documentElement has data-theme="blue-light", both selectors match
- *     the :root vars from the light-default block; the blue-light rule wins
- *     by specificity, not by !important.
- *   - Keeping !important here would block future per-component overrides
- *     (e.g. [data-theme="blue-light"] .special-card { --accent: ... }).
- * The light and dark blocks keep !important for now — they share a combined
- * selector (:root, [data-theme="light"]) and removing it there is out of scope
- * for this commit. */
-[data-theme="blue-light"] {
-  --bg-primary:    #f3f7fc !important; /* Clean ice-blue primary background */
-  --bg-secondary:  #ffffff !important; /* Pure white card/panel background */
-  --bg-tertiary:   #edf4fc !important; /* Cool light ice-blue background for fields/tabs */
-  --border-color:  #cbdcf0 !important; /* Soft steel-blue border */
-  --border-hover:  #0066ff !important; /* Vibrant tech-blue hover border */
-  --text-primary:  #091e42 !important; /* Crisp slate navy primary text */
-  --text-secondary:#344563 !important; /* Cool slate-blue secondary text */
-  --text-muted:    #627d98 !important; /* Soft blue-gray muted text */
-  --accent:        #0066ff !important; /* Electric tech blue accent */
-  --accent-hover:  #0052cc !important;
-  --accent-glow:   rgba(0, 102, 255, 0.12) !important;
-  --success:       #0d9488 !important; /* Clean high-tech emerald green */
-  --success-glow:  rgba(13, 148, 136, 0.12) !important;
-  --warning:       #d97706 !important;
-  --error:         #ef4444 !important;
-  --danger:        #ef4444 !important;
-  --danger-hover:  #dc2626 !important;
-  --cyan:          #0ea5e9 !important; /* Cyber cyan */
-  --tab-bar-bg:    #e2edf9 !important; /* Light-blue tab bar background */
-  --tab-active-bg: #ffffff !important;
-  color-scheme: light;
-}
-
+/* The dark and light blocks keep !important — they share a combined
+ * selector (:root, [data-theme="light"]) and removing it there is out of
+ * scope for now. */
 [data-theme="dark"] {
   --bg-primary:    #1A1714 !important;
   --bg-secondary:  #25211C !important;
@@ -1233,7 +1143,7 @@
 body {
   /* Emoji-capable stack: 'Inter' first (Claude Code 风), then system UI, then
    * dedicated emoji fonts (Segoe UI Emoji / Apple Color Emoji / Noto Color
-   * Emoji) so the blue-light "🌐" button does not tofu. */
+   * Emoji) so emoji glyphs do not tofu on Windows 10 / headless Linux. */
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Roboto, system-ui, sans-serif;
   font-feature-settings: 'cv11', 'ss01', 'tnum', 'zero' !important;
   letter-spacing: -0.012em !important;
@@ -1246,14 +1156,8 @@ body {
 [data-theme="light"] .sidebar,
 :root .sidebar { background: #EFEAE0; }
 [data-theme="dark"] .sidebar { background: #221E1A; }
-[data-theme="blue-light"] .sidebar { background: #edf4fc; } /* Fresh, cool ice-blue background */
 .logo { border-color: var(--border-color); }
 .logo-icon { filter: none !important; }
-
-/* Logo icon glow in blue-light theme */
-[data-theme="blue-light"] .logo-icon svg {
-  filter: drop-shadow(0 0 5px rgba(0, 102, 255, 0.45)) !important;
-}
 
 .nav-item { border-radius: 8px; transition: background .12s, color .12s; }
 .nav-item.active {
@@ -1263,51 +1167,13 @@ body {
 }
 [data-theme="dark"] .nav-item.active { box-shadow: 0 1px 2px rgba(0,0,0,0.30); }
 
-/* Nav active override in blue-light */
-[data-theme="blue-light"] .nav-item.active {
-  color: var(--accent) !important;
-  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.06), 0 1px 3px rgba(0, 102, 255, 0.04) !important;
-  border-left: 3px solid var(--accent);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
 .nav-item.active .nav-icon {
   color: var(--accent) !important;
   filter: none !important;
 }
 
-/* Inactive nav icon color in blue-light theme */
-[data-theme="blue-light"] .nav-icon {
-  color: #708fa8;
-}
-[data-theme="blue-light"] .nav-item:hover {
-  background: #e1edf9 !important;
-  color: var(--text-primary) !important;
-}
-[data-theme="blue-light"] .nav-item:hover .nav-icon {
-  color: var(--accent) !important;
-}
-
 .status-icon.connected,
 .status-icon.data-on { filter: none !important; }
-
-/* Status bar & connected state custom styling in blue-light theme */
-[data-theme="blue-light"] .status-bar {
-  background: rgba(0, 102, 255, 0.03) !important;
-  border-top-color: #cbdcf0 !important;
-}
-[data-theme="blue-light"] .status-icon {
-  color: #708fa8 !important;
-}
-[data-theme="blue-light"] .status-icon.connected {
-  color: var(--success) !important;
-  filter: drop-shadow(0 0 4px rgba(13, 148, 136, 0.45)) !important;
-}
-[data-theme="blue-light"] .status-icon.data-on {
-  color: var(--accent) !important;
-  filter: drop-shadow(0 0 5px rgba(0, 102, 255, 0.5)) !important;
-}
 
 .data-connect-btn { border-radius: 6px; }
 .data-connect-btn:hover {
@@ -1545,13 +1411,6 @@ body {
   color: var(--text-secondary) !important;
   opacity: 0.8 !important;
 }
-[data-theme="blue-light"] .terminal-line.resp {
-  color: var(--text-primary) !important;
-}
-[data-theme="blue-light"] .terminal-line.info {
-  color: var(--text-secondary) !important;
-  opacity: 0.8 !important;
-}
 .shortcut-bar .btn {
   font-family: 'JetBrains Mono', monospace !important;
   font-size: 11px !important;
@@ -1645,42 +1504,6 @@ body {
       filter:drop-shadow(0 0 3px var(--accent));
     }
 
-/* ── 17. 科技蓝专属细节润色 ── */
-[data-theme="blue-light"] .panel {
-  border-color: #cbdcf0 !important;
-  box-shadow: 0 4px 16px rgba(0, 102, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
-}
-[data-theme="blue-light"] .panel:hover {
-  border-color: var(--accent) !important;
-  box-shadow: 0 8px 24px rgba(0, 102, 255, 0.08), 0 2px 4px rgba(0, 102, 255, 0.04) !important;
-}
-[data-theme="blue-light"] .info-item {
-  border-color: #cbdcf0 !important;
-  background: var(--bg-secondary) !important;
-}
-[data-theme="blue-light"] .info-item:hover {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.08) !important;
-}
-[data-theme="blue-light"] input,
-[data-theme="blue-light"] select,
-[data-theme="blue-light"] .conn-select,
-[data-theme="blue-light"] .terminal-input {
-  border-color: #cbdcf0 !important;
-  background: var(--bg-tertiary) !important;
-  color: var(--text-primary) !important;
-}
-[data-theme="blue-light"] input:focus,
-[data-theme="blue-light"] select:focus,
-[data-theme="blue-light"] .conn-select:focus,
-[data-theme="blue-light"] .terminal-input:focus-within {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12) !important;
-}
-[data-theme="blue-light"] .tab-indicator {
-  box-shadow: 0 1px 3px rgba(0, 102, 255, 0.08) !important;
-}
-
 /* ── Firmware Download Page ─────────────────────────────────────────────── */
 
 .alert {
@@ -1729,6 +1552,14 @@ body {
 .chip.info {
   background: rgba(59, 130, 246, 0.12);
   color: #3b82f6;
+}
+
+.fw-platform-note {
+  margin-top: -4px;
+}
+.fw-platform-note .chip {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .progress-bar {

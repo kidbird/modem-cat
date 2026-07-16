@@ -32,9 +32,9 @@
       }
       notConnected.style.display = 'none';
 
-      const isQualcomm = isQualcommModel(state.model);
-      qualcommPanel.style.display = isQualcomm ? '' : 'none';
-      if (isQualcomm) {
+      const isUnisoc = state.chipVendor === 'unisoc';
+      qualcommPanel.style.display = isUnisoc ? 'none' : '';
+      if (!isUnisoc) {
         loadingEl.style.display   = 'none';
         unisocPanel.style.display = 'none';
         return;

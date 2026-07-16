@@ -51,6 +51,7 @@
 | UI 元素 | 触发函数 | IPC 命令 |
 |---|---|---|
 | 首选网络选择 | applyPreferredNetwork | `set_network_mode_cmd` |
+| 网络模式（路由/网卡） | loadNetlockData / applyNatMode | `get_nat_mode` / `set_nat_mode` |
 | 频段网格 | refreshBands | `get_bands` |
 | 应用频段 | applyBandLock | `set_bands` |
 | 重置频段 | resetBandLock | `reset_all_bands` |
@@ -95,12 +96,12 @@
 | UI 元素 | HTML ID | 触发函数 | IPC 命令 |
 |---|---|---|---|
 | 页面初始化 | `#adbDebugNav` | `initDebugTerminal` | `get_debug_terminal_capabilities` / `get_debug_terminal_prefs` |
-| 连接按钮 | `#adbDebugConnectBtn` | `connectAdbDebug` | `get_feature_toggles` → `start_adb_session` |
+| 连接按钮 | `#adbDebugConnectBtn` | `connectAdbDebug` | `start_adb_session` |
 | 终端键盘输入 | `#adbDebugTerminal` | `handleDebugTerminalKey` / `handleDebugTerminalPaste` | `write_debug_terminal_input` |
 | 断开按钮 | `#adbDebugDisconnectBtn` | `disconnectDebugTerminal` | `close_debug_terminal_session` |
 | 终端输出 | `#adbDebugTerminal` | `handleDebugOutputEvent` | `debug-terminal-output` 事件 |
 
-> 若系统信息页中的 ADB 开关未启用，前端不会自动代开，只提示“请先开启 ADB 并重启设备后重新连接”。
+> ADB 调试页不读取 modem AT 状态，不调用 `get_feature_toggles` / `AT+QCFG="usbcfg"`；是否启用 ADB 由 `adb.exe shell` 的实际启动结果返回。
 
 ### 2.5 SSH 调试页（`#page-sshdebug`）
 

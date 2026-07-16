@@ -12,12 +12,12 @@ const bundleResources = tauriConfig.bundle.resources;
 
 assert.equal(
   webviewInstallMode.type,
-  'embedBootstrapper',
-  'desktop build should use embedBootstrapper by default'
+  'downloadBootstrapper',
+  'desktop build should use downloadBootstrapper by default'
 );
 assert.ok(
   webviewInstallMode.path == null,
-  'embedBootstrapper config should not pin a fixed WebView2 runtime path'
+  'downloadBootstrapper config should not pin a fixed WebView2 runtime path'
 );
 
 assert.ok(!script.includes('license-gen.exe'), 'release script should not package license-gen');
@@ -73,9 +73,9 @@ assert.ok(
   'setup-webview2 should no longer target a Fixed Version runtime package'
 );
 assert.ok(
-  setupWebviewScript.includes('embedBootstrapper') &&
+  setupWebviewScript.includes('downloadBootstrapper') &&
     setupWebviewScript.includes('webview2-runtime'),
-  'setup-webview2 should document embedBootstrapper mode and optional legacy cleanup'
+  'setup-webview2 should document downloadBootstrapper mode and optional legacy cleanup'
 );
 
 console.log('release packaging assertions passed');

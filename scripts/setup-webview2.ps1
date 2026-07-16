@@ -1,6 +1,6 @@
 # setup-webview2.ps1 — WebView2 mode sanity helper
 #
-# The project now uses Tauri's `embedBootstrapper` mode by default:
+# The project now uses Tauri's `downloadBootstrapper` mode by default:
 #   - Windows 10/11 with system WebView2: app starts directly
 #   - machines without WebView2: installer bootstrapper downloads/installs it
 #
@@ -28,15 +28,15 @@ function Write-Utf8NoBomJson([string]$Path, $Value) {
 
 $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
 $cfg.bundle.windows.webviewInstallMode = [PSCustomObject]@{
-    type = "embedBootstrapper"
+    type = "downloadBootstrapper"
 }
 Write-Utf8NoBomJson -Path $configPath -Value $cfg
 
 Write-Host ""
 Write-Host "WebView2 mode normalized:"
-Write-Host "  tauri.conf.json -> bundle.windows.webviewInstallMode = embedBootstrapper"
+Write-Host "  tauri.conf.json -> bundle.windows.webviewInstallMode = downloadBootstrapper"
 Write-Host "  portable builds  -> rely on system WebView2"
-Write-Host "  installer builds -> use embedded bootstrapper when needed"
+Write-Host "  installer builds -> download bootstrapper when needed"
 
 if ($CleanLegacy) {
     foreach ($dir in $legacyDirs) {

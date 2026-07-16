@@ -1,6 +1,6 @@
 # 项目架构设计
 
-> 最近更新：2026-07-07
+> 最近更新：2026-07-09
 > 适用于：modem-cat 当前主线
 
 ## 1. 总体结构
@@ -22,7 +22,6 @@ src-tauri/src/
   connection.rs← 串口/TCP/WebSocket 连接 IPC
   monitor.rs   ← usb-monitor / heartbeat 后台线程
   mqtt.rs      ← 可选 MQTT 后台状态上报
-  factory.rs   ← 工厂模式 HTTP 设备通信 / 本地持久化 / IPC
   dloader.rs   ← 固件下载 sidecar / 事件转发 / IPC
         │
         ├─ modem-hal/src/*
@@ -30,7 +29,6 @@ src-tauri/src/
         │    modem_factory.rs / modem_vendor.rs
         │    vendors/quectel/{mod,parser,qualcomm,unisoc,band_db}.rs
         │
-        ├─ HTTP device APIs（factory 模式）
         └─ r26-cli sidecar / DLFrame.dll（固件下载）
 ```
 
@@ -55,10 +53,11 @@ src-tauri/src/
 
 - `AppState.transport` 是当前唯一 live AT 队列 owner。
 - `send_raw_at` 也必须走同一把 `transport` 锁，但它只服务 AT 调试页，不能承载 IMS / MTU / DMZ / LAN / CFUN 查询这类业务主路径。
+- `LoggingTransport::send_at` 是 live AT 的统一发送包装层；任意两条 live AT 之间必须在上一条完成后至少间隔 `10ms`，禁止在 vendor 方法里各自绕开或另建节流。
 - 业务页的 live 配置必须通过 `handlers.rs` 专用 typed IPC → `ModemVendor` 专用方法收敛，禁止前端自行拼接完整业务 AT。
 - `mqtt.rs` 已改为复用同一把 `transport` 锁，并按 `transport -> vendor` 顺序取锁。
 - 所有 live 查询（如 feature toggle / NAT / 设备认证状态）失败时必须直接报错，不得伪装成 `false` / `0` / 空值。
-- `factory.rs` 的 HTTP 请求和 `dloader.rs` 的 sidecar 不是 AT 路径，不得反向引入第二条 modem AT 队列。
+- `dloader.rs` 的 sidecar 不是 AT 路径，不得反向引入第二条 modem AT 队列。
 
 ## 3. 单一真相源
 
@@ -104,12 +103,13 @@ src-tauri/src/
 - live 业务 IPC handler
 - `data_cid` / feature toggle / NAT / IMS / CFUN / MTU / LAN / DMZ / AT / MQTT 状态入口
 - 所有 live 查询必须返回真实结果或明确错误
+- UniSoc / ASR 的 `ethernet`、`uartAt` 开关成功下发后，后端立即关闭并清空当前 live transport/vendor；这些开关可能触发 AT 口重枚举，同一连接上禁止继续连发后续 AT。
 
 ### 4.3 `src-tauri/src/connection.rs`
 
 - 串口 / TCP / WebSocket 连接
 - 自动连接、端口筛选、网卡枚举
-- 串口枚举时优先读取 USB `VID/PID`，命中已知映射后先确认芯片平台与 AT 分支：`0x2C7C:0x0900` → UniSoc（RG200U/RM500U 系），`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR RedCap；未命中时再回退到 `AT+CGMM`
+- 串口枚举时优先读取 USB `VID/PID`，命中已知映射后先确认芯片平台与 AT 分支：`0x2C7C:0x0900` → UniSoc（RG200U/RM500U 系），`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` / `0x2C7C:0x600C`（ADB-on 变体） → ASR RedCap；未命中时再回退到 `AT+CGMM`
 - 若系统枚举阶段没拿到 USB `VID/PID`，`ModemFactory::create_with_usb_ids` 直接回退 `AT+CGMM`；禁止把 `AT+QCFG="usbcfg"` 当成跨厂商的通用 USB ID 恢复路径
 - `get_hardware_info` 只使用 `AppState.connected_usb_ids` 和 vendor 已返回的字段；若当前连接没有系统枚举到的 `usbVid` / `usbPid`，页面保持空值，不额外假设所有平台都支持 `AT+QCFG="usbcfg"`
 - WebSocket 认证只接受显式提供的凭据；禁止公开默认值
@@ -150,7 +150,8 @@ src-tauri/src/
 - 启动阶段文件日志路径统一为 `%LOCALAPPDATA%\Modem Cat\logs\startup.log`
 - 若 `LOCALAPPDATA` 不可用，则依次回退到 `%TEMP%`、当前工作目录
 - `main.rs` 启动前安装 panic hook；`lib.rs::run()` 在进入 Tauri runtime 前初始化文件 logger
-- 启动最前面会额外记录 `modem-cat.exe` 路径、当前工作目录、以及同层遗留 `webview2-runtime/` / `msedgewebview2.exe` 是否存在，便于区分“旧 fixed runtime 包残留”与当前 `embedBootstrapper` / 系统 WebView2 路径
+- 启动最前面会额外记录 `modem-cat.exe` 路径、当前工作目录、以及同层遗留 `webview2-runtime/` / `msedgewebview2.exe` 是否存在，便于区分“旧 fixed runtime 包残留”与当前 `downloadBootstrapper` / 系统 WebView2 路径
+- `main.rs` **不再做任何 WebView2 注册表预检或 bootstrapper 拉起**：历史上的 `webview2_setup::ensure_webview2()` 已删除，它查注册表 + 找同目录 `MicrosoftEdgeWebview2Setup.exe` 的逻辑是死代码，且其额外的检查点会放大“路径不对误报 webview 没有”的噪音。现在启动期只有“Tauri/wry 直接使用系统 WebView2”一条路径；startup.log 仍记录同目录 `webview2-runtime/` 残留状态，专门用于排查 wry 被坏目录干扰的情况，`build.ps1` 也会在打包时清理 `dist/webview2-runtime`
 - 目标是把“窗口子系统下双击无反应”的启动失败收敛成可回收的本地日志，而不是只写 stdout/stderr
 
 ## 5. HAL 结构
@@ -190,7 +191,7 @@ pub trait AtTransport: Send {
 
 - Qualcomm：数据连接 / 状态查询主路径围绕 `AT+QMAP`
 - UniSoc：数据连接 / IP 查询主路径围绕 `AT+QNETDEVCTL` / `AT+QNETDEVSTATUS`
-- ASR（RG255AA 系列）：当前 AT 指令集**复用 UniSoc adapter**（同一 Quectel 厂家共通），`ChipsetVendor::Asr` 仅用于 UI/序列化标识；若后续出现 ASR 独有 AT，再拆分 `asr.rs` 并扩展 `QuectelChip`。
+- ASR（RG255AA 系列）：当前 AT 指令集**复用 UniSoc adapter**（同一 Quectel 厂家共通）。平台标识收敛为单一真相源——工厂检测后直接构造 `QuectelChip::Asr`，dispatch 里 `Asr` 分支与 `UniSoc` 共用同一套 AT；若后续出现 ASR 独有 AT，再拆分 `asr.rs` 并扩展 dispatch。
 - `Unknown`：正式合同是直接报错，不允许猜 adapter
 
 ### 6.2 不属于正式合同的内容

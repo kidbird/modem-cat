@@ -106,11 +106,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Quick
 - `AdbWinApi.dll`
 - `AdbWinUsbApi.dll`
 
-`build.ps1` 会在构建开始前把 ADB 组件复制到 `dist/` 根目录，方便便携版直接运行。`r26-cli` 固件 sidecar 额外依赖 **x86** `vcruntime140.dll`，构建脚本会从 Windows 构建机同步到 `src-tauri/resources/r26-runtime/`（供安装包使用）以及 `dist/vcruntime140.dll`（供便携版 / 直接双击验证使用）。WebView2 方面，当前 `tauri.conf.json` 使用 `embedBootstrapper`：安装包优先复用系统 WebView2，缺失时再自动拉起 bootstrapper；便携版则直接依赖目标机器已有的系统 WebView2。
+`build.ps1` 会在构建开始前把 ADB 组件复制到 `dist/` 根目录，方便便携版直接运行。`r26-cli` 固件 sidecar 额外依赖 **x86** `vcruntime140.dll`，构建脚本会从 Windows 构建机同步到 `src-tauri/resources/r26-runtime/`（供安装包使用）以及 `dist/vcruntime140.dll`（供便携版 / 直接双击验证使用）。WebView2 方面，主程序（`main.rs`）**不再做任何 WebView2 注册表预检或 bootstrapper 拉起**——启动期完全交给 Tauri/wry 使用目标机器的系统 WebView2；三种交付物（单独 `modem-cat.exe`、portable ZIP、安装包）在有系统 WebView2 的 Win10 1803+/Win11 上都能直接启动，不会因 WebView2 相关逻辑报错。安装包侧 `tauri.conf.json` 使用 `downloadBootstrapper`：安装包优先复用系统 WebView2，缺失时再自动下载并拉起 bootstrapper；便携版则直接依赖目标机器已有的系统 WebView2。
 
 Windows 安装包固定产出两个变体：
 
-- `webview`：沿用 `embedBootstrapper`，适合常规交付
+- `webview`：沿用 `downloadBootstrapper`，适合常规在线交付
 - `nowebview`：临时覆写为 `skip`，适合目标环境已统一预装/管控 WebView2 的场景
 
 Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不再创建 `dist/installer/`、`dist/portable/` 这类分类目录。
@@ -124,6 +124,32 @@ Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不再�
 - `r26-cli-x86_64-pc-windows-msvc.exe`
 - `r26-cli.version.txt`
 - `vcruntime140.dll`（x86，供 `r26-cli` 使用）
+- r26-cli 运行时依赖的 DLL / INI（DLFrame.dll、BMPlatform9.dll 等 Unisoc SDK 组件）
+- `Customized/Auth/Auth.dll`（固件下载认证组件）
+
+### dist-assets/ 统一部署资产目录
+
+所有运行时依赖文件统一放在项目根目录的 `dist-assets/` 下，`build.ps1` 构建时自动将其复制到 `dist/`。该目录**不进 Git**（已在 `.gitignore` 中排除），但跨构建持久化——只需一次性准备，后续重建自动复用。
+
+首次构建前需手动准备 `dist-assets/`，包含以下文件：
+
+```
+dist-assets/
+├── r26-cli-x86_64-pc-windows-msvc.exe    # 固件下载 sidecar（来自 src-tauri/binaries/）
+├── r26-cli.version.txt
+├── vcruntime140.dll                       # x86 VC 运行库（来自系统或 src-tauri/resources/r26-runtime/）
+├── DLFrame.dll                            # Unisoc 刷机核心 DLL
+├── BMPlatform9.dll, Channel9.dll, ...     # r26-cli 全部依赖 DLL / INI
+├── ResearchDownload.ini                   # r26-cli 配置
+├── Customized/
+│   └── Auth/
+│       └── Auth.dll                       # 固件下载认证 DLL
+├── adb.exe                                # ADB 调试工具（来自 Sdk/）
+├── AdbWinApi.dll
+└── AdbWinUsbApi.dll
+```
+
+> **提示**：可从已有的 `dist/` 或 Unisoc ResearchDownload SDK 安装目录一次性复制上述文件到 `dist-assets/`，之后每次构建只需运行 `build.ps1`，无需再手动管理散落的文件。
 
 当前两个 portable ZIP 的差异如下：
 
@@ -136,11 +162,12 @@ Windows 正式发版时，`dist/` 根目录只保留最终交付文件，不再�
 
 - `dist/modem-cat.exe` 不再依赖同层 `webview2-runtime/`；它和两个 portable ZIP 一样，直接要求目标机器已有系统 WebView2
 - 若外机提示缺少 WebView2，优先改发 `webview` 安装包，或先在目标机器安装系统 WebView2 Runtime
-- `dist/r26-cli-x86_64-pc-windows-msvc.exe` 现在默认依赖同层的 `dist/vcruntime140.dll`；若漏掉它，主程序仍可启动，但固件下载会在启动 sidecar 时失败
+- `dist/r26-cli-x86_64-pc-windows-msvc.exe` 依赖同层的 `vcruntime140.dll`；若漏掉它，主程序仍可启动，但固件下载会在启动 sidecar 时失败
+- r26-cli 还需要同层的 DLFrame.dll 及其 INI 依赖、`Customized/Auth/Auth.dll`；这些文件统一从 `dist-assets/` 复制
 
 任何 license / 设备激活工具都不属于最终用户桌面交付物，也不进入 `dist/` 或 portable ZIP。
 
-`build.ps1` 本身不再为 app-local fixed runtime 预处理目录；安装包默认直接走 `embedBootstrapper`，便携版默认依赖系统 WebView2。`scripts/build-helper.ps1` 只会尽量复用 `%LOCALAPPDATA%\tauri` 中已缓存的 `MicrosoftEdgeWebview2Setup.exe`，减少重复下载。`scripts/setup-webview2.ps1` 也已经改成模式校验/清理脚本，不再把配置改回 `fixedRuntime`。WebView2 约束统一维护在本文件，不再单独维护重复的 `WEBVIEW2_BUILD.md`。
+`build.ps1` 本身不再为 app-local fixed runtime 预处理目录；安装包默认直接走 `downloadBootstrapper`，便携版默认依赖系统 WebView2。`scripts/setup-webview2.ps1` 也已经改成模式校验/清理脚本，不再把配置改回 `fixedRuntime`。WebView2 约束统一维护在本文件，不再单独维护重复的 `WEBVIEW2_BUILD.md`。
 
 为保证远端 CI/CD 也能完整执行 Windows 打包，以下构建输入必须保留在 Git：
 

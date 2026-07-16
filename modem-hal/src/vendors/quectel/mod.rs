@@ -18,11 +18,11 @@ fn get_ant_values(t: &mut dyn AtTransport, chip: &QuectelChip) -> Result<Vec<Str
     let none = vec![String::new(), String::new(), String::new(), String::new()];
     let response = match chip {
         QuectelChip::Qualcomm => t.send_at("AT+QRSRP")?,
-        QuectelChip::UniSoc => t.send_at("AT+QANTRSSI?")?,
+        QuectelChip::UniSoc | QuectelChip::Asr => t.send_at("AT+QANTRSSI?")?,
     };
     let ant = match chip {
         QuectelChip::Qualcomm => parse_qrsrp(&response),
-        QuectelChip::UniSoc => parse_qantrssi(&response),
+        QuectelChip::UniSoc | QuectelChip::Asr => parse_qantrssi(&response),
     };
     if ant.iter().any(|v| !v.is_empty()) {
         Ok(ant)
@@ -167,10 +167,17 @@ fn parse_qnwlock_response(resp: &str, prefix: &str) -> Vec<(String, String)> {
 /// break downstream consumers. Internal `match` arms in this crate remain
 /// exhaustive at compile time — when a new variant is added, the compiler
 /// will surface every `match self.chip { ... }` that needs updating.
+///
+/// `Asr` is a distinct variant so the platform can be identified from a
+/// single source of truth (the factory's VID/PID or CGMM decision) instead
+/// of re-sniffing the model string. Per the documented contract, ASR AT
+/// commands reuse the UniSoc adapter; dispatch arms that match `UniSoc`
+/// therefore also match `Asr` unless ASR needs a platform-specific branch.
 #[non_exhaustive]
 pub enum QuectelChip {
     Qualcomm,
     UniSoc,
+    Asr,
 }
 
 pub struct QuectelModem {
@@ -191,17 +198,20 @@ impl QuectelModem {
             model,
         }
     }
+    pub fn asr(model: String) -> Self {
+        Self {
+            chip: QuectelChip::Asr,
+            model,
+        }
+    }
 }
 
 impl ModemVendor for QuectelModem {
     fn vendor(&self) -> ChipsetVendor {
-        // ASR 平台在 UI/序列化层独立标识，AT 分发仍走 self.chip = UniSoc。
-        if self.model.to_uppercase().contains("RG255") {
-            return ChipsetVendor::Asr;
-        }
         match self.chip {
             QuectelChip::Qualcomm => ChipsetVendor::Qualcomm,
             QuectelChip::UniSoc => ChipsetVendor::UniSoc,
+            QuectelChip::Asr => ChipsetVendor::Asr,
         }
     }
 
@@ -222,7 +232,7 @@ impl ModemVendor for QuectelModem {
     fn query_iccid(&mut self, t: &mut dyn AtTransport) -> Result<String, String> {
         let cmd = match self.chip {
             QuectelChip::Qualcomm => "AT+ICCID",
-            QuectelChip::UniSoc => "AT+CCID",
+            QuectelChip::UniSoc | QuectelChip::Asr => "AT+CCID",
         };
         let resp = t.send_at(cmd)?;
         let iccid = parse_iccid(&resp);
@@ -253,7 +263,7 @@ impl ModemVendor for QuectelModem {
                     Ok("未连接".to_string())
                 }
             }
-            QuectelChip::UniSoc => {
+            QuectelChip::UniSoc | QuectelChip::Asr => {
                 let resp = send_and_delay(t, "AT+CGACT?")?;
                 let contexts = parse_cgact(&resp);
                 if contexts.iter().any(|(_, s)| *s == 1) {
@@ -315,18 +325,16 @@ impl ModemVendor for QuectelModem {
         let (ap_baseline, cp_baseline) = parse_qbaseline(&baseline_resp);
 
         let temp_resp = t.send_at("AT+QTEMP")?;
-        let is_asr = self.model.to_uppercase().contains("RG255");
-        let (soc_temp, pa_temp) = if is_asr {
-            let info = parse_qtemp_asr(&temp_resp);
-            (info.soc_temp, info.pa_temp)
-        } else {
-            match self.chip {
-                QuectelChip::UniSoc => {
-                    let info = parse_qtemp_unisoc(&temp_resp);
-                    (info.soc_temp, info.pa_temp)
-                }
-                QuectelChip::Qualcomm => parse_qtemp_rich(&temp_resp),
+        let (soc_temp, pa_temp) = match self.chip {
+            QuectelChip::Asr => {
+                let info = parse_qtemp_asr(&temp_resp);
+                (info.soc_temp, info.pa_temp)
             }
+            QuectelChip::UniSoc => {
+                let info = parse_qtemp_unisoc(&temp_resp);
+                (info.soc_temp, info.pa_temp)
+            }
+            QuectelChip::Qualcomm => parse_qtemp_rich(&temp_resp),
         };
 
         // SN read via AT+EGMR=0,5. Like ICCID, this is a modem-adjacent
@@ -354,14 +362,10 @@ impl ModemVendor for QuectelModem {
 
     fn query_temperature(&mut self, t: &mut dyn AtTransport) -> Result<TemperatureInfo, String> {
         let resp = send_and_delay(t, "AT+QTEMP")?;
-        let is_asr = self.model.to_uppercase().contains("RG255");
-        if is_asr {
-            Ok(parse_qtemp_asr(&resp))
-        } else {
-            match self.chip {
-                QuectelChip::UniSoc => Ok(parse_qtemp_unisoc(&resp)),
-                QuectelChip::Qualcomm => Ok(parse_qtemp(&resp)),
-            }
+        match self.chip {
+            QuectelChip::Asr => Ok(parse_qtemp_asr(&resp)),
+            QuectelChip::UniSoc => Ok(parse_qtemp_unisoc(&resp)),
+            QuectelChip::Qualcomm => Ok(parse_qtemp(&resp)),
         }
     }
 
@@ -397,7 +401,7 @@ impl ModemVendor for QuectelModem {
     fn query_ip_info(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<IpInfo, String> {
         match self.chip {
             QuectelChip::Qualcomm => qualcomm::query_ip_info(t, cid),
-            QuectelChip::UniSoc => unisoc::query_ip_info(t, cid),
+            QuectelChip::UniSoc | QuectelChip::Asr => unisoc::query_ip_info(t, cid),
         }
     }
 
@@ -447,7 +451,8 @@ impl ModemVendor for QuectelModem {
                 let rf_resp = send_and_delay(t, r#"AT+QNWPREFCFG="rf_band""#)?;
                 parse_qnwprefcfg_rf_band(&rf_resp)
             }
-            QuectelChip::UniSoc => match band_db::get_supported_bands(&self.model) {
+            // ASR 复用 UniSoc 的 band_db 预设路径（RG255AA 有独立 band 预设）。
+            QuectelChip::UniSoc | QuectelChip::Asr => match band_db::get_supported_bands(&self.model) {
                 Some(bands) => {
                     log::info!("UniSoc model {}, using band_db preset", self.model);
                     (
@@ -493,7 +498,7 @@ impl ModemVendor for QuectelModem {
     fn query_traffic(&mut self, t: &mut dyn AtTransport) -> Result<TrafficInfo, String> {
         match self.chip {
             QuectelChip::Qualcomm => qualcomm::query_traffic(t),
-            QuectelChip::UniSoc => unisoc::query_traffic(t),
+            QuectelChip::UniSoc | QuectelChip::Asr => unisoc::query_traffic(t),
         }
     }
 
@@ -502,7 +507,7 @@ impl ModemVendor for QuectelModem {
             QuectelChip::Qualcomm => {
                 t.send_at("AT+QGDNRCNT=0")?;
             }
-            QuectelChip::UniSoc => {
+            QuectelChip::UniSoc | QuectelChip::Asr => {
                 t.send_at("AT+QGDCNT=0")?;
             }
         }
@@ -530,7 +535,7 @@ impl ModemVendor for QuectelModem {
         let uart_at = query_required_qcfg_bool(t, r#"AT+QCFG="uartat""#, "uartat")?;
         let eth_at = match self.chip {
             QuectelChip::Qualcomm => query_required_qcfg_bool(t, r#"AT+QCFG="eth_at""#, "eth_at")?,
-            QuectelChip::UniSoc => false,
+            QuectelChip::UniSoc | QuectelChip::Asr => false,
         };
         let adb = query_required_qcfg_usbcfg_adb(t)?;
         let napt = query_required_qcfg_bool(t, r#"AT+QCFG="napt""#, "napt")?;
@@ -581,6 +586,9 @@ impl ModemVendor for QuectelModem {
                 }
             }
             "ethAt" => {
+                if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
+                    return Err("ETH AT is not supported on UniSoc platform".to_string());
+                }
                 let resp = send_and_delay(t, &format!(r#"AT+QCFG="eth_at",{}"#, val))?;
                 if !is_ok(&resp) {
                     return Err(format!("Failed to set eth_at: {}", resp));
@@ -643,7 +651,7 @@ impl ModemVendor for QuectelModem {
             }
         }
         // QNWLOCKFREQ is UniSoc-only
-        if matches!(self.chip, QuectelChip::UniSoc) {
+        if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             if let Ok(resp) = t.send_at(r#"AT+QNWLOCKFREQ="common/5g""#) {
                 for (arfcn, _) in parse_qnwlock_response(&resp, "QNWLOCKFREQ") {
                     entries.push(CellLockEntry {
@@ -771,7 +779,7 @@ impl ModemVendor for QuectelModem {
     fn factory_reset(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
         let cmd = match self.chip {
             QuectelChip::Qualcomm => "AT&F",
-            QuectelChip::UniSoc => "AT+QPRTPARA=3",
+            QuectelChip::UniSoc | QuectelChip::Asr => "AT+QPRTPARA=3",
         };
         let resp = t.send_at(cmd)?;
         if is_ok(&resp) {
@@ -811,7 +819,7 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_vlan(&mut self, t: &mut dyn AtTransport) -> Result<Vec<i32>, String> {
-        if matches!(self.chip, QuectelChip::UniSoc) {
+        if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             return Err("VLAN not supported on UniSoc platform".to_string());
         }
         let resp = send_and_delay(t, r#"AT+QMAP="VLAN""#)?;
@@ -846,7 +854,7 @@ impl ModemVendor for QuectelModem {
         vlan_id: i32,
         enabled: bool,
     ) -> Result<(), String> {
-        if matches!(self.chip, QuectelChip::UniSoc) {
+        if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             return Err("VLAN not supported on UniSoc platform".to_string());
         }
         // Enable:  AT+QMAP="VLAN",<vid>,"enable",1  (1=ETH)
@@ -899,7 +907,7 @@ impl ModemVendor for QuectelModem {
             .ok_or_else(|| format!("Failed to parse live ims state from {}", response.trim()))?;
         let enabled = match self.chip {
             QuectelChip::Qualcomm => values.get(1),
-            QuectelChip::UniSoc => values.first(),
+            QuectelChip::UniSoc | QuectelChip::Asr => values.first(),
         }
         .ok_or_else(|| format!("Failed to parse live ims state from {}", response.trim()))?;
         match enabled.as_str() {
@@ -922,7 +930,9 @@ impl ModemVendor for QuectelModem {
                     r#"AT+QCFG="ims",2,0"#.to_string()
                 }
             }
-            QuectelChip::UniSoc => format!(r#"AT+QCFG="ims",{}"#, if enabled { 1 } else { 0 }),
+            QuectelChip::UniSoc | QuectelChip::Asr => {
+                format!(r#"AT+QCFG="ims",{}"#, if enabled { 1 } else { 0 })
+            }
         };
         send_and_check(t, &command)?;
         Ok(())
@@ -940,17 +950,15 @@ impl ModemVendor for QuectelModem {
     }
 
     fn query_lan_config(&mut self, t: &mut dyn AtTransport) -> Result<LanConfig, String> {
-        let is_asr = self.model.to_uppercase().contains("RG255");
-        if matches!(self.chip, QuectelChip::Qualcomm) {
-            let response = send_and_delay(t, r#"AT+QMAP="LANIP""#)?;
-            return parse_qmap_lanip(&response)
-                .ok_or_else(|| format!("Failed to parse live LAN state from {}", response.trim()));
-        }
-
-        let (command, key) = if is_asr {
-            (r#"AT+QCFG="lanip""#, "lanip")
-        } else {
-            (r#"AT+QCFG="lanip_ex""#, "lanip_ex")
+        let (command, key) = match self.chip {
+            QuectelChip::Qualcomm => {
+                let response = send_and_delay(t, r#"AT+QMAP="LANIP""#)?;
+                return parse_qmap_lanip(&response).ok_or_else(|| {
+                    format!("Failed to parse live LAN state from {}", response.trim())
+                });
+            }
+            QuectelChip::Asr => (r#"AT+QCFG="lanip""#, "lanip"),
+            QuectelChip::UniSoc => (r#"AT+QCFG="lanip_ex""#, "lanip_ex"),
         };
         let response = send_and_delay(t, command)?;
         parse_qcfg_lan_config(&response, key)
@@ -962,13 +970,12 @@ impl ModemVendor for QuectelModem {
         t: &mut dyn AtTransport,
         config: &LanConfig,
     ) -> Result<(), String> {
-        let is_asr = self.model.to_uppercase().contains("RG255");
         let command = match self.chip {
             QuectelChip::Qualcomm => format!(
                 r#"AT+QMAP="LANIP",{},{},{}"#,
                 config.dhcp_start, config.dhcp_end, config.gateway
             ),
-            QuectelChip::UniSoc if is_asr => match config.netmask.as_deref() {
+            QuectelChip::Asr => match config.netmask.as_deref() {
                 Some(netmask) if !netmask.is_empty() => format!(
                     r#"AT+QCFG="lanip","{}","{}","{}","{}""#,
                     config.gateway, netmask, config.dhcp_start, config.dhcp_end
@@ -996,7 +1003,7 @@ impl ModemVendor for QuectelModem {
     fn set_dmz(&mut self, t: &mut dyn AtTransport, ip: &str) -> Result<(), String> {
         let command = match self.chip {
             QuectelChip::Qualcomm => format!(r#"AT+QMAP="DMZ",1,4,"{}""#, ip),
-            QuectelChip::UniSoc => format!("AT+QDMZ=1,4,{}", ip),
+            QuectelChip::UniSoc | QuectelChip::Asr => format!("AT+QDMZ=1,4,{}", ip),
         };
         send_and_check(t, &command)?;
         Ok(())
@@ -1005,14 +1012,14 @@ impl ModemVendor for QuectelModem {
     fn clear_dmz(&mut self, t: &mut dyn AtTransport) -> Result<(), String> {
         let command = match self.chip {
             QuectelChip::Qualcomm => r#"AT+QMAP="DMZ",0,4"#,
-            QuectelChip::UniSoc => "AT+QDMZ=0,4",
+            QuectelChip::UniSoc | QuectelChip::Asr => "AT+QDMZ=0,4",
         };
         send_and_check(t, command)?;
         Ok(())
     }
 
     fn query_qualcomm_config(&mut self, t: &mut dyn AtTransport) -> Result<QualcommConfig, String> {
-        if matches!(self.chip, QuectelChip::UniSoc) {
+        if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             return Err("query_qualcomm_config not supported on UniSoc platform".to_string());
         }
         let resp = send_and_delay(t, r#"AT+QCFG="usbnet""#)?;
@@ -1058,7 +1065,7 @@ impl ModemVendor for QuectelModem {
         param: &str,
         value: &str,
     ) -> Result<(), String> {
-        if matches!(self.chip, QuectelChip::UniSoc) {
+        if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             return Err("set_qualcomm_config not supported on UniSoc platform".to_string());
         }
         let cmd = match param {
@@ -1128,7 +1135,7 @@ impl ModemVendor for QuectelModem {
         let sim_status = parse_cpin(&cpin_raw);
         let iccid_cmd = match self.chip {
             QuectelChip::Qualcomm => "AT+ICCID",
-            QuectelChip::UniSoc => "AT+CCID",
+            QuectelChip::UniSoc | QuectelChip::Asr => "AT+CCID",
         };
         // ICCID only makes sense with a usable SIM. Gate on READY so we don't
         // send AT+ICCID/AT+CCID when there is no card (NO SIM, "SIM not
@@ -1170,10 +1177,10 @@ impl ModemVendor for QuectelModem {
 
         let ant_raw = match self.chip {
             QuectelChip::Qualcomm => t.send_at("AT+QRSRP")?,
-            QuectelChip::UniSoc => t.send_at("AT+QANTRSSI?")?,
+            QuectelChip::UniSoc | QuectelChip::Asr => t.send_at("AT+QANTRSSI?")?,
         };
 
-        let cgact_raw = if matches!(self.chip, QuectelChip::UniSoc) {
+        let cgact_raw = if matches!(self.chip, QuectelChip::UniSoc | QuectelChip::Asr) {
             Some(t.send_at("AT+CGACT?")?)
         } else {
             None
@@ -1210,7 +1217,7 @@ impl ModemVendor for QuectelModem {
         let ant_values = {
             let ant = match self.chip {
                 QuectelChip::Qualcomm => parse_qrsrp(&ant_raw),
-                QuectelChip::UniSoc => parse_qantrssi(&ant_raw),
+                QuectelChip::UniSoc | QuectelChip::Asr => parse_qantrssi(&ant_raw),
             };
             if ant.iter().any(|v| !v.is_empty()) {
                 ant
@@ -1230,7 +1237,7 @@ impl ModemVendor for QuectelModem {
                     "未连接".to_string()
                 }
             }
-            QuectelChip::UniSoc => {
+            QuectelChip::UniSoc | QuectelChip::Asr => {
                 let cgact_raw = cgact_raw
                     .as_deref()
                     .ok_or("Missing UniSoc CGACT response")?;
@@ -1449,14 +1456,14 @@ impl ModemVendor for QuectelModem {
     fn connect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
             QuectelChip::Qualcomm => qualcomm::connect_data(t, cid),
-            QuectelChip::UniSoc => unisoc::connect_data(t, cid),
+            QuectelChip::UniSoc | QuectelChip::Asr => unisoc::connect_data(t, cid),
         }
     }
 
     fn disconnect_data(&mut self, t: &mut dyn AtTransport, cid: i32) -> Result<(), String> {
         match self.chip {
             QuectelChip::Qualcomm => qualcomm::disconnect_data(t, cid),
-            QuectelChip::UniSoc => unisoc::disconnect_data(t, cid),
+            QuectelChip::UniSoc | QuectelChip::Asr => unisoc::disconnect_data(t, cid),
         }
     }
 
@@ -1617,6 +1624,101 @@ mod tests {
     }
 
     #[test]
+    fn set_ethernet_toggle_unisoc_uses_qcfg_ethernet() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_feature_toggle(&mut transport, "ethernet", true)
+            .expect("set ethernet should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="ethernet",1"#]);
+    }
+
+    #[test]
+    fn repeated_ethernet_toggle_unisoc_sends_only_requested_qcfg_commands() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK", "OK", "OK", "OK"]);
+
+        modem
+            .set_feature_toggle(&mut transport, "ethernet", true)
+            .expect("enable ethernet should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "ethernet", false)
+            .expect("disable ethernet should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "ethernet", true)
+            .expect("enable ethernet should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "ethernet", false)
+            .expect("disable ethernet should succeed");
+
+        assert_eq!(
+            transport.sent,
+            vec![
+                r#"AT+QCFG="ethernet",1"#,
+                r#"AT+QCFG="ethernet",0"#,
+                r#"AT+QCFG="ethernet",1"#,
+                r#"AT+QCFG="ethernet",0"#,
+            ]
+        );
+    }
+
+    #[test]
+    fn set_uart_at_toggle_unisoc_uses_qcfg_uartat() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        modem
+            .set_feature_toggle(&mut transport, "uartAt", false)
+            .expect("set UART AT should succeed");
+
+        assert_eq!(transport.sent, vec![r#"AT+QCFG="uartat",0"#]);
+    }
+
+    #[test]
+    fn repeated_uart_at_toggle_unisoc_sends_only_requested_qcfg_commands() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK", "OK", "OK", "OK"]);
+
+        modem
+            .set_feature_toggle(&mut transport, "uartAt", true)
+            .expect("enable UART AT should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "uartAt", false)
+            .expect("disable UART AT should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "uartAt", true)
+            .expect("enable UART AT should succeed");
+        modem
+            .set_feature_toggle(&mut transport, "uartAt", false)
+            .expect("disable UART AT should succeed");
+
+        assert_eq!(
+            transport.sent,
+            vec![
+                r#"AT+QCFG="uartat",1"#,
+                r#"AT+QCFG="uartat",0"#,
+                r#"AT+QCFG="uartat",1"#,
+                r#"AT+QCFG="uartat",0"#,
+            ]
+        );
+    }
+
+    #[test]
+    fn set_eth_at_toggle_unisoc_is_rejected() {
+        let mut modem = QuectelModem::unisoc("RM500U".to_string());
+        let mut transport = MockTransport::new(vec!["OK"]);
+
+        let err = modem
+            .set_feature_toggle(&mut transport, "ethAt", true)
+            .expect_err("UniSoc ETH AT should not be set");
+
+        assert!(err.contains("UniSoc"), "unexpected error: {err}");
+        assert!(transport.sent.is_empty());
+    }
+
+    #[test]
     fn query_ims_enabled_qualcomm_uses_dedicated_query() {
         let mut modem = QuectelModem::qualcomm("RM500Q".to_string());
         let mut transport = MockTransport::new(vec!["+QCFG: \"ims\",1,1\r\nOK"]);
@@ -1729,7 +1831,7 @@ mod tests {
 
     #[test]
     fn set_lan_config_asr_uses_lanip_command() {
-        let mut modem = QuectelModem::unisoc("RG255AA".to_string());
+        let mut modem = QuectelModem::asr("RG255AA".to_string());
         let mut transport = MockTransport::new(vec!["OK"]);
 
         modem

@@ -2,7 +2,7 @@
 # 入口脚本, 取代 build.bat 让脚本也能在 PowerShell 环境下直接运行
 #
 # 产出 (全部在 dist/ 根目录):
-#   dist\Modem Cat_<ver>_webview_*.msi/.exe        (embedBootstrapper 安装包)
+#   dist\Modem Cat_<ver>_webview_*.msi/.exe        (downloadBootstrapper 安装包)
 #   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (skip WebView2 安装包)
 #   dist\ModemCat_v<ver>_portable.zip              (便携包, 依赖系统 WebView2)
 #   dist\ModemCat_v<ver>_portable-lite.zip         (兼容别名, 当前同样依赖系统 WebView2)
@@ -94,6 +94,13 @@ function Remove-StaleDistArtifacts([string]$DistDir, [string]$Version) {
         Remove-Item -LiteralPath $distRuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    # 清理 ZIP 打包流程可能泄漏到 dist/ 的解压目录（如 ModemCat_v*_portable），
+    # 这些目录不该出现在最终交付物里。只匹配 ModemCat_v* 目录，避免误删 Customized/Log 等资源目录。
+    $leakedPortableDirs = Get-ChildItem $DistDir -Directory -Filter "ModemCat_v*" -ErrorAction SilentlyContinue
+    foreach ($leaked in $leakedPortableDirs) {
+        Remove-Item -LiteralPath $leaked.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     $distR26Runtime = Join-Path $DistDir "vcruntime140.dll"
     if (Test-Path $distR26Runtime) {
         Remove-Item -LiteralPath $distR26Runtime -Force -ErrorAction SilentlyContinue
@@ -148,7 +155,7 @@ if ($vcvars) {
 Write-Host ""
 
 # ── 2. Installer (embed bootstrapper) ─────────────────
-Write-Host "[2/6] Installer build (embed WebView2 bootstrapper)..."
+Write-Host "[2/6] Installer build (download WebView2 bootstrapper at install time)..."
 $tauriCli = $null
 $stagedR26Runtime = $null
 try { $tauriCli = (Get-Command "cargo-tauri" -ErrorAction SilentlyContinue) ; if (-not $tauriCli) { cargo tauri --version | Out-Null } } catch {}
@@ -189,31 +196,24 @@ if (-not $stagedR26Runtime) {
     $stagedR26Runtime = Sync-R26Runtime
 }
 
+# Copy modem-cat.exe from release build
 Copy-Item -LiteralPath "$root\target\release\modem-cat.exe" -Destination (Join-Path $distDir "modem-cat.exe") -Force
 Write-Host "       dist\modem-cat.exe"
 
-# Sidecar must keep its target-triple suffix
-$sidecarSrc = Join-Path $root "src-tauri\binaries\r26-cli-x86_64-pc-windows-msvc.exe"
-$sidecarDst = Join-Path $distDir "r26-cli-x86_64-pc-windows-msvc.exe"
-if (Test-Path $sidecarSrc) {
-    Copy-Item -LiteralPath $sidecarSrc -Destination $sidecarDst -Force
-    Write-Host "       dist\r26-cli-x86_64-pc-windows-msvc.exe"
-} else {
-    Write-Warning "       sidecar not found at $sidecarSrc"
-}
-$sidecarRuntimeDst = Join-Path $distDir "vcruntime140.dll"
-Copy-Item -LiteralPath $stagedR26Runtime -Destination $sidecarRuntimeDst -Force
-Write-Host "       dist\vcruntime140.dll"
-
-# ADB tools (from Sdk/ or resources/)
-$adbFiles = @("adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll")
-foreach ($adb in $adbFiles) {
-    $adbSrc = Join-Path $root "src-tauri\resources\adb\$adb"
-    if (-not (Test-Path $adbSrc)) { $adbSrc = Join-Path $root "Sdk\$adb" }
-    if (Test-Path $adbSrc) {
-        Copy-Item -LiteralPath $adbSrc -Destination (Join-Path $distDir $adb) -Force
-        Write-Host "       dist\$adb"
+# Copy all runtime assets from dist-assets/ (r26-cli, DLLs, ADB, Customized/Auth, etc.)
+$assetsDir = Join-Path $root "dist-assets"
+if (Test-Path $assetsDir) {
+    $assetFiles = Get-ChildItem -LiteralPath $assetsDir -Recurse -File
+    foreach ($asset in $assetFiles) {
+        $relPath = $asset.FullName.Substring($assetsDir.Length)
+        $dstPath = Join-Path $distDir $relPath
+        $dstDir = Split-Path $dstPath -Parent
+        if (-not (Test-Path $dstDir)) { New-Item -ItemType Directory -Path $dstDir -Force | Out-Null }
+        Copy-Item -LiteralPath $asset.FullName -Destination $dstPath -Force
     }
+    Write-Host "       dist-assets\ → dist\ ($($assetFiles.Count) files)"
+} else {
+    Write-Warning "       dist-assets\ not found — sidecar, DLLs, ADB will be missing. Populate it before building."
 }
 
 Write-Host ""
@@ -229,18 +229,23 @@ if ($Quick) {
         if (Test-Path $d) { Remove-Item $d -Recurse -Force }
         New-Item -ItemType Directory -Path $d -Force | Out-Null
     }
-    $portableFiles = @("modem-cat.exe", "r26-cli-x86_64-pc-windows-msvc.exe", "r26-cli.version.txt", "vcruntime140.dll", "adb.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll")
-    foreach ($f in $portableFiles) {
-        $src = Join-Path $distDir $f
-        if (Test-Path $src) {
-            Copy-Item $src $pFull -Force
-            Copy-Item $src $pLite -Force
-        }
+    # 便携包：复制 dist/ 下所有运行时文件和子目录（排除安装包、ZIP、便携临时目录）
+    $excludePatterns = @('*.msi', '*.zip', 'Modem Cat_*-setup.exe', 'ModemCat_v*_portable*')
+    Get-ChildItem -LiteralPath $distDir -Force | Where-Object {
+        $name = $_.Name
+        $exclude = $false
+        foreach ($pat in $excludePatterns) { if ($name -like $pat) { $exclude = $true; break } }
+        -not $exclude
+    } | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $pFull -Recurse -Force
+        Copy-Item -LiteralPath $_.FullName -Destination $pLite -Recurse -Force
     }
 
     $zipFull = Join-Path $distDir "ModemCat_v${ver}_portable.zip"
     $zipLite = Join-Path $distDir "ModemCat_v${ver}_portable-lite.zip"
-    Get-ChildItem $distDir -Filter "ModemCat_v${ver}_portable*" | Remove-Item -Force -EA 0
+    foreach ($oldZip in @(Get-ChildItem -LiteralPath $distDir -Filter "ModemCat_v${ver}_portable*" -File -ErrorAction SilentlyContinue)) {
+        Remove-Item -LiteralPath $oldZip.FullName -Force -ErrorAction SilentlyContinue
+    }
 
     Compress-Archive -Path "$pFull\*" -DestinationPath $zipFull -Force
     $szFull = [math]::Round((Get-Item $zipFull).Length / 1MB, 1)

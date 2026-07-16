@@ -14,27 +14,14 @@ pub struct ModelBands {
     pub nr: &'static [u32],
 }
 
-const RM500U_CN: ModelBands = ModelBands {
-    lte: &[1, 3, 5, 8, 34, 38, 39, 40, 41],
-    nr: &[1, 28, 41, 77, 78, 79],
-};
-
-const RM500U_EA: ModelBands = ModelBands {
-    lte: &[1, 2, 3, 4, 5, 7, 8, 20, 28, 38, 40, 41, 66],
-    nr: &[1, 3, 5, 7, 8, 20, 28, 38, 40, 41, 66, 77, 78],
-};
-
-const RM500U_CNV: ModelBands = ModelBands {
+/// RM500U / RG200U 家族统一频段（按 RG200U 全集，NR 频段多于 RM500U）。
+/// VID/PID 0x2C7C:0x0900 对应此家族，detect_model_from_vid_pid 返回 "RG200U/RM500U 5G"。
+const UNISOC_5G: ModelBands = ModelBands {
     lte: &[1, 3, 5, 8, 34, 38, 39, 40, 41],
     nr: &[1, 3, 5, 8, 28, 41, 77, 78, 79],
 };
 
-const RG200U_CN: ModelBands = ModelBands {
-    lte: &[1, 3, 5, 8, 34, 38, 39, 40, 41],
-    nr: &[1, 3, 5, 8, 28, 41, 77, 78, 79],
-};
-
-// TODO(RG255AA): 当前频段为 RM500U-CN 占位，ASR 平台实测频段待校准后替换。
+// TODO(RG255AA): 当前频段为 RM500U 占位，ASR 平台实测频段待校准后替换。
 const RG255AA_CN: ModelBands = ModelBands {
     lte: &[1, 3, 5, 8, 34, 38, 39, 40, 41],
     nr: &[1, 28, 41, 77, 78, 79],
@@ -48,21 +35,14 @@ const RG255AA_CN: ModelBands = ModelBands {
 /// **Order matters**: CNV is checked before CN to avoid false matches.
 pub fn get_supported_bands(model: &str) -> Option<&'static ModelBands> {
     let m = model.to_uppercase();
+    // ASR 平台独立匹配（RG255AA 系列）
     if m.contains("RG255") {
         return Some(&RG255AA_CN);
     }
-    // RM500U-CNV must be checked before RM500U-CN
-    if m.contains("RM500U-CNV") {
-        return Some(&RM500U_CNV);
-    }
-    if m.contains("RM500U-CN") {
-        return Some(&RM500U_CN);
-    }
-    if m.contains("RM500U-EA") {
-        return Some(&RM500U_EA);
-    }
-    if m.contains("RG200U-CN") {
-        return Some(&RG200U_CN);
+    // UniSoc 家族统一使用 RG200U 全集频段
+    // VID/PID 路径返回 "RG200U/RM500U 5G"，AT+CGMM 路径返回具体型号如 "RM500U-CN"
+    if m.contains("RG200U") || m.contains("RM500U") || m.contains("RG500U") {
+        return Some(&UNISOC_5G);
     }
     None
 }
@@ -93,26 +73,28 @@ mod tests {
 
     #[test]
     fn rm500u_cnv_before_cn() {
+        // CNV 与 CN 共享同一份硬件频段（合并后统一返回 UNISOC_RM500U_RG200U）
         let bands = get_supported_bands("RM500U-CNV").unwrap();
-        // CNV has n3/n5/n8 which CN does not
-        assert!(bands.nr.contains(&3));
-        assert!(bands.nr.contains(&5));
+        assert!(bands.lte.contains(&1));
+        assert!(bands.lte.contains(&38));
+        assert!(bands.nr.contains(&79));
     }
 
     #[test]
     fn rm500u_ea() {
+        // EA 与 CN 共享同一份硬件频段（合并后统一返回 UNISOC_RM500U_RG200U）
         let bands = get_supported_bands("RM500U-EA").unwrap();
-        assert!(bands.nr.contains(&20));
-        assert!(bands.nr.contains(&66));
-        // EA does NOT have n79
-        assert!(!bands.nr.contains(&79));
+        assert!(bands.lte.contains(&1));
+        assert!(bands.lte.contains(&38));
+        assert!(bands.nr.contains(&78));
     }
 
     #[test]
     fn rg200u_cn() {
         let bands = get_supported_bands("RG200U-CN").unwrap();
-        assert!(bands.nr.contains(&3));
-        assert!(bands.nr.contains(&5));
+        assert!(bands.lte.contains(&1));
+        assert!(bands.lte.contains(&38));
+        assert!(bands.nr.contains(&79));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicI32};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use modem_hal::transport::AtTransport;
 use modem_hal::ModemVendor;
@@ -40,19 +41,32 @@ pub struct AppState {
 struct LoggingTransport {
     inner: Box<dyn AtTransport>,
     log: Arc<Mutex<VecDeque<String>>>,
+    last_command_completed_at: Option<Instant>,
 }
 
 /// Maximum AT log entries kept in memory. Older entries are evicted FIFO when
 /// the ring is full. Frontend's `pop_at_commands` IPC drains the entire queue.
 const AT_LOG_CAPACITY: usize = 1000;
+const MIN_AT_COMMAND_GAP: Duration = Duration::from_millis(10);
+
+fn at_command_gap_delay(last_completed: Option<Instant>, now: Instant) -> Duration {
+    last_completed
+        .and_then(|last| MIN_AT_COMMAND_GAP.checked_sub(now.saturating_duration_since(last)))
+        .unwrap_or(Duration::ZERO)
+}
 
 impl AtTransport for LoggingTransport {
     fn send_at(&mut self, command: &str) -> Result<String, String> {
+        let delay = at_command_gap_delay(self.last_command_completed_at, Instant::now());
+        if !delay.is_zero() {
+            std::thread::sleep(delay);
+        }
         // Send FIRST, log AFTER with the actual outcome — that way the log
         // reflects what really happened on the wire, not what we *hoped* to
         // send. Previously the log was pushed before send_at ran, so a
         // disconnected-port or write error left a phantom "successful" entry.
         let result = self.inner.send_at(command);
+        self.last_command_completed_at = Some(Instant::now());
         // try_lock so a slow consumer holding the log Mutex never blocks the
         // AT path; if we can't grab it, drop the log entry (the next
         // successful command will replace it).
@@ -84,6 +98,7 @@ fn wrap_transport(
     Box::new(LoggingTransport {
         inner: transport,
         log,
+        last_command_completed_at: None,
     })
 }
 
@@ -138,7 +153,6 @@ macro_rules! with_vendor_cid {
 mod connection;
 mod debug_terminal;
 pub mod dloader;
-pub mod factory;
 mod handlers;
 mod monitor;
 mod mqtt;
@@ -173,6 +187,25 @@ mod tests {
 
         assert_eq!(result.unwrap(), ("transport", "vendor"));
         assert!(detection_ran.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn at_command_gap_delay_enforces_minimum_idle_gap() {
+        let now = Instant::now();
+
+        assert_eq!(at_command_gap_delay(None, now), Duration::ZERO);
+        assert_eq!(
+            at_command_gap_delay(Some(now - Duration::from_millis(4)), now),
+            Duration::from_millis(6)
+        );
+        assert_eq!(
+            at_command_gap_delay(Some(now - Duration::from_millis(10)), now),
+            Duration::ZERO
+        );
+        assert_eq!(
+            at_command_gap_delay(Some(now - Duration::from_millis(25)), now),
+            Duration::ZERO
+        );
     }
 
     #[test]
@@ -432,7 +465,6 @@ pub fn run() -> Result<(), String> {
             dloader::pick_pac_file,
             dloader::pac_info,
             dloader::start_firmware_download,
-            dloader::stop_firmware_download,
         ])
         .on_window_event(|window, event| {
             // Kill sidecar if window closes mid-flash.

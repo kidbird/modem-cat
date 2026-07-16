@@ -4,10 +4,10 @@
 #   powershell -NoProfile -File scripts\build-helper.ps1 -Variant nowebview
 #
 # 行为:
-#   - Variant=webview:  使用 tauri.conf.json 原始 (embedBootstrapper)
+#   - Variant=webview:  使用 tauri.conf.json 原始 (downloadBootstrapper)
 #   - Variant=nowebview: 在临时目录生成 tauri.nowebview.conf.json (skip)
 #     因为 Tauri 2 schema 不支持 `extends`, 必须完整覆盖
-#   - 预置 WebView2 bootstrapper 缓存：从 %LOCALAPPDATA%\tauri 复制已缓存文件，避免重复下载
+#   - webview 变体不指定 fixedRuntime；WebView2 bootstrapper 由安装阶段按需下载
 #   - 运行 cargo tauri build
 #   - 把生成的 msi / nsis exe 改名带 _<variant>_x64_ 后缀, 复制到 dist/
 #   - 不再修改任何源码或配置, 纯产物处理
@@ -63,6 +63,22 @@ function Sync-R26Runtime {
     return $runtimeDst
 }
 
+function Sync-RuntimeAssets {
+    # Copy all files from dist-assets/ into src-tauri/resources/runtime/
+    # so the Tauri installer bundles them alongside modem-cat.exe.
+    $srcDir = Join-Path $root "dist-assets"
+    $dstDir = Join-Path $root "src-tauri\resources\runtime"
+    if (-not (Test-Path $srcDir)) {
+        Write-Warning "  dist-assets/ not found — installer will miss runtime DLLs"
+        return
+    }
+    if (Test-Path $dstDir) { Remove-Item -LiteralPath $dstDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+    Copy-Item -Path (Join-Path $srcDir '*') -Destination $dstDir -Recurse -Force
+    $count = (Get-ChildItem -LiteralPath $dstDir -Recurse -File | Measure-Object).Count
+    Write-Host "  staged runtime assets: $count files (dist-assets/ -> resources/runtime/)"
+}
+
 try {
     # 1. 读取 version
     $cfgPath = "src-tauri\tauri.conf.json"
@@ -97,34 +113,16 @@ try {
     }
     $stagedR26Runtime = Sync-R26Runtime
     Write-Host "  using r26 runtime: $stagedR26Runtime"
+    Sync-RuntimeAssets
 
-    # 4. 预置 WebView2 bootstrapper 缓存（避免重复下载）
-    $wixDir = Join-Path $root "target\release\wix\x64"
-    if (-not (Test-Path $wixDir)) { New-Item -ItemType Directory -Path $wixDir -Force | Out-Null }
-    
-    if ($Variant -eq "webview") {
-        $bootstrapperCache = Join-Path $wixDir "MicrosoftEdgeWebview2Setup.exe"
-        if (-not (Test-Path $bootstrapperCache)) {
-            # 尝试从 %LOCALAPPDATA%\tauri 查找
-            $tauriCache = Join-Path $env:LOCALAPPDATA "tauri"
-            $cachedBootstrapper = Get-ChildItem $tauriCache -Recurse -Filter "MicrosoftEdgeWebview2Setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($cachedBootstrapper) {
-                Copy-Item -LiteralPath $cachedBootstrapper.FullName -Destination $bootstrapperCache -Force
-                Write-Host "  pre-cached WebView2 bootstrapper"
-            } else {
-                Write-Warning "  no cached WebView2 bootstrapper found in $tauriCache - will allow tauri-cli to fetch it"
-            }
-        }
-    }
-
-    # 5. 运行 cargo tauri build
+    # 4. 运行 cargo tauri build
     Push-Location "src-tauri"
     try {
         if ($Variant -eq "nowebview") {
             Write-Host "  running: cargo tauri build --config $activeCfg"
             cargo tauri build --config $activeCfg
         } else {
-            Write-Host "  running: cargo tauri build  (default = embedBootstrapper)"
+            Write-Host "  running: cargo tauri build  (default = downloadBootstrapper)"
             cargo tauri build
         }
         if ($LASTEXITCODE -ne 0) {

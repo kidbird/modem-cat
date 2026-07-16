@@ -3,7 +3,6 @@ use modem_hal::types::ModemStatus;
 use modem_hal::ModemVendor;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use serde_json::json;
-use std::net::{IpAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -78,21 +77,6 @@ impl MqttConfig {
     }
 }
 
-/// Detects the active outbound network interface IP address by simulating a UDP connect to the MQTT broker.
-/// This queries the OS routing table without sending any actual network packets.
-pub fn detect_outbound_ip(target: &str) -> Option<IpAddr> {
-    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-    socket.connect(target).ok()?;
-    let local_addr = socket.local_addr().ok()?;
-
-    let ip = local_addr.ip();
-    if ip.is_loopback() || ip.is_unspecified() {
-        None
-    } else {
-        Some(ip)
-    }
-}
-
 /// MQTT must share the same live AT queue as IPC handlers.
 /// We therefore lock in the same order (`transport -> vendor`) and use
 /// `try_lock` so background publish never deadlocks or stalls foreground AT work.
@@ -131,10 +115,6 @@ pub async fn run_mqtt_loop(
     loop {
         log::info!("MQTT: Starting connection setup...");
 
-        // 1. Detect outbound IP (the interface to bind to)
-        let local_ip = detect_outbound_ip(&format!("{}:{}", config.host, config.port));
-        log::info!("MQTT: Detected outbound IP: {:?}", local_ip);
-
         // 2. Query IMEI from the modem (if connected)
         let mut imei = "unknown_device".to_string();
         match try_query_modem_status(&transport, &vendor) {
@@ -157,13 +137,6 @@ pub async fn run_mqtt_loop(
 
         // 4. Create client & event loop
         let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-
-        // 5. Force bind to the detected outbound network interface
-        // if let Some(ip) = local_ip {
-        //     let mut net_opts = NetworkOptions::default();
-        //     net_opts.bind_addr = Some(SocketAddr::new(ip, 0));
-        //     eventloop.network_options = net_opts;
-        // }
 
         // 6. Spawn the periodic publishing task (every 120 seconds)
         let publish_client = client.clone();

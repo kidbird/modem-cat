@@ -45,7 +45,7 @@
 - `docs/AT_COMMANDS.md`
   说明正式 AT 合同、平台差异、禁止复制的历史 fallback。
 - `docs/CODE_MAP.md`
-  说明前端触发点、IPC 名称、后端 live handler 映射（含 `handlers.rs` / `connection.rs` / `factory.rs` / `dloader.rs`）。
+  说明前端触发点、IPC 名称、后端 live handler 映射（含 `handlers.rs` / `connection.rs` / `dloader.rs`）。
 - `docs/CALL_FLOW.md`
   说明主要 UI → IPC → HAL 调用链。
 - `docs/REVIEW.md`

@@ -15,6 +15,7 @@ node_modules/
 
 # Build outputs
 dist/
+dist-assets/
 build/
 out/
 
@@ -27,6 +28,9 @@ src-tauri/resources/r26-runtime/vcruntime140.dll
 src-tauri/target/
 src-tauri/release/
 src-tauri/debug/
+# build-helper.ps1 把 dist-assets/ 复制进 resources/runtime/ 作为安装包资源，
+# 属于构建中间产物，不进 Git（dist-assets/ 本地准备即可）
+src-tauri/resources/runtime/
 
 # Testing
 coverage/
@@ -95,6 +99,7 @@ docs/AT_HANDBOOK_*.md
 .specify/
 .qoder/
 .understand-anything/
+.zcode/
 
 # Stale build artifacts
 check-err.txt

@@ -652,9 +652,9 @@
         if (el) { el.textContent = '--'; el.className = 'info-value muted'; }
       });
       document.getElementById('lteNeighborBody').innerHTML =
-        '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
+        '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
       document.getElementById('nrNeighborBody').innerHTML =
-        '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
+        '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">暂无数据</td></tr>';
       document.getElementById('logoText').textContent = 'Modem Cat';
     }
 
@@ -1191,6 +1191,14 @@
       } catch (e) {
         console.warn('get IMS failed:', e);
       }
+      // Load NAT mode (routing/bridge)
+      try {
+        const natMode = await invoke('get_nat_mode');
+        const natSel = document.getElementById('natMode');
+        if (natSel) natSel.value = String(natMode);
+      } catch (e) {
+        console.warn('get_nat_mode failed:', e);
+      }
       // Load bands independently
       await refreshBands();
       hideLoading();
@@ -1234,6 +1242,24 @@
         hideLoading();
         showToast('首选网络保存失败: ' + e, 'err');
         addTerminalLine('[网络] 设置失败: ' + e, 'err');
+      }
+    }
+
+    async function applyNatMode() {
+      const sel = document.getElementById('natMode');
+      if (!sel) return;
+      const mode = parseInt(sel.value, 10);
+      try {
+        showLoading('正在设置网络模式...');
+        await invoke('set_nat_mode', { mode });
+        await flushAtLog();
+        hideLoading();
+        showToast('网络模式已设置，请重启模组使配置生效', 'ok');
+        addTerminalLine(`[网络模式] 已设为 ${mode === 2 ? '路由模式' : '网卡模式'}，需重启模组`, 'ok');
+      } catch (e) {
+        hideLoading();
+        showToast('网络模式设置失败: ' + e, 'err');
+        addTerminalLine('[网络模式] 设置失败: ' + e, 'err');
       }
     }
 
@@ -1814,14 +1840,10 @@
     }
 
     function highlightMatch(text, query) {
-      if (!query) return escHtml(text);
+      if (!query) return escapeHtml(text);
       const idx = text.toLowerCase().indexOf(query);
-      if (idx === -1) return escHtml(text);
-      return escHtml(text.slice(0, idx)) + '<mark>' + escHtml(text.slice(idx, idx + query.length)) + '</mark>' + escHtml(text.slice(idx + query.length));
-    }
-
-    function escHtml(s) {
-      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      if (idx === -1) return escapeHtml(text);
+      return escapeHtml(text.slice(0, idx)) + '<mark>' + escapeHtml(text.slice(idx, idx + query.length)) + '</mark>' + escapeHtml(text.slice(idx + query.length));
     }
 
     function renderAtdbIndex() {
@@ -1843,7 +1865,7 @@
         const items = categories[cat];
         const hdr = document.createElement('div');
         hdr.className = 'atdb-cat-header';
-        hdr.innerHTML = `<span>${escHtml(cat)}</span><span class="atdb-count">${items.length}</span>`;
+        hdr.innerHTML = `<span>${escapeHtml(cat)}</span><span class="atdb-count">${items.length}</span>`;
         idx.appendChild(hdr);
         const list = document.createElement('div');
         list.className = 'atdb-cmd-list';
@@ -1885,27 +1907,27 @@
           <table class="atdb-param-table">
             <thead><tr><th>参数</th><th>说明</th><th>取值</th></tr></thead>
             <tbody>
-              ${entry.params.map(p => `<tr><td>${escHtml(p.name)}</td><td>${escHtml(p.desc)}</td><td>${escHtml(p.values)}</td></tr>`).join('')}
+              ${entry.params.map(p => `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.desc)}</td><td>${escapeHtml(p.values)}</td></tr>`).join('')}
             </tbody>
           </table>`;
       }
 
       const exampleHtml = entry.example ? `
         <div class="atdb-section-label">示例</div>
-        <div class="atdb-code">${escHtml(entry.example)}</div>` : '';
+        <div class="atdb-code">${escapeHtml(entry.example)}</div>` : '';
 
-      const noteHtml = entry.note ? `<div class="atdb-note">${escHtml(entry.note)}</div>` : '';
+      const noteHtml = entry.note ? `<div class="atdb-note">${escapeHtml(entry.note)}</div>` : '';
 
       detail.innerHTML = `
         <div class="atdb-detail-header">
-          <div class="atdb-detail-title">${escHtml(entry.cmd)}</div>
+          <div class="atdb-detail-title">${escapeHtml(entry.cmd)}</div>
           <span class="atdb-platform-badge ${badgeClass}">${badgeLabel}</span>
         </div>
-        <div class="atdb-detail-desc">${escHtml(entry.desc)}</div>
+        <div class="atdb-detail-desc">${escapeHtml(entry.desc)}</div>
         <div class="atdb-section-label">语法</div>
-        <div class="atdb-code" data-cp="${escHtml(entry.syntax).replace(/\n/g,'&#10;')}">${escHtml(entry.syntax)}<button class="atdb-copy-btn" onclick="atdbCopyParent(this)">${t('atdb_copy_btn')}</button></div>
+        <div class="atdb-code" data-cp="${escapeHtml(entry.syntax).replace(/\n/g,'&#10;')}">${escapeHtml(entry.syntax)}<button class="atdb-copy-btn" onclick="atdbCopyParent(this)">${t('atdb_copy_btn')}</button></div>
         <div class="atdb-section-label">响应</div>
-        <div class="atdb-code">${escHtml(entry.response)}</div>
+        <div class="atdb-code">${escapeHtml(entry.response)}</div>
         ${paramsHtml}
         ${exampleHtml}
         ${noteHtml}
@@ -2281,6 +2303,24 @@
       }
     }
 
+    const pendingFeatureToggles = new Set();
+
+    function markPortAffectingToggleDisconnected(label) {
+      invoke('disconnect').catch(() => {});
+      state.connected = false;
+      state.dataConnected = false;
+      state.dataApn = '';
+      state.connectedPort = '';
+      state.idle = true;
+      state.transport = undefined;
+      updateConnectionUI(false);
+      updateDataConnectionUI();
+      clearData();
+      addTerminalLine(`[功能] ${label} 已下发，AT 口可能正在重枚举，请重新连接后再继续操作`, 'warn');
+      showToast(`${label} 已下发，请等待端口恢复后重新连接`, 'ok');
+      setTimeout(() => refreshPortList().catch(() => {}), 5000);
+    }
+
     async function applyToggle(feature, enabled) {
       const labels = { adb: 'ADB', ethAt: 'ETH AT', uartAt: 'UART AT', pcieMode: 'PCIe ↔ 以太网', ethernet: 'Ethernet', proxyArp: 'Proxy ARP', napt: 'NAPT 端口转换', netmask: '动态子网掩码', armLog: 'ARM LOG', cpLog: 'CP LOG' };
       const keyMap = { adb: 'Adb', ethAt: 'EthAt', uartAt: 'UartAt', pcieMode: 'Pcie', ethernet: 'Ethernet', proxyArp: 'ProxyArp', napt: 'Napt', netmask: 'Netmask', armLog: 'ArmLog', cpLog: 'CpLog' };
@@ -2291,6 +2331,18 @@
       const key = keyMap[feature];
       const onBtn = document.getElementById('toggle' + key + '_on');
       const offBtn = document.getElementById('toggle' + key + '_off');
+      if (pendingFeatureToggles.has(feature)) {
+        showToast(`${labels[feature]} 正在设置中，请稍候`, 'err');
+        return;
+      }
+      const isPortAffectingUnisocToggle = ['unisoc', 'asr'].includes(state.chipVendor) && ['ethernet', 'uartAt'].includes(feature);
+      if (isPortAffectingUnisocToggle) {
+        const ok = confirm(`${labels[feature]} 可能导致当前 AT 口短暂中断，确认继续？`);
+        if (!ok) return;
+      }
+      pendingFeatureToggles.add(feature);
+      if (onBtn) onBtn.disabled = true;
+      if (offBtn) offBtn.disabled = true;
       // Optimistic UI: update active state immediately so user sees feedback
       if (onBtn) onBtn.classList.toggle('active', enabled);
       if (offBtn) offBtn.classList.toggle('active', !enabled);
@@ -2298,48 +2350,95 @@
         await invoke('set_feature_toggle', { feature, enabled });
         await flushAtLog();
         addTerminalLine(`[功能] ${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
+        if (isPortAffectingUnisocToggle) {
+          markPortAffectingToggleDisconnected(labels[feature]);
+          return;
+        }
         showToast(`${labels[feature]} 已${enabled ? '开启' : '关闭'}`, enabled ? 'ok' : 'info');
       } catch (e) {
         addTerminalLine(`[功能] ${labels[feature]} 设置失败: ${e}`, 'err');
+        if (isPortAffectingUnisocToggle) {
+          markPortAffectingToggleDisconnected(labels[feature]);
+          return;
+        }
         showToast(`${labels[feature]} 设置失败`, 'err');
         // Revert optimistic UI on failure
         if (onBtn) onBtn.classList.toggle('active', !enabled);
         if (offBtn) offBtn.classList.toggle('active', enabled);
+      } finally {
+        pendingFeatureToggles.delete(feature);
+        if (onBtn) onBtn.disabled = false;
+        if (offBtn) offBtn.disabled = false;
       }
     }
 
+    // CFUN 是射频 + 飞行两个开关的共同真相源：CFUN=1 射频开（飞行关），CFUN=0 射频关（飞行开）。
+    // 这三个函数分工：
+    //   applyCfun(rfOn)  —— 唯一的写路径：发 AT+CFUN、清空过期状态、延迟刷新、失败回滚
+    //   toggleRf/toggleAirplane —— 两个 UI 入口，只做极性转换 + 未连接守卫，最终都转调 applyCfun
+    //   syncRfState —— 连接后读 AT+CFUN? 回填两个开关
+    const RF_STALE_FIELDS = ['regStatus', 'connStatus', 'operator', 'networkType', 'band', 'pci', 'arfcn', 'bandwidth'];
+
+    // 按射频开关语义（true=射频开）同步两个 UI 开关，飞行开关为反向。
+    function setRfSwitches(rfOn) {
+      const rfCb = document.getElementById('rfToggle');
+      const apCb = document.getElementById('airplaneToggle');
+      if (rfCb) rfCb.checked = rfOn;
+      if (apCb) apCb.checked = !rfOn;
+    }
+
+    async function applyCfun(rfOn) {
+      await invoke('set_cfun', { mode: rfOn ? 1 : 0 });
+      await flushAtLog();
+      setRfSwitches(rfOn);
+      addTerminalLine(`[射频] AT+CFUN=${rfOn ? 1 : 0} 已执行`, rfOn ? 'ok' : 'info');
+      // 先清空旧值，避免射频变化期间显示过期状态
+      RF_STALE_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = '--'; el.className = 'info-value'; }
+      });
+      if (!rfOn) {
+        state.dataConnected = false;
+        updateDataConnectionUI();
+      }
+      // 射频状态变化后主动刷新网络状态：关闭立即刷新，开启稍等模组重新驻网
+      const delay = rfOn ? 2000 : 800;
+      setTimeout(async () => {
+        await refreshModemStatus(true);
+        try { await refreshApnList(); } catch (_) {}
+        try { await refreshIpInfo(); } catch (_) {}
+      }, delay);
+    }
+
+    // 射频开关（侧边栏）：checked = 射频开 = CFUN=1
     async function toggleRf(enabled) {
       if (!state.connected) {
-        const cb = document.getElementById('rfToggle');
-        cb.checked = !enabled;
+        setRfSwitches(!enabled);
         showToast('请先连接模组', 'err');
         return;
       }
       try {
-        await invoke('set_cfun', { mode: enabled ? 1 : 0 });
-        await flushAtLog();
-        addTerminalLine(`[射频] AT+CFUN=${enabled ? 1 : 0} 已执行`, enabled ? 'ok' : 'info');
-        // 先清空旧值，避免射频变化期间显示过期状态
-        ['regStatus', 'connStatus', 'operator', 'networkType', 'band', 'pci', 'arfcn', 'bandwidth'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) { el.textContent = '--'; el.className = 'info-value'; }
-        });
-        if (!enabled) {
-          state.dataConnected = false;
-          updateDataConnectionUI();
-        }
-        // 射频状态变化后主动刷新网络状态：关闭立即刷新，开启稍等模组重新驻网
-        const delay = enabled ? 2000 : 800;
-        setTimeout(async () => {
-          await refreshModemStatus(true);
-          try { await refreshApnList(); } catch (_) {}
-          try { await refreshIpInfo(); } catch (_) {}
-        }, delay);
+        await applyCfun(enabled);
       } catch (e) {
-        const cb = document.getElementById('rfToggle');
-        cb.checked = !enabled;
+        setRfSwitches(!enabled);
         addTerminalLine(`[射频] 设置失败: ${e}`, 'err');
         showToast('射频设置失败', 'err');
+      }
+    }
+
+    // 飞行模式开关（网络状态卡片）：checked = 飞行开 = CFUN=0，与射频反向
+    async function toggleAirplane(airplaneOn) {
+      if (!state.connected) {
+        setRfSwitches(airplaneOn);
+        showToast('请先连接模组', 'err');
+        return;
+      }
+      try {
+        await applyCfun(!airplaneOn);
+      } catch (e) {
+        setRfSwitches(airplaneOn);
+        addTerminalLine(`[飞行模式] 设置失败: ${e}`, 'err');
+        showToast('飞行模式设置失败', 'err');
       }
     }
 
@@ -2347,8 +2446,7 @@
       if (!state.connected) return;
       try {
         const mode = await invoke('get_cfun_mode');
-        const cb = document.getElementById('rfToggle');
-        if (cb) cb.checked = mode === 1;
+        setRfSwitches(mode === 1);
       } catch (e) {
         console.warn('[CFUN] query failed:', e);
       }
@@ -2700,69 +2798,6 @@
       }
     }
 
-    // ── Timing display ──
-    function displayTimingStats(stats, totalMs) {
-      const entries = stats.entries || [];
-      if (entries.length === 0) return;
-
-      addTerminalLine('═══════════════════════════════════════', 'info');
-      addTerminalLine('[时延分析] 详细耗时 breakdown:', 'info');
-      addTerminalLine('───────────────────────────────────────', 'info');
-
-      // Group by phase
-      const phases = {};
-      for (const e of entries) {
-        if (!phases[e.phase]) phases[e.phase] = { items: [], total: 0 };
-        phases[e.phase].items.push(e);
-        phases[e.phase].total += e.durationMs;
-      }
-
-      // Transport level: individual AT commands
-      const atEntries = entries.filter(e => e.phase === 'transport');
-      if (atEntries.length > 0) {
-        addTerminalLine(`[AT指令] 共 ${atEntries.length} 条:`, 'info');
-        for (const e of atEntries) {
-          const bar = '█'.repeat(Math.max(1, Math.round(e.durationMs / 20)));
-          const status = e.success ? '✓' : '✗';
-          addTerminalLine(`  ${status} ${e.command.padEnd(35)} ${String(e.durationMs).padStart(5)}ms ${bar}`, e.success ? 'info' : 'err');
-        }
-        const atTotal = atEntries.reduce((s, e) => s + e.durationMs, 0);
-        addTerminalLine(`  AT指令总耗时: ${atTotal}ms`, 'info');
-      }
-
-      // Query level phases
-      const queryPhases = ['query_modem_status', 'query_hardware_info', 'query_feature_toggles',
-        'query_ip_info', 'query_apn_list', 'query_bands', 'query_neighbor_cells',
-        'query_qos', 'query_traffic'];
-      for (const qp of queryPhases) {
-        const entry = entries.find(e => e.command === qp);
-        if (entry) {
-          const bar = '█'.repeat(Math.max(1, Math.round(entry.durationMs / 50)));
-          addTerminalLine(`  [模组查询] ${qp.padEnd(30)} ${String(entry.durationMs).padStart(5)}ms ${bar}`, 'info');
-        }
-      }
-
-      // Tauri command level
-      const tauriEntries = entries.filter(e => e.phase === 'tauri_cmd');
-      if (tauriEntries.length > 0) {
-        addTerminalLine(`[Tauri命令] 共 ${tauriEntries.length} 条:`, 'info');
-        for (const e of tauriEntries) {
-          const bar = '█'.repeat(Math.max(1, Math.round(e.durationMs / 50)));
-          addTerminalLine(`  ${e.command.padEnd(35)} ${String(e.durationMs).padStart(5)}ms ${bar}`, 'info');
-        }
-      }
-
-      // Auto-connect
-      const autoConn = entries.find(e => e.command === 'auto_connect_at');
-      if (autoConn) {
-        addTerminalLine(`[自动连接] ${String(autoConn.durationMs).padStart(5)}ms`, 'info');
-      }
-
-      addTerminalLine('───────────────────────────────────────', 'info');
-      addTerminalLine(`[时延汇总] AT指令总: ${stats.totalMs || 0}ms | 前端总耗时: ${totalMs}ms`, 'info');
-      addTerminalLine('═══════════════════════════════════════', 'info');
-    }
-
     // ── 频段初始化（空，等待连接后从模组加载） ──
     renderBandGrid([], [], 'bandGridLte');
     renderBandGrid([], [], 'bandGridNr');
@@ -2822,8 +2857,8 @@
       [...report.nv_files, ...report.rf_cali_files, ...report.erase_files, ...report.phasecheck_files]
         .forEach(f => rows.push({ id: f.file_id, risk: f.risk_level, reason: f.reason }));
       const body = rows.map(r => {
-        const [label, cls] = RISK_LABEL[r.risk] || [escHtml(r.risk) + ' ?', 'warn'];
-        return `<tr><td class="id">${escHtml(r.id)}</td><td><span class="chip ${cls}" title="${escHtml(r.reason)}">${label}</span></td></tr>`;
+        const [label, cls] = RISK_LABEL[r.risk] || [escapeHtml(r.risk) + ' ?', 'warn'];
+        return `<tr><td class="id">${escapeHtml(r.id)}</td><td><span class="chip ${cls}" title="${escapeHtml(r.reason)}">${label}</span></td></tr>`;
       }).join('');
       document.getElementById('fwRiskWrap').innerHTML =
         `<details><summary style="cursor:pointer; font-size:12.5px; color:var(--text-secondary);">文件列表 (${report.total_files})</summary>` +
@@ -2839,9 +2874,9 @@
     function fwSetDownloading(on) {
       fw.downloading = on;
       document.getElementById('fwStartBtn').disabled = on || !fw.report;
-      document.getElementById('fwStopBtn').disabled = !on;
-      document.getElementById('fwSelectPacBtn').disabled = on;
       document.getElementById('fwStartBtn').textContent = on ? '下载中…' : '开始下载';
+      const selBtn = document.getElementById('fwSelectPacBtn');
+      if (selBtn) selBtn.disabled = on;
     }
 
     function fwSetResult(html) {
@@ -2863,7 +2898,7 @@
       try {
         path = await invoke('pick_pac_file');
       } catch (e) {
-        document.getElementById('fwPacAlert').innerHTML = `<div class="alert alert-error">分析失败: ${escHtml(e)}</div>`;
+        document.getElementById('fwPacAlert').innerHTML = `<div class="alert alert-error">分析失败: ${escapeHtml(e)}</div>`;
         return;
       }
       if (!path) return;
@@ -2879,7 +2914,7 @@
         fw.report = report;
         fwRenderReport(report);
       } catch (e) {
-        document.getElementById('fwPacAlert').innerHTML = `<div class="alert alert-error">分析失败: ${escHtml(e)}</div>`;
+        document.getElementById('fwPacAlert').innerHTML = `<div class="alert alert-error">分析失败: ${escapeHtml(e)}</div>`;
       } finally {
         selBtn.disabled = fw.downloading;
       }
@@ -2897,18 +2932,7 @@
       } catch (e) {
         fwSetDownloading(false);
         fwSetProgress(null);
-        fwSetResult(`<div class="alert alert-error">${escHtml(e)}</div>`);
-      }
-    }
-
-    async function handleFirmwareStop() {
-      try {
-        await invoke('stop_firmware_download');
-        fwSetDownloading(false);
-        fwSetProgress(null);
-        fwSetResult('<div class="alert alert-info">下载已手动停止</div>');
-      } catch (e) {
-        showToast(`停止失败: ${e}`, 'error');
+        fwSetResult(`<div class="alert alert-error">${escapeHtml(e)}</div>`);
       }
     }
 
@@ -2929,11 +2953,11 @@
         fwSetProgress(null);
         fwSetResult(r.success
           ? `<div class="alert alert-success">下载完成！耗时 ${Math.round((r.duration_ms||0)/1000)} 秒</div>`
-          : `<div class="alert alert-error">下载失败: ${escHtml(r.error || '未知错误')}</div>`);
+          : `<div class="alert alert-error">下载失败: ${escapeHtml(r.error || '未知错误')}</div>`);
       } else if (p.Error) {
         fwSetDownloading(false);
         fwSetProgress(null);
-        fwSetResult(`<div class="alert alert-error">错误 [${p.Error.code}]: ${escHtml(p.Error.message)}</div>`);
+        fwSetResult(`<div class="alert alert-error">错误 [${p.Error.code}]: ${escapeHtml(p.Error.message)}</div>`);
       } else if (p.Terminated) {
         if (fw.downloading) {
           fwSetDownloading(false);
@@ -2952,8 +2976,7 @@
 
       const fwSelectBtn = document.getElementById('fwSelectPacBtn');
       const fwStartBtn = document.getElementById('fwStartBtn');
-      const fwStopBtn = document.getElementById('fwStopBtn');
-      if (!fwSelectBtn || !fwStartBtn || !fwStopBtn) {
+      if (!fwSelectBtn || !fwStartBtn) {
         console.warn('[Firmware] 固件下载页面节点未准备好');
         return;
       }
@@ -2961,7 +2984,6 @@
       fw.initialized = true;
       fwSelectBtn.addEventListener('click', handleFirmwareSelectPac);
       fwStartBtn.addEventListener('click', handleFirmwareStart);
-      fwStopBtn.addEventListener('click', handleFirmwareStop);
 
       const listen = window.__TAURI__?.event?.listen;
       if (listen) {
@@ -3354,7 +3376,7 @@
     // to window ensures every onclick="fn()" in index.html works reliably.
     const _onclickFns = {
       applyBandLock, applyDmz, applyLanConfig, applyMtu,
-      applyOperatorLock, applyPreferredNetwork, applyToggle, applyVlan,
+      applyOperatorLock, applyPreferredNetwork, applyNatMode, applyToggle, applyVlan,
       clearCellLock, clearOperatorLock, closeApnModal,
       configureQualcomm5Glan, confirmAction,
       connectQualcomm5Glan, dismissSceneReboot, enableEthPdu,
@@ -3368,7 +3390,7 @@
       setTheme, setUiScale, setUiScaleMode,
       switch5GlanTab, switchCellularTab, switchHardwareTab,
       switchNeighborTab, switchStatusTab,
-      toggleConnection, toggleDataConnection, toggleRf,
+      toggleConnection, toggleDataConnection, toggleRf, toggleAirplane,
       toggleSimSlotDropdown,
     };
     Object.keys(_onclickFns).forEach(fn => {

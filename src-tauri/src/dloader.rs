@@ -10,10 +10,12 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
 };
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{Command, CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+
+use crate::AppState;
 
 // -- Sidecar version gate ----------------------------------------------------
 
@@ -88,10 +90,20 @@ fn sidecar_runtime_path_env(runtime_dir: &Path) -> Result<OsString, String> {
 fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     let runtime_dir = resolve_sidecar_runtime_dir(app)?;
     let path = sidecar_runtime_path_env(&runtime_dir)?;
-    app.shell()
-        .sidecar("r26-cli")
-        .map(|command| command.env("PATH", path))
-        .map_err(|e| format!("无法定位刷机组件: {e}"))
+    // 直接定位到程序同级目录下的 sidecar，不走 Tauri sidecar 解析（会去找 binaries/ 子目录）
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .ok_or_else(|| "无法定位程序所在目录".to_string())?;
+    let sidecar_path = exe_dir.join("r26-cli-x86_64-pc-windows-msvc.exe");
+    if !sidecar_path.is_file() {
+        return Err(format!("刷机组件不存在: {}", sidecar_path.display()));
+    }
+    Ok(app
+        .shell()
+        .command(sidecar_path)
+        .env("PATH", path)
+        .current_dir(exe_dir))
 }
 
 /// Verify the vendored sidecar reports the expected version.
@@ -333,9 +345,13 @@ fn lock_child_slot<'a>(
         .map_err(|e| format!("dloader.child lock poisoned: {e}"))
 }
 
-/// Start the firmware download: analyze PAC, enforce policy, spawn sidecar.
+/// Start the firmware download: analyze PAC, enforce policy, switch modem to
+/// download mode via AT+QDOWNLOAD=1, then spawn sidecar.
 #[tauri::command]
-pub async fn start_firmware_download(app: AppHandle, path: String) -> Result<(), String> {
+pub async fn start_firmware_download(
+    app: AppHandle,
+    path: String,
+) -> Result<(), String> {
     ensure_sidecar_version(&app).await?;
 
     // Re-analyze + policy gate (TOCTOU protection).
@@ -344,6 +360,46 @@ pub async fn start_firmware_download(app: AppHandle, path: String) -> Result<(),
         FlashDecision::Blocked { reason } => return Err(reason),
         FlashDecision::Proceed { allow_flags } => allow_flags,
     };
+
+    // Switch modem into download mode before starting the sidecar.
+    // The modem will re-enumerate as a download port; the sidecar auto-detects
+    // it via --port 0.
+    let _ = app.emit(
+        "firmware-event",
+        FirmwareEvent::Log {
+            level: "info".to_string(),
+            message: "正在切换模组到下载模式 (AT+QDOWNLOAD=1)…".to_string(),
+        },
+    );
+    let app_for_switch = app.clone();
+    let transport_err = tokio::task::spawn_blocking(move || {
+        let state = app_for_switch.state::<AppState>();
+        let transport = state.transport.clone();
+        let mut tguard = transport
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        // Send AT+QDOWNLOAD=1 — modem will reboot into download mode.
+        // The response may be truncated because the port drops; that's OK.
+        let _ = t.send_at("AT+QDOWNLOAD=1");
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?;
+
+    // Ignore transport errors here — the modem drops the AT port when entering
+    // download mode, so a transport error is actually expected.
+    let _ = transport_err;
+
+    // Give the modem time to switch ports.
+    let _ = app.emit(
+        "firmware-event",
+        FirmwareEvent::Log {
+            level: "info".to_string(),
+            message: "等待模组进入下载模式…".to_string(),
+        },
+    );
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
     let mut args: Vec<String> = vec![
         "download".into(),
@@ -437,8 +493,10 @@ pub async fn start_firmware_download(app: AppHandle, path: String) -> Result<(),
 }
 
 /// Kill the running download sidecar, if any.
-#[tauri::command]
-pub fn stop_firmware_download(state: State<'_, DloaderState>) -> Result<(), String> {
+/// Currently unused — download cannot be stopped mid-flight.
+#[allow(dead_code)]
+pub fn stop_firmware_download(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<DloaderState>();
     if let Some(child) = lock_child_slot(&state.child)?.take() {
         child.kill().map_err(|e| format!("停止失败: {e}"))?;
     }

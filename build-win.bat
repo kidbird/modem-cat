@@ -31,7 +31,7 @@ echo   build-win.bat --quick   跳过 portable ZIP, 仅做快速正式构建
 echo.
 echo   所有产物统一输出到 dist\ 根目录。
 echo   WebView2 规则:
-echo     - 安装包: 默认走 embedBootstrapper
+echo     - 安装包: 默认走 downloadBootstrapper
 echo     - dist\modem-cat.exe / portable ZIP: 依赖系统 WebView2
 exit /b 0
 

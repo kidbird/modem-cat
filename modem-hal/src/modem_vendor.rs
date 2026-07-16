@@ -198,15 +198,6 @@ pub trait ModemVendor: Send {
         bands: &str,
     ) -> Result<(), String>;
 
-    /// Set 5G NSA bands (if supported)
-    fn set_nsa_nr5g_bands(
-        &mut self,
-        _transport: &mut dyn AtTransport,
-        _bands: &str,
-    ) -> Result<(), String> {
-        Err("NSA NR5G bands not supported".to_string())
-    }
-
     /// Set network mode preference (e.g., "LTE", "NR5G", "LTE:NR5G")
     fn set_network_mode(
         &mut self,

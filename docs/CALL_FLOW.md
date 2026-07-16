@@ -1,6 +1,6 @@
 # 函数调用流程
 
-> 最近更新：2026-07-07（对齐 `main` 分支当前代码）
+> 最近更新：2026-07-09（对齐 `main` 分支当前代码）
 
 ## 1. 启动与初始化
 
@@ -64,7 +64,7 @@
                                       ├─ spawn_blocking + `AT` probe
                                       │
                                       └─ ModemFactory::create_with_usb_ids()
-                                              ├─ 已知 USB VID/PID → 直接选 AT 分支（`0x2C7C:0x0900` → UniSoc，`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600` → ASR）
+                                              ├─ 已知 USB VID/PID → 直接选 AT 分支（`0x2C7C:0x0900` → UniSoc，`0x2C7C:0x0800/0x0801` → Qualcomm，`0x2C7C:0x0600`/`0x2C7C:0x600C` → ASR）
                                               └─ 系统枚举没拿到 / 枚举值未知 → `AT+CGMM` 型号检测 fallback
                                               └─→ 成功：建 LoggingTransport → AppState.transport，并把 USB `VID/PID` 写入 `AppState.connected_usb_ids`
                                               └─→ 失败：尝试下一个端口
@@ -137,6 +137,7 @@ main.rs
   ▼
 [LoggingTransport::send_at]
   │
+  ├─ 若上一条 live AT 刚完成不足 10ms，先 sleep 到 10ms 间隔
   ├─ inner.send_at(cmd)  ← 真实 transport 先发送
   │
   └─ 发送完成后写环形日志（成功或错误都会 redact）
@@ -265,6 +266,8 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
   └─→ handlers.rs::set_feature_toggle
         │
         ├─ feature="adb" → 读当前 usbcfg，修改最后一位，写回
+        ├─ UniSoc/ASR feature="ethernet" / "uartAt"
+        │     └─ AT+QCFG="<feature>",<0|1> 成功后立即关闭并清空当前 live transport/vendor，后续重复调用返回未连接
         └─ 其它          → AT+QCFG="<feature>",<0|1>
 ```
 
@@ -341,6 +344,7 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
               │
               └─→ state.transport.lock()?.send_at(cmd)
                     │
+                    ├─ 若上一条 live AT 刚完成不足 10ms，先 sleep 到 10ms 间隔
                     ├─ inner.send_at(cmd)  ← transport 先发送
                     └─ [LoggingTransport] 发送完成后写 redact 日志
                           │
@@ -465,9 +469,8 @@ invoke('set_feature_toggle', { feature: "adb", enabled: true })
         │
         ├─ invoke('get_debug_terminal_prefs')
         └─ handleDebugTerminalPageChange(...)
-              └─ ensureAdbEnabled()
-                    └─ invoke('get_feature_toggles')
-                          └─ adb=false → 仅提示“请先开启 ADB 并重启设备后重新连接”
+              └─ ensureAdbSupported()
+                    └─ 仅检查当前桌面环境是否支持 ADB，不读取任何 modem AT 状态
 ```
 
 ### 13.2 建立 ADB shell 会话

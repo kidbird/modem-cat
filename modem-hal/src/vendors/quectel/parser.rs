@@ -760,23 +760,6 @@ pub fn parse_qicsgp(response: &str, active_cids: &[i32]) -> Vec<ApnEntry> {
     entries
 }
 
-pub fn parse_band_list(response: &str) -> Vec<String> {
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+QNWPREFCFG:") {
-            let parts: Vec<&str> = rest.split(',').collect();
-            if parts.len() >= 2 {
-                return parts[1]
-                    .trim()
-                    .trim_matches('"')
-                    .split(':')
-                    .map(|b| b.trim_start_matches('B').to_string())
-                    .collect();
-            }
-        }
-    }
-    vec![]
-}
-
 pub fn parse_qnwprefcfg_mode(response: &str) -> String {
     for line in extract_data_lines(response) {
         if let Some(rest) = line.strip_prefix("+QNWPREFCFG:") {
@@ -1001,43 +984,8 @@ pub fn parse_qcfg_usbcfg_adb(response: &str) -> Option<bool> {
     None
 }
 
-pub fn parse_qcfg_usbcfg_vid_pid(response: &str) -> Option<(u16, u16)> {
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+QCFG: \"usbcfg\",") {
-            let mut parts = rest.split(',').map(str::trim);
-            let vid = parts
-                .next()?
-                .trim_start_matches("0x")
-                .trim_start_matches("0X");
-            let pid = parts
-                .next()?
-                .trim_start_matches("0x")
-                .trim_start_matches("0X");
-            return Some((
-                u16::from_str_radix(vid, 16).ok()?,
-                u16::from_str_radix(pid, 16).ok()?,
-            ));
-        }
-    }
-    None
-}
-
 pub fn parse_qcfg_usbnet(response: &str) -> Option<i32> {
     parse_qcfg_int(response, "usbnet")
-}
-
-pub fn parse_qgdcnt(response: &str) -> (u64, u64) {
-    for line in extract_data_lines(response) {
-        if let Some(rest) = line.strip_prefix("+QGDCNT:") {
-            let parts: Vec<&str> = rest.trim().split(',').map(|v| v.trim()).collect();
-            if parts.len() >= 2 {
-                let ul = parts[0].parse::<u64>().unwrap_or(0);
-                let dl = parts[1].parse::<u64>().unwrap_or(0);
-                return (ul, dl);
-            }
-        }
-    }
-    (0, 0)
 }
 
 pub fn parse_cereg(response: &str) -> (String, Option<String>, Option<String>) {
@@ -1396,17 +1344,5 @@ OK"#;
         assert_eq!(parse_egmr_sn("ERROR"), "");
         assert_eq!(parse_egmr_sn("OK"), "");
         assert_eq!(parse_egmr_sn(""), "");
-    }
-
-    #[test]
-    fn parse_qcfg_usbcfg_vid_pid_extracts_ids() {
-        let ids = parse_qcfg_usbcfg_vid_pid("+QCFG: \"usbcfg\",0x2C7C,0x0900,1,1,1,1,1,1,0\r\nOK");
-        assert_eq!(ids, Some((0x2C7C, 0x0900)));
-    }
-
-    #[test]
-    fn parse_qcfg_usbcfg_vid_pid_rejects_invalid_values() {
-        let ids = parse_qcfg_usbcfg_vid_pid("+QCFG: \"usbcfg\",oops,0x0900\r\nOK");
-        assert_eq!(ids, None);
     }
 }

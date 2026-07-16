@@ -71,9 +71,10 @@ impl ModemFactory {
             }
             ChipsetVendor::Asr => {
                 // ASR 平台现阶段复用 UniSoc AT 指令集（同一 Quectel 厂家共通），
+                // 但以独立的 QuectelChip::Asr 标识，避免后续靠 model 串二次嗅探。
                 // 后续若出现 ASR 独有 AT，再拆分独立 adapter。
                 log::info!("Creating ASR adapter (reusing UniSoc AT set) for {}", model);
-                Ok(Box::new(QuectelModem::unisoc(model)))
+                Ok(Box::new(QuectelModem::asr(model)))
             }
             ChipsetVendor::Unknown => Err(format!(
                 "Unknown modem vendor for '{}': refusing to guess an adapter",

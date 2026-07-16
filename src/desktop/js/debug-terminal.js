@@ -85,11 +85,6 @@
     });
   }
 
-  function currentPage() {
-    const activePage = document.querySelector('.page.active');
-    return activePage ? activePage.id.replace('page-', '') : '';
-  }
-
   async function loadDebugPrefs() {
     try {
       const prefs = await invoke('get_debug_terminal_prefs');
@@ -154,22 +149,12 @@
     saveDebugPrefs().catch(() => {});
   }
 
-  async function ensureAdbEnabled() {
-    if (!state.connected) {
-      setDebugStatus('adb', '请先连接模组，再使用 ADB 调试。');
+  function ensureAdbSupported() {
+    if (!debugState.adbSupported) {
+      setDebugStatus('adb', '当前环境不支持 ADB 调试。');
       return false;
     }
-    try {
-      const toggles = await invoke('get_feature_toggles');
-      if (!toggles.adb) {
-        setDebugStatus('adb', 'ADB 未开启，请先到“系统信息”页开启 ADB，并重启设备后重新连接。');
-        return false;
-      }
-      return true;
-    } catch (e) {
-      setDebugStatus('adb', '读取 ADB 开关状态失败: ' + e.message);
-      return false;
-    }
+    return true;
   }
 
   function ensureNoOtherSession(kind) {
@@ -183,7 +168,7 @@
 
   async function connectAdbDebug() {
     if (!ensureNoOtherSession('adb')) return;
-    if (!(await ensureAdbEnabled())) return;
+    if (!ensureAdbSupported()) return;
     try {
       clearDebugTerminal('adb');
       debugState.pendingKind = 'adb';
@@ -383,7 +368,7 @@
       disconnectDebugTerminal(debugState.activeKind || debugState.pendingKind).catch(() => {});
     }
     if (nextPage === 'adbdebug') {
-      ensureAdbEnabled().catch(() => {});
+      ensureAdbSupported();
       updateDebugControls();
       updateTerminalState();
     }

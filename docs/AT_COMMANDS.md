@@ -1,6 +1,6 @@
 # AT 指令功能映射
 
-> 最近更新：2026-07-07
+> 最近更新：2026-07-09
 > 本文档只记录**当前正式主合同** AT 路径；历史兼容命令留在手册资料中，不作为 live 代码设计依据。
 
 ## 使用规则
@@ -20,6 +20,7 @@
 | `0x2C7C:0x0800` | Qualcomm（高通） | 直接走 Qualcomm AT 分支 |
 | `0x2C7C:0x0801` | Qualcomm（高通） | 直接走 Qualcomm AT 分支 |
 | `0x2C7C:0x0600` | ASR | 5G RedCap，直接走 ASR 分支（当前 AT 仍复用 UniSoc adapter） |
+| `0x2C7C:0x600C` | ASR | `0x0600` 的 ADB-on 变体，同样走 ASR 分支 |
 
 若 USB 未命中已知表，或当前 transport 拿不到系统枚举 USB ID，则直接回退 `AT+CGMM` 关键字识别。
 
@@ -31,7 +32,7 @@
 | 4 | **Unknown** | 未识别型号 | — |
 
 ⚠️ **正式合同**：`Unknown` 直接返回错误，业务侧重试 / 提示 UI。
-⚠️ **ASR 现阶段 AT 指令集复用 UniSoc**：同一 Quectel 厂家 AT 共通；后端 `ModemFactory` 对 `ChipsetVendor::Asr` 走 `QuectelModem::unisoc(model)`，UI 平台徽标显示 "ASR"。后续按实测逐条调整。
+⚠️ **ASR 现阶段 AT 指令集复用 UniSoc**：同一 Quectel 厂家 AT 共通；后端 `ModemFactory` 对 `ChipsetVendor::Asr` 构造 `QuectelChip::Asr`，dispatch 里 `Asr` 与 `UniSoc` 共用同一套 AT。UI 平台徽标显示 "ASR"。后续按实测逐条调整。
 ⚠️ **关键字冲突**：`RM500Q`（Qualcomm） vs `RM500U`（UniSoc）靠末尾字母区分；若未来加 `RG500UA` 之类型号需补测试。
 
 ---
@@ -73,7 +74,7 @@
 | 连接数据 | `AT+QNETDEVCTL={cid},1,1` | `<cid>,<op=1 拨号>,<state=1 自动重连>`（手册 p.194，cid 在首位） |
 | 断开数据 | `AT+QNETDEVCTL={cid},0` | `<cid>,<op=0 断开>`；`<state>` 仅 op=1/3 有效 |
 | 查询 IP | `AT+QNETDEVSTATUS={cid}` | 响应格式见下方说明 |
-| 流量统计 | `AT+QGDCNT?` | `parse_qgdcnt()` |
+| 流量统计 | `AT+QGDCNT?` | `unisoc::query_traffic` 内联解析 `+QGDCNT:` 行 |
 | 重置流量 | `AT+QGDCNT=0` | |
 | 天线信号 | `AT+QANTRSSI?` | `parse_qantrssi()` → `[ANT0, ANT1, ANT2, ANT3]` |
 
@@ -146,11 +147,11 @@
 | 功能 | 查询指令 | 设置指令 | 备注 |
 |------|---------|---------|------|
 | PCIe 模式 | `AT+QCFG="pcie/mode"` | `AT+QCFG="pcie/mode",{0/1}` | |
-| 以太网 | `AT+QCFG="ethernet"` | `AT+QCFG="ethernet",{0/1}` | |
+| 以太网 | `AT+QCFG="ethernet"` | `AT+QCFG="ethernet",{0/1}` | UniSoc / ASR 上可能导致当前 AT 口短暂中断；前端必须二次确认并防重复点击，后端成功下发后必须清空当前 live transport/vendor，禁止同一连接继续连发 |
 | Proxy ARP | `AT+QCFG="proxyarp"` | `AT+QCFG="proxyarp",{0/1}` | |
-| UART AT | `AT+QCFG="uartat"` | `AT+QCFG="uartat",{0/1}` | |
-| ETH AT | `AT+QCFG="eth_at"` | `AT+QCFG="eth_at",{0/1}` | 仅 Qualcomm；UniSoc 硬编码 false |
-| ADB | `AT+QCFG="usbcfg"` | `AT+QCFG="usbcfg",{...}` | 先查询当前整行 `usbcfg`，仅修改倒数第二个字段；软件不得自行改写当前设备返回的 `VID/PID` |
+| UART AT | `AT+QCFG="uartat"` | `AT+QCFG="uartat",{0/1}` | UniSoc / ASR 上可能导致当前 AT 口短暂中断；前端必须二次确认并防重复点击，后端成功下发后必须清空当前 live transport/vendor，禁止同一连接继续连发 |
+| ETH AT | `AT+QCFG="eth_at"` | `AT+QCFG="eth_at",{0/1}` | 仅 Qualcomm；UniSoc 查询硬编码 false，设置直接拒绝 |
+| ADB | `AT+QCFG="usbcfg"` | `AT+QCFG="usbcfg",{...}` | 仅系统信息页 ADB 开关使用本 AT；ADB 调试页不读取本项，也不读取任何 modem AT 状态，直接由 `adb.exe shell` 的实际启动结果判断；设置时先查询当前整行 `usbcfg`，仅修改倒数第二个字段；软件不得自行改写当前设备返回的 `VID/PID` |
 | NAPT | `AT+QCFG="napt"` | `AT+QCFG="napt",{0/1}` | |
 | Netmask | `AT+QCFG="netmask"` | `AT+QCFG="netmask",{0/1}` | |
 | USB 网卡模式 | `AT+QCFG="usbnet"` | `AT+QCFG="usbnet",{mode}` | |

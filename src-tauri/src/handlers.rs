@@ -21,6 +21,11 @@ fn parse_ipv4_field(value: &str, field: &str) -> Result<String, String> {
         .map_err(|_| format!("Invalid {} IPv4 address: {}", field, value))
 }
 
+fn feature_toggle_drops_live_transport(chip: ChipsetVendor, feature: &str) -> bool {
+    matches!(chip, ChipsetVendor::UniSoc | ChipsetVendor::Asr)
+        && matches!(feature, "ethernet" | "uartAt")
+}
+
 // ── High-level modem queries ──
 
 #[tauri::command]
@@ -507,7 +512,75 @@ pub(crate) async fn set_feature_toggle(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     validate_at_string(&feature)?;
-    with_vendor!(state, |t, v| v.set_feature_toggle(t, &feature, enabled))
+    let transport = state.transport.clone();
+    let vendor = state.vendor.clone();
+    let connected_port = state.connected_port.clone();
+    let connected_usb_ids = state.connected_usb_ids.clone();
+
+    tokio::task::spawn_blocking(move || {
+        let mut tguard = transport
+            .lock()
+            .map_err(|e| format!("Lock poisoned: {}", e))?;
+        let mut vguard = vendor.lock().map_err(|e| format!("Lock poisoned: {}", e))?;
+        let t = tguard.as_deref_mut().ok_or("Not connected")?;
+        let v = vguard.as_deref_mut().ok_or("No vendor detected")?;
+        let chip = v.vendor();
+        v.set_feature_toggle(t, &feature, enabled)?;
+
+        if feature_toggle_drops_live_transport(chip, &feature) {
+            if let Some(mut live_transport) = tguard.take() {
+                live_transport.close();
+            }
+            *vguard = None;
+            *connected_port
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+            *connected_usb_ids
+                .lock()
+                .map_err(|e| format!("Lock poisoned: {}", e))? = None;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unisoc_ethernet_and_uartat_toggles_drop_live_transport() {
+        assert!(feature_toggle_drops_live_transport(
+            ChipsetVendor::UniSoc,
+            "ethernet"
+        ));
+        assert!(feature_toggle_drops_live_transport(
+            ChipsetVendor::UniSoc,
+            "uartAt"
+        ));
+        assert!(feature_toggle_drops_live_transport(
+            ChipsetVendor::Asr,
+            "ethernet"
+        ));
+        assert!(feature_toggle_drops_live_transport(ChipsetVendor::Asr, "uartAt"));
+    }
+
+    #[test]
+    fn unrelated_or_qualcomm_toggles_keep_live_transport() {
+        assert!(!feature_toggle_drops_live_transport(
+            ChipsetVendor::Qualcomm,
+            "ethernet"
+        ));
+        assert!(!feature_toggle_drops_live_transport(
+            ChipsetVendor::UniSoc,
+            "proxyArp"
+        ));
+        assert!(!feature_toggle_drops_live_transport(
+            ChipsetVendor::UniSoc,
+            "adb"
+        ));
+    }
 }
 
 #[tauri::command]

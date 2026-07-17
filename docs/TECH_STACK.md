@@ -111,7 +111,7 @@ src-tauri/src/dloader.rs
 ### 5.1 Windows 打包资产边界
 
 - Windows 发布使用 `.cargo/config.toml` 提供 static CRT 配置，主程序 `modem-cat.exe` 不额外依赖 VC 运行库；`r26-cli` 由于是独立 x86 sidecar，仍需单独携带 `vcruntime140.dll`
-- `src-tauri/tauri.conf.json` 当前启用 `downloadBootstrapper`；安装包优先复用系统 WebView2，缺失时再下载并拉起 bootstrapper 安装。`build.ps1` / `scripts/build-helper.ps1` 不再要求 `src-tauri/webview2-runtime/`，`src-tauri/build.rs` 也不再为 fixed runtime 做预处理。便携包统一依赖系统 WebView2；`portable.zip` 与 `portable-lite.zip` 当前保留双文件名，但 runtime 要求一致
+- `src-tauri/tauri.conf.json` 当前启用 `downloadBootstrapper`；安装包优先复用系统 WebView2，缺失时再下载并拉起 bootstrapper 安装。`build.ps1` / `scripts/build-helper.ps1` 不再要求 `src-tauri/webview2-runtime/`，`src-tauri/build.rs` 也不再为 fixed runtime 做预处理。便携包统一依赖系统 WebView2
 - `src-tauri/resources/adb/`、`src-tauri/binaries/r26-cli*` 都属于可复现打包链路的一部分，需保留跟仓；`src-tauri/resources/r26-runtime/README.md` 作为占位说明保留跟仓，但实际的 `vcruntime140.dll` 由构建脚本在 Windows 构建机上临时同步，不进入 Git
 - Ubuntu runner 可以承接校验和部分构建任务，但不能把“需要 Windows 打包器/运行时的完整 Windows 发版”变成纯 Linux 主机任务
 - `.codegraph/`、`.gitnexus/`、`.specify/`、`.understand-anything/`、`.workbuddy/` 属于本地工具痕迹，不属于源码或发布资产

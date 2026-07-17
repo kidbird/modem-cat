@@ -34,7 +34,6 @@
 | 产物 | 路径模式 | 使用场景 |
 |---|---|---|
 | 便携包 | `dist/ModemCat_vX.Y.Z_portable.zip` | 已知目标 Windows 机器具备系统 WebView2，解压即用 |
-| 便携包兼容别名 | `dist/ModemCat_vX.Y.Z_portable-lite.zip` | 当前与 `portable.zip` 同内容，保留给既有分发链路 |
 | NSIS 安装包 | `dist/Modem Cat_X.Y.Z_[webview|nowebview]_x64-setup.exe` | 需要常规安装流程；`webview` 变体会在缺少运行时时拉起 bootstrapper |
 | MSI 安装包 | `dist/Modem Cat_X.Y.Z_[webview|nowebview]_x64_zh-CN.msi` | 需要企业分发、统一部署或更标准的 Windows 安装介质 |
 

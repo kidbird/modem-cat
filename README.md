@@ -25,13 +25,12 @@ Windows 发版产物统一输出到 `dist/` 根目录，常见选择如下：
 | 产物 | 文件名模式 | 适用场景 |
 |---|---|---|
 | 便携包 | `ModemCat_vX.Y.Z_portable.zip` | 直接解压运行；要求目标机器已有系统 WebView2 |
-| 便携包兼容别名 | `ModemCat_vX.Y.Z_portable-lite.zip` | 当前与 `portable.zip` 同内容，保留给既有分发链路 |
 | NSIS 安装包 | `Modem Cat_X.Y.Z_webview_x64-setup.exe` / `Modem Cat_X.Y.Z_nowebview_x64-setup.exe` | 常规终端用户安装；`webview` 版内置 bootstrapper，`nowebview` 版要求环境已备好 WebView2 |
 | MSI 安装包 | `Modem Cat_X.Y.Z_webview_x64_zh-CN.msi` / `Modem Cat_X.Y.Z_nowebview_x64_zh-CN.msi` | 企业分发、批量部署、标准 Windows 安装介质 |
 
 补充说明：
 
-- `portable.zip` 与 `portable-lite.zip` 都包含 `modem-cat.exe`、ADB 组件、`r26-cli` 固件 sidecar，以及供 sidecar 使用的 `vcruntime140.dll`（x86）。
+- `portable.zip` 包含 `modem-cat.exe`、ADB 组件、`r26-cli` 固件 sidecar，以及供 sidecar 使用的 `vcruntime140.dll`（x86）。
 - 便携包不再内置 app-local `webview2-runtime/`；目标机器需要已有系统 WebView2 Runtime（Windows 10/11 大多已自带）。
 - 若目标机器没有系统 WebView2，请优先使用 `webview` 安装包；它会复用系统运行时，缺失时再自动拉起 bootstrapper 安装。
 

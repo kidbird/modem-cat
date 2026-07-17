@@ -5,7 +5,6 @@
 #   dist\Modem Cat_<ver>_webview_*.msi/.exe        (downloadBootstrapper 安装包)
 #   dist\Modem Cat_<ver>_nowebview_*.msi/.exe      (skip WebView2 安装包)
 #   dist\ModemCat_v<ver>_portable.zip              (便携包, 依赖系统 WebView2)
-#   dist\ModemCat_v<ver>_portable-lite.zip         (兼容别名, 当前同样依赖系统 WebView2)
 #   dist\modem-cat.exe                              (便携版主程序)
 #   dist\r26-cli-x86_64-pc-windows-msvc.exe         (固件下载 sidecar)
 #   dist\vcruntime140.dll                           (r26 sidecar 的 x86 VC 运行库)
@@ -69,7 +68,6 @@ function Remove-StaleDistArtifacts([string]$DistDir, [string]$Version) {
         "ModemCat_v*_portable_webview.zip",
         "ModemCat_v*_portable_nowebview.zip",
         "ModemCat_v*_portable.zip",
-        "ModemCat_v*_portable-lite.zip",
         "Modem Cat_*_webview_x64_*.msi",
         "Modem Cat_*_webview_x64-setup.exe",
         "Modem Cat_*_nowebview_x64_*.msi",
@@ -127,7 +125,7 @@ Write-Host "  Modem Cat  -  Multi-Variant Build"
 Write-Host ""
 Write-Host "  所有产物统一输出到 dist/ 根目录:"
 Write-Host "    MSI/NSIS 安装包 -> dist\\Modem Cat_*_[webview|nowebview]_x64_*.msi/.exe"
-Write-Host "    便携版 ZIP      -> dist\\ModemCat_v*_portable.zip / portable-lite.zip"
+Write-Host "    便携版 ZIP      -> dist\\ModemCat_v*_portable.zip"
 Write-Host "    便携版主程序    -> dist\\modem-cat.exe"
 Write-Host "    Sidecar         -> dist\\r26-cli-x86_64-pc-windows-msvc.exe"
 Write-Host "    Sidecar runtime -> dist\\vcruntime140.dll"
@@ -222,40 +220,31 @@ Write-Host ""
 Write-Host "[5/6] Portable ZIPs..."
 if ($Quick) {
     Write-Host "       SKIP - Quick mode"
-} else {
-    $pFull = Join-Path $env:TEMP "mc-pfull"
-    $pLite = Join-Path $env:TEMP "mc-plite"
-    foreach ($d in @($pFull, $pLite)) {
-        if (Test-Path $d) { Remove-Item $d -Recurse -Force }
-        New-Item -ItemType Directory -Path $d -Force | Out-Null
-    }
-    # 便携包：复制 dist/ 下所有运行时文件和子目录（排除安装包、ZIP、便携临时目录）
-    $excludePatterns = @('*.msi', '*.zip', 'Modem Cat_*-setup.exe', 'ModemCat_v*_portable*')
-    Get-ChildItem -LiteralPath $distDir -Force | Where-Object {
-        $name = $_.Name
-        $exclude = $false
-        foreach ($pat in $excludePatterns) { if ($name -like $pat) { $exclude = $true; break } }
-        -not $exclude
-    } | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $pFull -Recurse -Force
-        Copy-Item -LiteralPath $_.FullName -Destination $pLite -Recurse -Force
-    }
+	} else {
+	    $pFull = Join-Path $env:TEMP "mc-pfull"
+	    if (Test-Path $pFull) { Remove-Item $pFull -Recurse -Force }
+	    New-Item -ItemType Directory -Path $pFull -Force | Out-Null
+	    # 便携包：复制 dist/ 下所有运行时文件和子目录（排除安装包、ZIP、便携临时目录）
+	    $excludePatterns = @('*.msi', '*.zip', 'Modem Cat_*-setup.exe', 'ModemCat_v*_portable*')
+	    Get-ChildItem -LiteralPath $distDir -Force | Where-Object {
+	        $name = $_.Name
+	        $exclude = $false
+	        foreach ($pat in $excludePatterns) { if ($name -like $pat) { $exclude = $true; break } }
+	        -not $exclude
+	    } | ForEach-Object {
+	        Copy-Item -LiteralPath $_.FullName -Destination $pFull -Recurse -Force
+	    }
 
-    $zipFull = Join-Path $distDir "ModemCat_v${ver}_portable.zip"
-    $zipLite = Join-Path $distDir "ModemCat_v${ver}_portable-lite.zip"
-    foreach ($oldZip in @(Get-ChildItem -LiteralPath $distDir -Filter "ModemCat_v${ver}_portable*" -File -ErrorAction SilentlyContinue)) {
-        Remove-Item -LiteralPath $oldZip.FullName -Force -ErrorAction SilentlyContinue
-    }
+	    $zipFull = Join-Path $distDir "ModemCat_v${ver}_portable.zip"
+	    foreach ($oldZip in @(Get-ChildItem -LiteralPath $distDir -Filter "ModemCat_v${ver}_portable*" -File -ErrorAction SilentlyContinue)) {
+	        Remove-Item -LiteralPath $oldZip.FullName -Force -ErrorAction SilentlyContinue
+	    }
 
-    Compress-Archive -Path "$pFull\*" -DestinationPath $zipFull -Force
-    $szFull = [math]::Round((Get-Item $zipFull).Length / 1MB, 1)
-    Write-Host "  $(Split-Path $zipFull -Leaf) ($szFull MB)"
-    Compress-Archive -Path "$pLite\*" -DestinationPath $zipLite -Force
-    $szLite = [math]::Round((Get-Item $zipLite).Length / 1MB, 1)
-    Write-Host "  $(Split-Path $zipLite -Leaf) ($szLite MB)"
-    Remove-Item $pFull -Recurse -Force
-    Remove-Item $pLite -Recurse -Force
-}
+	    Compress-Archive -Path "$pFull\*" -DestinationPath $zipFull -Force
+	    $szFull = [math]::Round((Get-Item $zipFull).Length / 1MB, 1)
+	    Write-Host "  $(Split-Path $zipFull -Leaf) ($szFull MB)"
+	    Remove-Item $pFull -Recurse -Force
+	}
 Write-Host ""
 
 # ── 6. Summary ─────────────────────────────────────────

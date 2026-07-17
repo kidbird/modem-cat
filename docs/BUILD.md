@@ -155,7 +155,6 @@ dist-assets/
 
 | 包名 | WebView2 要求 | 适用场景 |
 |---|---|---|
-| `ModemCat_vX.Y.Z_portable-lite.zip` | 依赖系统 WebView2 | 保留给既有分发链路；当前与 `portable.zip` 同内容 |
 | `ModemCat_vX.Y.Z_portable.zip` | 依赖系统 WebView2 | 默认便携交付物，适用于目标机器已具备系统 WebView2 |
 
 额外说明：
@@ -259,7 +258,7 @@ https://developer.microsoft.com/microsoft-edge/webview2/
 
 若是双击 `modem-cat.exe` 后完全没有界面、也没有弹窗，先区分两类情况：
 
-- 使用 `portable.zip` / `portable-lite.zip`：确认目标机器已经安装系统 WebView2 Runtime
+- 使用 `portable.zip`：确认目标机器已经安装系统 WebView2 Runtime
 - 使用 `webview` 安装包：确认安装时没有被安全策略拦截 bootstrapper；如仍失败，再看启动日志
 
 所有启动期错误、panic 和 Tauri runtime 初始化失败，都会追加到：

@@ -296,7 +296,7 @@
       margin-bottom: 16px;
     }
     .panel-header .panel-title { margin-bottom: 0; }
-    .panel-header-left {
+    .panel-header-right {
       display: flex;
       align-items: center;
       gap: 12px;

@@ -301,7 +301,6 @@
       align-items: center;
       gap: 12px;
     }
-    .airplane-toggle { display: flex; align-items: center; gap: 6px; }
     .airplane-label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
 
     /* ── Forms ── */
